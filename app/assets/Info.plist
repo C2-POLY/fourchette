@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Linked into the binary's __TEXT,__info_plist section by build.rs, so macOS names the app
-     "Fourchette" (menu bar, About) even when it runs from target/ rather than an .app bundle. -->
+     "Fourchette" (menu bar, About) even when it runs from target/ rather than an .app bundle.
+     scripts/release.sh copies it into Fourchette.app and adds the version keys. -->
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
@@ -10,5 +11,17 @@
 	<string>Fourchette</string>
 	<key>CFBundleExecutable</key>
 	<string>fourchette</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.c2poly.fourchette</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.developer-tools</string>
 </dict>
 </plist>
