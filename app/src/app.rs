@@ -79,6 +79,8 @@ pub enum Cmd {
     SetCommitLimit(usize),
     /// System, dark or light, kept in repos.json.
     SetAppearance(theme::Appearance),
+    /// The app's colours and icon, chosen in the palette.
+    SetVariant(theme::Variant),
     /// Open or close the Settings window (⌘,).
     Settings,
     /// Keep the settings chosen in the Settings window; they apply at once.
@@ -180,7 +182,8 @@ impl App {
         let library = crate::library::Library::load();
         // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
-        theme::apply(&cc.egui_ctx, appearance);
+        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
+        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
         let mut app = App {
             repo: None,
             commits: vec![],
@@ -641,6 +644,12 @@ impl App {
                 Cmd::SetSettings(s) => {
                     self.library.settings = s;
                     self.library.save();
+                }
+                Cmd::SetVariant(v) => {
+                    self.library.variant = v;
+                    self.library.save();
+                    theme::set_variant(ctx, v);
+                    crate::icon::show(ctx, v);
                 }
                 Cmd::Switcher => {
                     self.switcher = if self.switcher.is_some() { None } else { Some(repos::Switcher::default()) };

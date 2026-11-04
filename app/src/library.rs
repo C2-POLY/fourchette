@@ -1,7 +1,7 @@
 //! The person's repositories: where they are, how they're grouped, which are favourites.
 //! Kept in `~/Library/Application Support/Fourchette/repos.json`.
 use crate::settings::Settings;
-use crate::theme::Appearance;
+use crate::theme::{Appearance, Variant};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -52,6 +52,8 @@ pub struct Library {
     pub appearance: Appearance,
     /// Everything else chosen in the Settings window.
     pub settings: Settings,
+    /// The app's colours and icon, chosen in the palette.
+    pub variant: Variant,
     file: Option<PathBuf>,
 }
 
@@ -99,7 +101,8 @@ impl Library {
             .unwrap_or_default();
         let appearance = v["appearance"].as_str().and_then(Appearance::parse).unwrap_or_default();
         let settings = Settings::from_json(&v["settings"]);
-        Library { entries, appearance, settings, file: Some(file.to_path_buf()) }
+        let variant = v["variant"].as_str().and_then(Variant::parse).unwrap_or_default();
+        Library { entries, appearance, variant, settings, file: Some(file.to_path_buf()) }
     }
 
     pub fn save(&self) {
@@ -112,7 +115,7 @@ impl Library {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "settings": self.settings.to_json(), "repos": repos})).unwrap_or_default());
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "variant": self.variant.key(), "settings": self.settings.to_json(), "repos": repos})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -349,6 +352,24 @@ mod tests {
             assert_eq!(lib.settings, Settings::default(), "{bad}");
             assert_eq!((lib.entries.len(), lib.appearance), (1, Appearance::Dark), "{bad}");
         }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn variant_survives_a_save_and_defaults_to_classic() {
+        let d = tmp("variant");
+        let file = d.join("repos.json");
+        assert_eq!(Library::read(&file).variant, Variant::Classic);
+        let mut lib = Library::read(&file);
+        lib.add(&d.join("a"));
+        lib.appearance = Appearance::Dark;
+        lib.variant = Variant::Neon;
+        lib.save();
+        let back = Library::read(&file);
+        assert_eq!((back.variant, back.appearance), (Variant::Neon, Appearance::Dark));
+        assert_eq!(back.entries.len(), 1);
+        std::fs::write(&file, r#"{"version": 1, "variant": "sepia", "repos": []}"#).unwrap();
+        assert_eq!(Library::read(&file).variant, Variant::Classic);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

@@ -244,6 +244,70 @@ pub fn toolbar_pill(ui: &mut Ui, caption: &str, value: &str) -> egui::Response {
     resp
 }
 
+/// Thin outline icons on a 24-unit grid (Tabler style), scaled to about 20 points.
+/// egui strokes have flat caps, so open ends get a small dot to look round.
+struct Ink<'a> {
+    p: &'a egui::Painter,
+    c: Pos2,
+    s: Stroke,
+}
+
+impl Ink<'_> {
+    const WIDTH: f32 = 1.5;
+    const SCALE: f32 = 20.0 / 24.0;
+
+    /// A point of the 24-unit grid, relative to the icon centre.
+    fn t(&self, x: f32, y: f32) -> Pos2 {
+        self.c + vec2(x - 12.0, y - 12.0) * Self::SCALE
+    }
+    fn dot(&self, at: Pos2) {
+        self.p.circle_filled(at, Self::WIDTH / 2.0, self.s.color);
+    }
+    /// Open polyline of grid points, round at both ends.
+    fn line(&self, pts: &[(f32, f32)]) {
+        let v: Vec<Pos2> = pts.iter().map(|&(x, y)| self.t(x, y)).collect();
+        self.dot(v[0]);
+        self.dot(*v.last().unwrap());
+        self.p.add(Shape::line(v, self.s));
+    }
+    fn closed(&self, pts: Vec<Pos2>) {
+        self.p.add(Shape::closed_line(pts, self.s));
+    }
+    /// Points of an arc (grid units, angles in degrees, screen orientation).
+    fn arc(cx: f32, cy: f32, r: f32, from: f32, to: f32) -> Vec<(f32, f32)> {
+        let n = ((to - from).abs() / 8.0).ceil().max(2.0) as usize;
+        (0..=n)
+            .map(|k| {
+                let a = (from + (to - from) * k as f32 / n as f32).to_radians();
+                (cx + r * a.cos(), cy + r * a.sin())
+            })
+            .collect()
+    }
+    fn ring(&self, x: f32, y: f32, r: f32) {
+        self.p.circle_stroke(self.t(x, y), r * Self::SCALE, self.s);
+    }
+    /// Four-pointed star with concave sides.
+    fn star(&self, x: f32, y: f32, r: f32) {
+        let k = r * 0.22;
+        let tips = [(0.0, -r), (r, 0.0), (0.0, r), (-r, 0.0)];
+        let mut v = Vec::new();
+        for i in 0..4 {
+            let (ax, ay) = tips[i];
+            let (bx, by) = tips[(i + 1) % 4];
+            let ctl = ((ax + bx) / 2.0 * k / r, (ay + by) / 2.0 * k / r);
+            for j in 0..8 {
+                let u = j as f32 / 8.0;
+                let w = 1.0 - u;
+                v.push(self.t(
+                    x + w * w * ax + 2.0 * w * u * ctl.0 + u * u * bx,
+                    y + w * w * ay + 2.0 * w * u * ctl.1 + u * u * by,
+                ));
+            }
+        }
+        self.closed(v);
+    }
+}
+
 /// Toolbar button with a drawn icon above its label.
 pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(58.0, 48.0), Sense::click());
@@ -253,85 +317,74 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
     }
     let col = if resp.hovered() { theme::c().strong } else { theme::c().text };
     let c = pos2(rect.center().x, rect.top() + 17.0);
-    let s = Stroke::new(1.8, col);
+    let mut k = Ink { p, c, s: Stroke::new(Ink::WIDTH, col) };
     match icon {
+        // two arcs with a chevron each
         "fetch" => {
-            let pts: Vec<Pos2> = (0..=24)
-                .map(|k| {
-                    let a = -0.4 + k as f32 / 24.0 * 5.2;
-                    c + vec2(a.cos(), a.sin()) * 7.0
-                })
-                .collect();
-            let end = *pts.last().unwrap();
-            p.add(Shape::line(pts, s));
-            p.line_segment([end, end + vec2(4.0, -1.0)], s);
-            p.line_segment([end, end + vec2(1.0, 4.0)], s);
+            k.line(&Ink::arc(12.0, 12.0, 8.0, -7.0, -160.0));
+            k.line(&[(4.0, 5.0), (4.0, 9.3), (8.0, 9.3)]);
+            k.line(&Ink::arc(12.0, 12.0, 8.0, 173.0, 20.0));
+            k.line(&[(20.0, 19.0), (20.0, 14.7), (16.0, 14.7)]);
         }
         "ai" => {
-            // four-pointed sparkle with a small one beside it
-            let star = |p: &egui::Painter, c: Pos2, r: f32, col: Color32| {
-                let k = r * 0.28;
-                let pts = vec![
-                    c + vec2(0.0, -r),
-                    c + vec2(k, -k),
-                    c + vec2(r, 0.0),
-                    c + vec2(k, k),
-                    c + vec2(0.0, r),
-                    c + vec2(-k, k),
-                    c + vec2(-r, 0.0),
-                    c + vec2(-k, -k),
-                ];
-                p.add(Shape::convex_polygon(pts, col, Stroke::NONE));
-            };
-            let col = if active { theme::c().accent_text } else { col };
-            star(p, c + vec2(-1.5, 1.0), 8.0, col);
-            star(p, c + vec2(7.0, -6.5), 3.5, col);
+            if active {
+                k.s = Stroke::new(Ink::WIDTH, theme::c().accent_text);
+            }
+            k.star(9.0, 14.5, 8.5);
+            k.star(19.5, 5.0, 3.2);
         }
+        // arrow pointing left, coming back from a turn on the right
         "undo" => {
-            // curved arrow turning back to the left
-            let pts: Vec<Pos2> = (0..=20)
-                .map(|k| {
-                    let a = std::f32::consts::PI * (1.0 - k as f32 / 20.0 * 1.25);
-                    c + vec2(1.5, 2.0) + vec2(-a.cos(), -a.sin()) * 7.0
-                })
-                .collect();
-            let start = pts[0];
-            p.add(Shape::line(pts, s));
-            p.line_segment([start, start + vec2(-3.5, -3.5)], s);
-            p.line_segment([start, start + vec2(3.5, -3.5)], s);
+            let mut path = vec![(14.0, 19.0)];
+            path.extend(Ink::arc(16.0, 14.5, 4.5, 90.0, -90.0));
+            path.push((4.0, 10.0));
+            k.line(&path);
+            k.line(&[(8.5, 14.5), (4.0, 10.0), (8.5, 5.5)]);
         }
-        "pull" | "push" => {
-            let down = icon == "pull";
-            let (a, b) = if down { (c - vec2(0.0, 8.0), c + vec2(0.0, 5.0)) } else { (c + vec2(0.0, 5.0), c - vec2(0.0, 8.0)) };
-            p.line_segment([a, b], s);
-            let d = if down { -1.0 } else { 1.0 };
-            p.line_segment([b, b + vec2(-5.0, 5.0 * d)], s);
-            p.line_segment([b, b + vec2(5.0, 5.0 * d)], s);
-            p.line_segment([c + vec2(-8.0, 9.0), c + vec2(8.0, 9.0)], s);
+        "pull" => {
+            k.line(&[(12.0, 4.0), (12.0, 16.0)]);
+            k.line(&[(7.5, 11.5), (12.0, 16.0), (16.5, 11.5)]);
+            k.line(&[(5.0, 20.0), (19.0, 20.0)]);
+        }
+        "push" => {
+            k.line(&[(12.0, 4.0), (12.0, 16.0)]);
+            k.line(&[(7.5, 8.5), (12.0, 4.0), (16.5, 8.5)]);
+            k.line(&[(5.0, 20.0), (19.0, 20.0)]);
         }
         "branch" => {
-            p.circle_stroke(c + vec2(-4.0, 7.0), 2.5, s);
-            p.circle_stroke(c + vec2(-4.0, -7.0), 2.5, s);
-            p.circle_stroke(c + vec2(5.0, -4.0), 2.5, s);
-            p.line_segment([c + vec2(-4.0, -4.5), c + vec2(-4.0, 4.5)], s);
-            p.add(egui::epaint::CubicBezierShape::from_points_stroke(
-                [c + vec2(5.0, -1.5), c + vec2(5.0, 3.0), c + vec2(-4.0, 1.0), c + vec2(-4.0, 4.5)],
-                false,
-                Color32::TRANSPARENT,
-                s,
-            ));
+            let r = 2.4;
+            k.ring(6.0, 18.0, r);
+            k.ring(6.0, 6.0, r);
+            k.ring(18.0, 6.0, r);
+            k.line(&[(6.0, 6.0 + r), (6.0, 18.0 - r)]);
+            let mut curve = Ink::arc(15.6, 15.6, 9.6, -90.0, -180.0);
+            curve.push((6.0, 15.6));
+            k.line(&curve);
         }
-        "stash" | "pop" => {
-            let r = Rect::from_center_size(c + vec2(0.0, 3.0), vec2(16.0, 10.0));
-            p.rect_stroke(r, CornerRadius::same(2), s, StrokeKind::Middle);
-            p.line_segment([c + vec2(0.0, -9.0), c + vec2(0.0, 1.0)], s);
-            let tip = if icon == "stash" { c + vec2(0.0, 1.0) } else { c + vec2(0.0, -9.0) };
-            let d = if icon == "stash" { -3.5 } else { 3.5 };
-            p.line_segment([tip, tip + vec2(-3.5, d)], s);
-            p.line_segment([tip, tip + vec2(3.5, d)], s);
+        // lid above an open body, with a handle
+        "stash" => {
+            let lid = Rect::from_min_max(k.t(3.0, 4.0), k.t(21.0, 8.0));
+            k.p.rect_stroke(lid, CornerRadius::same(2), k.s, StrokeKind::Middle);
+            let mut body = vec![(5.0, 8.5)];
+            body.extend(Ink::arc(7.0, 18.0, 2.0, 180.0, 90.0));
+            body.extend(Ink::arc(17.0, 18.0, 2.0, 90.0, 0.0));
+            body.push((19.0, 8.5));
+            k.line(&body);
+            k.line(&[(10.0, 12.5), (14.0, 12.5)]);
+        }
+        // open body with an arrow leaving it upwards
+        "pop" => {
+            let mut body = vec![(4.0, 11.0)];
+            body.extend(Ink::arc(6.0, 18.0, 2.0, 180.0, 90.0));
+            body.extend(Ink::arc(18.0, 18.0, 2.0, 90.0, 0.0));
+            body.push((20.0, 11.0));
+            k.line(&body);
+            k.line(&[(12.0, 15.0), (12.0, 3.0)]);
+            k.line(&[(7.5, 7.5), (12.0, 3.0), (16.5, 7.5)]);
         }
         _ => {}
     }
+    let p = k.p;
     p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::c().strong } else { theme::c().dim });
     if badge > 0 {
         let s = badge.min(99).to_string();
