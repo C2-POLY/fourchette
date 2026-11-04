@@ -66,12 +66,38 @@ pub fn ref_colors(r: &GitRef, lane: Color32, bg: Color32) -> (Color32, Option<Co
 
 /// Text on one line that ends with "…" when it is wider than `max_w`. Returns where it was drawn.
 pub fn fit_text(p: &egui::Painter, pos: Pos2, align: Align2, text: &str, font: FontId, color: Color32, max_w: f32) -> Rect {
-    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
-    job.wrap = egui::text::TextWrapping { max_width: max_w.max(1.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
-    let galley = p.layout_job(job);
+    let galley = fit_galley(p, text, font, color, max_w);
     let rect = align.anchor_size(pos, galley.size());
     p.galley(rect.min, galley, color);
     rect
+}
+
+/// The galley of one line of `text`, cut with "…" at its end when it is wider than `max_w`.
+pub fn fit_galley(p: &egui::Painter, text: &str, font: FontId, color: Color32, max_w: f32) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: max_w.max(1.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    p.layout_job(job)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_label_is_cut_with_an_ellipsis_within_its_width() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(Default::default(), |ctx| {
+            let p = ctx.layer_painter(egui::LayerId::background());
+            let long = "feature/remember-the-last-opened-repository-per-window";
+            let g = fit_galley(&p, long, theme::small(), Color32::WHITE, 80.0);
+            assert!(g.size().x <= 80.0 + 0.5, "too wide: {}", g.size().x);
+            let last = g.rows[0].row.glyphs.last().map(|gl| gl.chr);
+            assert_eq!(last, Some('…'), "no ellipsis at the end");
+            assert!(g.text().starts_with("feature/"));
+            let short = fit_galley(&p, "main", theme::small(), Color32::WHITE, 80.0);
+            assert_eq!(short.text(), "main");
+        });
+    }
 }
 
 /// A small chevron pointing right (closed) or down (open), drawn rather than typed.
