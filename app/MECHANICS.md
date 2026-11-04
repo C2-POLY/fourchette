@@ -227,5 +227,11 @@ Linear. These are design choices, not values from the original:
 * Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
   palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
   uses white surfaces and deepens the branch colours by 20% so they stay readable.
+* Variants (issue #14, a design choice, not a measured value): Classic (the look above, silver
+  fork), Gold (night-brown surfaces, amber accent, golden fork), Neon (night-violet surfaces,
+  magenta accent, glowing pink and cyan fork) and Forest (deep green surfaces, green accent, copper
+  fork). Each has a dark and a light palette, so Appearance works with all of them; the branch
+  colours are the same in all. Chosen in the palette ("Variant: …"), kept in repos.json
+  (`"variant"`, Classic by default), and the Dock icon changes at once.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).
