@@ -91,6 +91,13 @@ impl App {
                 };
                 v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
             }
+            // "theme" in the hint so that typing it finds the variants too. "current" is the one on
+            // screen, which FOURCHETTE_VARIANT may set apart from the saved one.
+            let now = theme::variant();
+            for t in theme::Variant::ALL {
+                let hint = if t == now { "theme · current".to_string() } else { format!("theme · {}", t.blurb()) };
+                v.push(item("Appearance", format!("Variant: {}", t.label()), hint, Cmd::SetVariant(t)));
+            }
         }
         // ReferenceCommandProvider
         for r in &self.refs {
