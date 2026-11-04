@@ -45,10 +45,14 @@ pub enum Id {
     OpenInTerminal,
     Website,
     Issues,
+    NewTab,
+    CloseTab,
+    NextTab,
+    PrevTab,
 }
 
 impl Id {
-    pub const ALL: [Id; 32] = [
+    pub const ALL: [Id; 36] = [
         Id::About,
         Id::Settings,
         Id::OpenRepository,
@@ -81,6 +85,10 @@ impl Id {
         Id::OpenInTerminal,
         Id::Website,
         Id::Issues,
+        Id::NewTab,
+        Id::CloseTab,
+        Id::NextTab,
+        Id::PrevTab,
     ];
 
     /// Edit actions go to the focused text field when there is one.
@@ -140,6 +148,16 @@ impl Shortcut {
         Shortcut { ctrl: true, ..self }
     }
 
+    /// What AppKit is given: a shifted bracket is written as the character it types ("}" for
+    /// ⇧]) with ⌘ alone, which is how AppKit matches ⇧⌘] on a US keyboard.
+    pub fn key_equivalent(&self) -> (char, bool) {
+        match (self.key, self.shift) {
+            (']', true) => ('}', false),
+            ('[', true) => ('{', false),
+            (k, shift) => (k, shift),
+        }
+    }
+
     /// As macOS writes it, modifiers in the order ⌃⌥⇧⌘.
     #[cfg(test)]
     pub fn label(&self) -> String {
@@ -193,7 +211,10 @@ fn sys(title: &'static str, selector: &'static str, key: Option<Shortcut>) -> En
 
 /// The whole menu bar, in the original's order. Shortcuts are the original's where Fourchette has
 /// the action, except File > Switch Repository (⌘O) and Command Palette (⌘P), which keep the
-/// keys Fourchette already uses (the original's ⌘O opens a folder dialog).
+/// keys Fourchette already uses (the original's ⌘O opens a folder dialog). New Tab and Close Tab
+/// are the original's New Tab (⌘T) and Close (⌘W); Show Next / Previous Tab are the items macOS
+/// adds to the original's Window menu for its tabs, with Safari's ⇧⌘] and ⇧⌘[ (⌃Tab and ⌃⇧Tab
+/// work too, `App::raw_input_hook`).
 pub fn bar() -> Vec<Menu> {
     use Entry::Separator;
     vec![
@@ -216,10 +237,13 @@ pub fn bar() -> Vec<Menu> {
         Menu {
             title: "File",
             entries: vec![
+                app("New Tab", Id::NewTab, Some(cmd('t'))),
                 app("Open Repository…", Id::OpenRepository, None),
                 Entry::OpenRecent,
                 app("Switch Repository…", Id::Switcher, Some(cmd('o'))),
                 app("Command Palette…", Id::Palette, Some(cmd('p'))),
+                Separator,
+                app("Close Tab", Id::CloseTab, Some(cmd('w'))),
             ],
         },
         Menu {
@@ -277,6 +301,9 @@ pub fn bar() -> Vec<Menu> {
                 sys("Minimize", "performMiniaturize:", Some(cmd('m'))),
                 sys("Zoom", "performZoom:", None),
                 Separator,
+                app("Show Previous Tab", Id::PrevTab, Some(cmd('[').shift())),
+                app("Show Next Tab", Id::NextTab, Some(cmd(']').shift())),
+                Separator,
                 sys("Bring All to Front", "arrangeInFront:", None),
             ],
         },
@@ -311,6 +338,8 @@ pub struct State {
     /// HEAD is in the loaded history.
     pub head_shown: bool,
     pub details: DetailsLayout,
+    /// How many tabs are open.
+    pub tabs: usize,
 }
 
 pub fn enabled(id: Id, s: &State) -> bool {
@@ -335,6 +364,9 @@ pub fn enabled(id: Id, s: &State) -> bool {
         Id::PopStash => git && s.stashes,
         Id::CheckoutBranch | Id::NewBranch | Id::NewTag => git && !s.settings,
         Id::ShowInFinder | Id::OpenInTerminal => s.repo,
+        Id::NewTab => overlay,
+        // Never the last tab; and nothing to go to with one.
+        Id::CloseTab | Id::NextTab | Id::PrevTab => overlay && s.tabs > 1,
     }
 }
 
@@ -590,11 +622,11 @@ mod mac {
     }
 
     fn item(mtm: MainThreadMarker, title: &str, action: Option<Sel>, key: Option<Shortcut>) -> Retained<NSMenuItem> {
-        let k = key.map(|k| k.key.to_string()).unwrap_or_default();
+        let k = key.map(|k| k.key_equivalent().0.to_string()).unwrap_or_default();
         let it = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), &NSString::from_str(title), action, &NSString::from_str(&k)) };
         if let Some(k) = key {
             let mut mask = NSEventModifierFlags::NSEventModifierFlagCommand;
-            if k.shift {
+            if k.key_equivalent().1 {
                 mask |= NSEventModifierFlags::NSEventModifierFlagShift;
             }
             if k.alt {
@@ -651,7 +683,8 @@ mod tests {
         let b = bar();
         assert_eq!(titles(&b[0]), ["About Fourchette", "Settings…", "Services", "Hide Fourchette", "Hide Others", "Show All", "Quit Fourchette"]);
         assert_eq!(titles(&b[2]), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
-        assert_eq!(titles(&b[5]), ["Minimize", "Zoom", "Bring All to Front"]);
+        assert_eq!(titles(&b[1]), ["New Tab", "Open Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
+        assert_eq!(titles(&b[5]), ["Minimize", "Zoom", "Show Previous Tab", "Show Next Tab", "Bring All to Front"]);
     }
 
     #[test]
@@ -684,6 +717,11 @@ mod tests {
             ("Switch Repository…", "⌘O"),
             ("Command Palette…", "⌘P"),
             ("Show Details Panel", "⌘J"),
+            // The original's New Tab and Close, and the keys of macOS tabs.
+            ("New Tab", "⌘T"),
+            ("Close Tab", "⌘W"),
+            ("Show Next Tab", "⇧⌘]"),
+            ("Show Previous Tab", "⇧⌘["),
         ] {
             assert_eq!(key_of(title), key, "{title}");
         }
@@ -793,5 +831,27 @@ mod tests {
     fn recent_titles_tell_same_named_repositories_apart() {
         let e = |n: &str, g: &str| (n.to_string(), g.to_string());
         assert_eq!(recent_titles(&[e("fourchette", "c2-poly"), e("api", "c2-poly"), e("api", "perso")]), ["fourchette", "api — c2-poly", "api — perso"]);
+    }
+
+    #[test]
+    fn tab_items_need_a_second_tab_and_never_close_the_last() {
+        let one = State { tabs: 1, ..open_repo() };
+        assert!(enabled(Id::NewTab, &one));
+        for id in [Id::CloseTab, Id::NextTab, Id::PrevTab] {
+            assert!(!enabled(id, &one), "{id:?}");
+            assert!(enabled(id, &State { tabs: 2, ..open_repo() }), "{id:?}");
+            assert!(!enabled(id, &State { tabs: 2, modal: true, ..open_repo() }), "{id:?}");
+        }
+        // The sample project can open a tab too.
+        assert!(enabled(Id::NewTab, &State { tabs: 1, ..State::default() }));
+        assert!(!enabled(Id::NewTab, &State { settings: true, ..one }));
+    }
+
+    #[test]
+    fn shifted_brackets_go_to_appkit_as_braces() {
+        assert_eq!(cmd(']').shift().key_equivalent(), ('}', false));
+        assert_eq!(cmd('[').shift().key_equivalent(), ('{', false));
+        assert_eq!(cmd('t').shift().key_equivalent(), ('t', true));
+        assert_eq!(cmd('w').key_equivalent(), ('w', false));
     }
 }

@@ -14,6 +14,8 @@ const RECENT_SHOWN: usize = 5;
 pub struct Switcher {
     pub query: String,
     pub sel: usize,
+    /// Opened by ⌘T or the tab strip's "+": the pick goes to a new tab.
+    pub new_tab: bool,
 }
 
 struct Row {
@@ -76,9 +78,12 @@ impl App {
         let rows = self.switcher_rows(&query);
         let n = rows.len();
         let current = self.tab().repo.as_ref().map(|r| r.root.clone());
+        // Repositories open in a tab: picking one goes to its tab.
+        let open: Vec<PathBuf> = self.tabs.iter().filter_map(|t| t.root().map(|p| p.to_path_buf())).collect();
         let groups = self.library.custom_groups();
         let (up, down, enter, esc) = ctx.input(|i| (i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown), i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
         let Some(sw) = self.switcher.as_mut() else { return };
+        let new_tab = sw.new_tab;
         if down && n > 0 {
             sw.sel = (sw.sel + 1).min(n - 1);
         }
@@ -110,7 +115,7 @@ impl App {
                     ui.set_width(SWITCHER_W);
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut sw.query)
-                            .hint_text(crate::ui::faint_hint("Switch repository — type a name, a group or a folder…"))
+                            .hint_text(crate::ui::faint_hint(if new_tab { "Open in a new tab — type a name, a group or a folder…" } else { "Switch repository — type a name, a group or a folder…" }))
                             .font(FontId::proportional(theme::FS_TITLE))
                             .desired_width(f32::INFINITY)
                             .margin(Margin::symmetric(10, 8)),
@@ -149,10 +154,11 @@ impl App {
                             }
                             let missing = !e.path.exists();
                             let is_current = current.as_deref() == Some(e.path.as_path());
+                            let is_open = open.iter().any(|o| o == &e.path);
                             let tc = if missing { theme::c().faint } else if selected || is_current { theme::c().strong } else { theme::c().text };
                             let name = p.text(pos2(rect.left() + 34.0, rect.center().y), Align2::LEFT_CENTER, e.name(), theme::body(), tc);
                             let mut x = name.right() + 10.0;
-                            if is_current {
+                            if is_open {
                                 let r = p.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, "✔ open", theme::small(), theme::c().added);
                                 x = r.right() + 10.0;
                             }
@@ -231,7 +237,8 @@ impl App {
         if let Some(k) = chosen {
             if let Some(row) = rows.get(k) {
                 if row.entry.path.exists() {
-                    cmds.push(Cmd::Open(row.entry.path.clone()));
+                    let p = row.entry.path.clone();
+                    cmds.push(if new_tab { Cmd::OpenTab(p) } else { Cmd::Open(p) });
                     close = true;
                 } else {
                     self.notify(format!("{} isn't there any more. Right-click it to remove it from the list.", tilde(&row.entry.path)), true);

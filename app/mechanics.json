@@ -111,6 +111,8 @@
     {"name": "new tag shortcut", "group": "menu", "value": "⇧⌘T", "source": "MainMenu.nib, ev_1c8c0440"},
     {"name": "show in Finder shortcut", "group": "menu", "value": "⌃⌘O", "source": "MainMenu.nib, ev_1c8c0440"},
     {"name": "open in Terminal shortcut", "group": "menu", "value": "⌃⌘T", "source": "MainMenu.nib, ev_1c8c0440"},
-    {"name": "full screen shortcut", "group": "menu", "value": "⌃⌘F", "source": "MainMenu.nib, ev_1c8c0440"}
+    {"name": "full screen shortcut", "group": "menu", "value": "⌃⌘F", "source": "MainMenu.nib, ev_1c8c0440"},
+    {"name": "new tab shortcut", "group": "menu", "value": "⌘T", "source": "MainMenu.nib, ev_1c8c0440"},
+    {"name": "close shortcut", "group": "menu", "value": "⌘W", "source": "MainMenu.nib, ev_1c8c0440"}
   ]
 }

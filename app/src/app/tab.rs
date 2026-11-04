@@ -4,6 +4,13 @@
 use super::*;
 
 pub struct Tab {
+    /// Never reused: salts this tab's egui ids, so tabs keep their own scroll and text fields.
+    pub(super) key: u64,
+    /// A repository restored at launch and not read yet: the tab reads it, and starts its
+    /// timers (status refresh, auto-fetch), the first time it is shown (`App::activate`).
+    pub(super) pending: Option<PathBuf>,
+    /// The name a sample-project tab shows (`FOURCHETTE_TABS` screenshots).
+    pub(super) sample_name: Option<String>,
     pub(super) repo: Option<Repo>,
     pub(super) commits: Vec<Commit>,
     pub(super) rows: Vec<Row>,
@@ -61,7 +68,11 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
 
 impl Tab {
     pub(super) fn new() -> Tab {
+        static NEXT_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         Tab {
+            key: NEXT_KEY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            pending: None,
+            sample_name: None,
             repo: None,
             commits: vec![],
             rows: vec![],
@@ -101,8 +112,27 @@ impl Tab {
         }
     }
 
+    /// A tab for `path`, read when it is first shown.
+    pub(super) fn unread(path: PathBuf) -> Tab {
+        Tab { pending: Some(path), ..Tab::new() }
+    }
+
     pub(super) fn is_demo(&self) -> bool {
         self.repo.is_none()
+    }
+
+    /// The repository this tab is about, read or not; None for the sample project.
+    pub(super) fn root(&self) -> Option<&std::path::Path> {
+        self.repo.as_ref().map(|r| r.root.as_path()).or(self.pending.as_deref())
+    }
+
+    /// The name on the tab: the repository's folder.
+    pub(super) fn name(&self) -> String {
+        match (&self.repo, &self.pending) {
+            (Some(r), _) => r.name(),
+            (None, Some(p)) => p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string()),
+            (None, None) => self.sample_name.clone().unwrap_or_else(|| "sample-project".into()),
+        }
     }
 
     pub(super) fn load_demo(&mut self) {
@@ -171,6 +201,9 @@ impl Tab {
     }
 
     pub(super) fn refresh_status(&mut self) {
+        if self.pending.is_some() {
+            return;
+        }
         if let Some(r) = &self.repo {
             self.status = r.status();
         }
@@ -181,7 +214,8 @@ impl Tab {
     /// (sub_10048580c), and fetches remotes automatically when that setting is on (here the
     /// person's choice in the Settings window, with its interval).
     fn timers(&mut self, ctx: &egui::Context, s: crate::settings::Settings) {
-        if self.repo.is_none() {
+        // The sample project, and a tab not read yet, have nothing to refresh or fetch.
+        if self.repo.is_none() || self.pending.is_some() {
             return;
         }
         if self.last_status.elapsed().as_secs_f32() > STATUS_UPDATE_SECS && self.busy.is_none() {
@@ -445,7 +479,12 @@ impl Tab {
             | Cmd::OpenUrl(_)
             | Cmd::ProjectReload
             | Cmd::ProjectPick(_)
-            | Cmd::Board => {}
+            | Cmd::Board
+            | Cmd::NewTab
+            | Cmd::OpenTab(_)
+            | Cmd::SelectTab(_)
+            | Cmd::CloseTab(_)
+            | Cmd::ShowTab { .. } => {}
         }
     }
 

@@ -5,6 +5,7 @@ mod project;
 mod repos;
 mod settings;
 mod tab;
+mod tabs;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
@@ -119,6 +120,16 @@ pub enum Cmd {
     ProjectPick(usize),
     /// Go to the Project view, or back to the history (⌘B).
     Board,
+    /// Tabs: pick a repository for a new tab in the switcher (⌘T, "+").
+    NewTab,
+    /// Open a repository in a new tab, or go to its tab when one shows it.
+    OpenTab(PathBuf),
+    /// Show the n-th tab.
+    SelectTab(usize),
+    /// Close the n-th tab; the last one stays.
+    CloseTab(usize),
+    /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
+    ShowTab { next: bool },
 }
 
 impl Cmd {
@@ -180,13 +191,9 @@ fn graph_width(max_lanes: usize) -> f32 {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext, repo_arg: Option<PathBuf>, screenshot: Option<PathBuf>) -> Self {
-        let library = crate::library::Library::load();
-        // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
-        let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
-        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
-        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
-        let mut app = App {
+    /// The app with one blank tab, before anything is open.
+    fn with_library(library: crate::library::Library, screenshot: Option<PathBuf>) -> Self {
+        App {
             tabs: vec![Tab::new()],
             active: 0,
             toast: None,
@@ -200,18 +207,34 @@ impl App {
             was_focused: true,
             palette: None,
             menu_cmds: Vec::new(),
-        };
+        }
+    }
+
+    pub fn new(cc: &eframe::CreationContext, repo_arg: Option<PathBuf>, screenshot: Option<PathBuf>) -> Self {
+        let library = crate::library::Library::load();
+        // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
+        let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
+        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
+        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
+        let mut app = App::with_library(library, screenshot);
         let cwd = std::env::current_dir().ok();
-        let candidate = repo_arg
-            .or_else(|| cwd.filter(|d| git::find_root(d).is_some()))
-            .or_else(|| if app.screenshot.is_none() { app.library.recent().first().map(|e| e.path.clone()) } else { None });
-        match candidate.map(|p| Repo::open(&p)) {
-            Some(Ok(r)) => app.set_repo(r),
-            Some(Err(e)) => {
-                app.tab_mut().load_demo();
-                app.notify(e, true);
+        let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
+        // The tabs open at the last quit come back (not in a screenshot); without any, the
+        // repository given, the current folder or the last one opened, as before tabs.
+        if app.screenshot.is_some() || !app.restore_tabs(explicit.clone()) {
+            let candidate = explicit.or_else(|| if app.screenshot.is_none() { app.library.recent().first().map(|e| e.path.clone()) } else { None });
+            match candidate.map(|p| Repo::open(&p)) {
+                Some(Ok(r)) => app.set_repo(r),
+                Some(Err(e)) => {
+                    app.tab_mut().load_demo();
+                    app.notify(e, true);
+                }
+                None => app.tab_mut().load_demo(),
             }
-            None => app.tab_mut().load_demo(),
+        }
+        // FOURCHETTE_TABS=<n> shows the sample project in n tabs, so the strip shows.
+        if let Some(n) = std::env::var("FOURCHETTE_TABS").ok().and_then(|v| v.trim().parse::<usize>().ok()) {
+            app.sample_tabs(n);
         }
         if std::env::var("FOURCHETTE_CLEANUP_PREVIEW").is_ok() {
             let a = |name: &str, action: &str, reason: &str, merged: bool| crate::ai::Advice {
@@ -296,6 +319,7 @@ impl App {
         self.tab_mut().set_repo(r);
         if self.screenshot.is_none() {
             self.library.touch(&root);
+            self.remember_tabs();
             self.library.save();
         }
         let layout = self.library.details(&root);
@@ -309,11 +333,14 @@ impl App {
         self.toast = Some((msg.into(), error, Instant::now()));
     }
 
-    /// Moves the tabs' latest messages to the window's toast.
+    /// Moves the tabs' latest messages to the window's toast. A message from a tab in the
+    /// background starts with its repository's name, since the toast is the window's.
     fn take_notices(&mut self) {
-        for t in &mut self.tabs {
-            if let Some(n) = t.notice.take() {
-                self.toast = Some(n);
+        let active = self.active;
+        for (i, t) in self.tabs.iter_mut().enumerate() {
+            if let Some((msg, error, at)) = t.notice.take() {
+                let msg = if i == active { msg } else { format!("{}: {msg}", t.name()) };
+                self.toast = Some((msg, error, at));
             }
         }
     }
@@ -324,11 +351,24 @@ impl App {
         for c in cmds {
             match c {
                 Cmd::OpenDialog => {
+                    // From the switcher opened for a new tab, the folder goes to a new tab too.
+                    let new_tab = self.switcher.as_ref().is_some_and(|s| s.new_tab);
                     if let Some(p) = rfd::FileDialog::new().set_title("Open a Git repository").pick_folder() {
-                        self.open_path(p);
+                        self.open_path(p, new_tab);
+                        if new_tab {
+                            self.switcher = None;
+                        }
                     }
                 }
-                Cmd::Open(p) => self.open_path(p),
+                Cmd::Open(p) => self.open_path(p, false),
+                Cmd::OpenTab(p) => self.open_path(p, true),
+                Cmd::NewTab => {
+                    let open = self.switcher.as_ref().is_some_and(|s| s.new_tab);
+                    self.switcher = if open { None } else { Some(repos::Switcher { new_tab: true, ..Default::default() }) };
+                }
+                Cmd::SelectTab(i) => self.activate(i),
+                Cmd::CloseTab(i) => self.close_tab(i),
+                Cmd::ShowTab { next } => self.show_next_tab(next),
                 Cmd::Copy(s) => {
                     ctx.copy_text(s);
                     self.notify("Copied", false);
@@ -404,17 +444,6 @@ impl App {
         if let (Some(r), None) = (&t.repo, &self.screenshot) {
             self.library.set_details(&r.root, l);
             self.library.save();
-        }
-    }
-
-    fn open_path(&mut self, p: PathBuf) {
-        match Repo::open(&p) {
-            Ok(r) => {
-                let name = r.name();
-                self.set_repo(r);
-                self.notify(format!("Opened {name}"), false);
-            }
-            Err(e) => self.notify(e, true),
         }
     }
 
