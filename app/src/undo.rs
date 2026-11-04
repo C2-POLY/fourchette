@@ -14,6 +14,8 @@ pub struct State {
     pub refs: Vec<(String, String)>,
     /// Stash commit shas, newest first.
     pub stashes: Vec<String>,
+    /// A rebase or merge (…) stopped on conflicts, as `Repo::operation` names it.
+    pub operation: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -28,6 +30,15 @@ pub struct Snapshot {
     pub trashed: Option<(String, PathBuf)>,
     /// Worktrees removed by the action (with their saved uncommitted work).
     pub worktrees: Vec<crate::worktree::Removed>,
+    /// Uncommitted changes before a pull (`git stash create`). A pull that put them aside and
+    /// back moved them onto the new commits, which `reset --keep` refuses to take back; Undo
+    /// then resets with `--hard` and re-applies these, as long as the changes are still as the
+    /// pull left them (`dirty_after`).
+    pub dirty: Option<String>,
+    /// `Repo::worktree_fingerprint` right after the pull.
+    pub dirty_after: Option<u64>,
+    /// The operation the action left stopped on conflicts (`Repo::operation`), which Undo aborts.
+    pub left: Option<String>,
 }
 
 impl Repo {
@@ -42,16 +53,21 @@ impl Repo {
             .collect();
         refs.sort();
         let stashes = self.git(&["stash", "list", "--format=%H"]).unwrap_or_default().lines().map(String::from).collect();
-        State { head_branch, head_sha, refs, stashes }
+        State { head_branch, head_sha, refs, stashes, operation: self.operation() }
     }
 
     pub fn snapshot(&self, label: &str, soft: bool, save_worktree: bool) -> Snapshot {
-        let worktree = if save_worktree {
-            self.git(&["stash", "create"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-        } else {
-            None
-        };
-        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, worktrees: Vec::new() }
+        let worktree = if save_worktree { self.stash_create() } else { None };
+        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
+    }
+
+    /// Notes, right after the action, what Undo needs to know of its result: the operation it
+    /// left stopped on conflicts, and the state of the uncommitted changes the snapshot saved.
+    pub fn after(&self, s: &mut Snapshot) {
+        s.left = self.operation().filter(|_| s.state.operation.is_none());
+        if s.dirty.is_some() {
+            s.dirty_after = Some(self.worktree_fingerprint());
+        }
     }
 
     /// Put the repository back to the snapshot. Returns what was undone.
@@ -64,6 +80,12 @@ impl Repo {
                 let _ = std::fs::create_dir_all(dir);
             }
             std::fs::rename(in_trash, &dst).map_err(|e| format!("Couldn't bring {path} back from the Trash: {e}"))?;
+        }
+        // 0. An operation the action left stopped on conflicts (a pull's rebase or merge) is
+        //    aborted: Git puts back the branch, and the changes it put aside (`--autostash`).
+        //    Only that one: a rebase started in a terminal since is the person's.
+        if let Some(op) = s.left.as_ref().filter(|op| self.operation().as_ref() == Some(*op)) {
+            self.git(&[op, "--abort"])?;
         }
         let now = self.state();
 
@@ -83,9 +105,12 @@ impl Repo {
         }
         // 2. Move the checked-out branch back to where it was.
         let head_now = self.git(&["rev-parse", "-q", "--verify", "HEAD"]).unwrap_or_default().trim().to_string();
+        let mut put_back = None;
         if !old.head_sha.is_empty() && head_now != old.head_sha {
             let mode = if s.soft { "--soft" } else { "--keep" };
-            self.git(&["reset", "-q", mode, &old.head_sha])?;
+            if let Err(e) = self.git(&["reset", "-q", mode, &old.head_sha]) {
+                put_back = Some(self.reset_dirty(s, e)?);
+            }
         }
         // 3. Every other branch and tag back to its old place; new ones removed, removed ones restored.
         let current = self.current_branch().map(|b| format!("refs/heads/{b}"));
@@ -113,14 +138,22 @@ impl Repo {
         for w in &s.worktrees {
             crate::worktree::restore(self, w)?;
         }
-        // 4. Stashes: a new stash is popped back into the files, a removed one is stored again.
+        // 4. Stashes: a new stash is popped back into the files, a removed one is stored again
+        //    under its own message. After `reset_dirty` the pull's autostash holds the changes
+        //    just re-applied, so it is dropped instead.
         let now = self.state();
         if now.stashes.len() > old.stashes.len() && now.stashes.get(1..) == Some(&old.stashes[..]) {
-            self.git(&["stash", "pop", "-q"])?;
+            if put_back.as_deref().is_some_and(|w| self.same_tree(&now.stashes[0], w)) {
+                self.git(&["stash", "drop", "-q"])?;
+            } else {
+                self.git(&["stash", "pop", "-q"])?;
+            }
         } else {
             for sha in old.stashes.iter().rev() {
                 if !now.stashes.contains(sha) {
-                    self.git(&["stash", "store", "-m", "Restored by Undo", sha])?;
+                    let msg = self.git(&["log", "-1", "--format=%s", sha]).map(|m| m.trim().to_string()).unwrap_or_default();
+                    let msg = if msg.is_empty() { "Restored by Undo".to_string() } else { msg };
+                    self.git(&["stash", "store", "-m", &msg, sha])?;
                 }
             }
         }
@@ -129,6 +162,29 @@ impl Repo {
             self.git(&["stash", "apply", "-q", w])?;
         }
         Ok(format!("Undid: {}", s.label))
+    }
+
+    /// Takes the branch back when `reset --keep` refused (`err`) because a pull moved the
+    /// uncommitted changes onto its commits: `reset --hard`, then the changes as they were before
+    /// the pull. Only when they are still as the pull left them, so no later edit is lost.
+    /// Returns the stash commit re-applied.
+    fn reset_dirty(&self, s: &Snapshot, err: String) -> Result<String, String> {
+        let Some(dirty) = s.dirty.as_ref().filter(|_| !s.soft) else { return Err(err) };
+        if s.dirty_after != Some(self.worktree_fingerprint()) {
+            return Err(format!("Your uncommitted changes were edited after “{}”. Commit or stash them, then Undo again.", s.label));
+        }
+        self.git(&["reset", "-q", "--hard", &s.state.head_sha])?;
+        if let Err(e) = self.git(&["stash", "apply", "-q", dirty]) {
+            // Never leave them only in a commit nobody points at.
+            let _ = self.git(&["stash", "store", "-m", &format!("Changes before {}", s.label), dirty]);
+            return Err(format!("{e}\nYour changes from before “{}” are in the stash list.", s.label));
+        }
+        Ok(dirty.clone())
+    }
+
+    fn same_tree(&self, a: &str, b: &str) -> bool {
+        let tree = |c: &str| self.git(&["rev-parse", &format!("{c}^{{tree}}")]).ok().map(|t| t.trim().to_string());
+        tree(a).is_some() && tree(a) == tree(b)
     }
 }
 
@@ -235,5 +291,210 @@ mod worktree_tests {
         assert!(repo.worktree_of("claude/task").is_some());
         let _ = std::fs::remove_dir_all(&wt_dir);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod pull_tests {
+    use super::Snapshot;
+    use crate::git::{exec, pull_args, pull_outcome, run_in, Repo};
+    use std::path::{Path, PathBuf};
+
+    /// A clone `a` with a commit of its own (g.txt), behind `origin/main`, which added line 4
+    /// ("B") to f.txt. Returns the folder holding everything, and `a`.
+    fn fixture(name: &str) -> (PathBuf, Repo) {
+        let base = std::env::temp_dir().join(format!("fourchette-pull-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let (a, b, remote) = (base.join("a"), base.join("b"), base.join("remote.git"));
+        let g = |dir: &Path, args: &[&str]| run_in(dir, args).unwrap();
+        g(&base, &["init", "-q", "--bare", "-b", "main", remote.to_str().unwrap()]);
+        g(&base, &["init", "-q", "-b", "main", a.to_str().unwrap()]);
+        g(&a, &["config", "user.name", "A"]);
+        g(&a, &["config", "user.email", "a@example.com"]);
+        std::fs::write(a.join("f.txt"), "1\n2\n3\n").unwrap();
+        g(&a, &["add", "-A"]);
+        g(&a, &["commit", "-q", "-m", "base"]);
+        g(&a, &["remote", "add", "origin", remote.to_str().unwrap()]);
+        g(&a, &["push", "-q", "-u", "origin", "main"]);
+        g(&base, &["clone", "-q", remote.to_str().unwrap(), b.to_str().unwrap()]);
+        g(&b, &["config", "user.name", "B"]);
+        g(&b, &["config", "user.email", "b@example.com"]);
+        std::fs::write(b.join("f.txt"), "1\n2\n3\nB\n").unwrap();
+        g(&b, &["commit", "-q", "-am", "remote change"]);
+        g(&b, &["push", "-q"]);
+        std::fs::write(a.join("g.txt"), "local\n").unwrap();
+        g(&a, &["add", "-A"]);
+        g(&a, &["commit", "-q", "-m", "local commit"]);
+        (base, Repo::open(&a).unwrap())
+    }
+
+    /// What `Tab::pull` and `poll_busy` do, without the thread.
+    fn pull(repo: &Repo, rebase: bool, autostash: bool) -> (Snapshot, Result<String, String>) {
+        let mut snap = Snapshot { dirty: repo.stash_create(), ..repo.snapshot("Pull", false, false) };
+        let args = pull_args("origin", "main", rebase, autostash);
+        let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let res = exec(&repo.root, &a).map(|(o, e)| format!("{o}{e}"));
+        let res = pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), "origin", "main");
+        repo.after(&mut snap);
+        (snap, res)
+    }
+
+    fn read(repo: &Repo, f: &str) -> String {
+        std::fs::read_to_string(repo.root.join(f)).unwrap()
+    }
+
+    fn mode(rebase: bool) -> &'static str {
+        if rebase { "rebase" } else { "merge" }
+    }
+
+    #[test]
+    fn undo_takes_back_a_clean_pull_in_both_modes() {
+        for rebase in [false, true] {
+            let (base, repo) = fixture(&format!("clean-{}", mode(rebase)));
+            let before = repo.state();
+            let (snap, res) = pull(&repo, rebase, false);
+            assert_eq!(res, Ok("Pulled origin/main".into()), "{}", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nB\n");
+            let log = repo.git(&["log", "--format=%s", "-3"]).unwrap();
+            if rebase {
+                assert_eq!(log, "local commit\nremote change\nbase\n", "rebased on top, no merge commit");
+            } else {
+                assert!(log.starts_with("Merge branch 'main'"), "{log}");
+            }
+            repo.undo(&snap).unwrap();
+            assert_eq!(repo.state(), before, "{}", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "1\n2\n3\n");
+            assert!(repo.status().is_empty());
+            let _ = std::fs::remove_dir_all(&base);
+        }
+    }
+
+    #[test]
+    fn without_stash_and_reapply_uncommitted_changes_stop_a_rebase_pull() {
+        let (base, repo) = fixture("dirty-off");
+        std::fs::write(repo.root.join("f.txt"), "X\n2\n3\n").unwrap();
+        let before = repo.state();
+        let (_, res) = pull(&repo, true, false);
+        let e = res.unwrap_err();
+        assert!(e.contains("Stash and reapply"), "{e}");
+        assert_eq!(repo.state(), before, "nothing moved");
+        assert_eq!(read(&repo, "f.txt"), "X\n2\n3\n");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn undo_after_stash_and_reapply_brings_back_the_changes_as_they_were() {
+        for rebase in [false, true] {
+            // The changed file is also changed by the pull: `reset --keep` alone would refuse.
+            let (base, repo) = fixture(&format!("autostash-{}", mode(rebase)));
+            std::fs::write(repo.root.join("f.txt"), "X\n2\n3\n").unwrap();
+            let before = repo.state();
+            let (snap, res) = pull(&repo, rebase, true);
+            assert_eq!(res, Ok("Pulled origin/main".into()), "{}", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "X\n2\n3\nB\n", "changes reapplied on top of the pull");
+            assert!(repo.state().stashes.is_empty());
+            repo.undo(&snap).unwrap();
+            assert_eq!(repo.state(), before, "{}", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "X\n2\n3\n");
+            assert_eq!(repo.status().unstaged.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), ["f.txt"]);
+            let _ = std::fs::remove_dir_all(&base);
+        }
+    }
+
+    #[test]
+    fn undo_refuses_rather_than_lose_edits_made_after_the_pull() {
+        let (base, repo) = fixture("edited-after");
+        std::fs::write(repo.root.join("f.txt"), "X\n2\n3\n").unwrap();
+        let (snap, res) = pull(&repo, true, true);
+        res.unwrap();
+        std::fs::write(repo.root.join("f.txt"), "X\n2\n3\nB\nlater\n").unwrap();
+        let after = repo.state();
+        let e = repo.undo(&snap).unwrap_err();
+        assert!(e.contains("edited after “Pull”"), "{e}");
+        assert_eq!(repo.state(), after, "nothing moved");
+        assert_eq!(read(&repo, "f.txt"), "X\n2\n3\nB\nlater\n");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn changes_that_conflict_on_reapply_stay_in_the_stash_and_undo_restores_them() {
+        for rebase in [false, true] {
+            let (base, repo) = fixture(&format!("reapply-conflict-{}", mode(rebase)));
+            std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nLOCAL\n").unwrap();
+            let before = repo.state();
+            let (snap, res) = pull(&repo, rebase, true);
+            let e = res.unwrap_err();
+            assert!(e.contains("conflict with it in f.txt") && e.contains("stash list"), "{e}");
+            assert_eq!(repo.state().stashes.len(), 1, "Git keeps the changes in the stash");
+            assert_eq!(repo.conflicted_files(), ["f.txt"]);
+            repo.undo(&snap).unwrap();
+            assert_eq!(repo.state(), before, "{}: no stash left, branch back", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nLOCAL\n");
+            assert!(repo.conflicted_files().is_empty());
+            let _ = std::fs::remove_dir_all(&base);
+        }
+    }
+
+    #[test]
+    fn a_pull_stopped_on_conflicts_is_aborted_by_undo() {
+        for rebase in [false, true] {
+            let (base, repo) = fixture(&format!("pull-conflict-{}", mode(rebase)));
+            std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nCOMMIT\n").unwrap();
+            repo.git(&["commit", "-q", "-am", "edit line 4"]).unwrap();
+            std::fs::write(repo.root.join("g.txt"), "dirty\n").unwrap();
+            let before = repo.state();
+            let (snap, res) = pull(&repo, rebase, true);
+            let e = res.unwrap_err();
+            assert!(e.starts_with(&format!("Pull stopped on conflicts in f.txt (a {} is in progress)", mode(rebase))), "{e}");
+            assert_eq!(repo.state().operation.as_deref(), Some(mode(rebase)));
+            repo.undo(&snap).unwrap();
+            assert_eq!(repo.state(), before, "{}", mode(rebase));
+            assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nCOMMIT\n");
+            assert_eq!(read(&repo, "g.txt"), "dirty\n", "the change put aside is back");
+            let _ = std::fs::remove_dir_all(&base);
+        }
+    }
+
+    #[test]
+    fn undo_leaves_alone_a_rebase_started_in_a_terminal_since() {
+        let (base, repo) = fixture("terminal-rebase");
+        std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nCOMMIT\n").unwrap();
+        let mut snap = repo.snapshot("Commit", true, false);
+        repo.git(&["commit", "-q", "-am", "edit line 4"]).unwrap();
+        repo.after(&mut snap);
+        assert_eq!(snap.left, None);
+        // Then, in a terminal: a rebase that stops on conflicts, half resolved.
+        repo.git(&["fetch", "-q"]).unwrap();
+        assert!(repo.git(&["rebase", "origin/main"]).is_err());
+        std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nresolved by hand\n").unwrap();
+        let _ = repo.undo(&snap);
+        assert_eq!(repo.operation().as_deref(), Some("rebase"), "not aborted");
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nresolved by hand\n");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn undo_of_apply_and_delete_stores_the_stash_again_under_its_name() {
+        let (base, repo) = fixture("apply-delete");
+        std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nwip\n").unwrap();
+        repo.git(&["stash", "push", "-q", "-m", "my work"]).unwrap();
+        std::fs::write(repo.root.join("h.txt"), "other\n").unwrap();
+        repo.git(&["add", "h.txt"]).unwrap();
+        repo.git(&["stash", "push", "-q", "-m", "older"]).unwrap();
+        let before = repo.state();
+        let list = |r: &Repo| r.git(&["stash", "list", "--format=%s"]).unwrap();
+        let names_before = list(&repo);
+        // What the Apply button runs with "Delete stash after Apply" on, through `Tab::git`.
+        let crate::app::Cmd::Git { args, .. } = crate::app::Cmd::apply_stash("stash@{1}", true) else { panic!() };
+        let snap = repo.snapshot("Stash applied and deleted", false, false);
+        repo.git(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap();
+        assert_eq!(repo.state().stashes.len(), 1);
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nwip\n");
+        repo.undo(&snap).unwrap();
+        assert_eq!(repo.state().stashes.len(), 2);
+        assert!(before.stashes.iter().all(|s| repo.state().stashes.contains(s)), "the same stash commits");
+        assert!(list(&repo).lines().any(|l| l == "On main: my work"), "{}\nwas\n{names_before}", list(&repo));
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

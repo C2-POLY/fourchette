@@ -472,7 +472,7 @@ mod tests {
         // Its timers and the refresh on focus leave it alone.
         let long_ago = Instant::now().checked_sub(std::time::Duration::from_secs(3600)).unwrap();
         let ctx = egui::Context::default();
-        let settings = crate::settings::Settings { auto_fetch: true, fetch_minutes: 1 };
+        let settings = crate::settings::Settings { auto_fetch: true, fetch_minutes: 1, ..Default::default() };
         for t in &mut a.tabs {
             t.last_status = long_ago;
             t.last_fetch = long_ago;

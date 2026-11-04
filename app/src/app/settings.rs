@@ -45,9 +45,10 @@ pub(super) struct Section {
     body: fn(&mut Ui, &mut Pane<'_>),
 }
 
-pub(super) const SECTIONS: [Section; 2] = [
+pub(super) const SECTIONS: [Section; 3] = [
     Section { key: "appearance", label: "Appearance", tint: Color32::from_rgb(0x6e, 0x5b, 0xd6), icon: appearance_glyph, body: appearance },
     Section { key: "fetch", label: "Fetch", tint: Color32::from_rgb(0x1c, 0x8c, 0xf0), icon: fetch_glyph, body: fetch },
+    Section { key: "git", label: "Git", tint: Color32::from_rgb(0xe8, 0x5d, 0x3a), icon: git_glyph, body: git },
 ];
 
 /// The section a key names (any case), or the first one.
@@ -67,6 +68,10 @@ fn appearance_glyph(p: &Painter, c: Pos2) {
 
 fn fetch_glyph(p: &Painter, c: Pos2) {
     crate::ui::glyph(p, c, "fetch", 15.0, 1.4, Color32::WHITE);
+}
+
+fn git_glyph(p: &Painter, c: Pos2) {
+    crate::ui::glyph(p, c, "branch", 15.0, 1.4, Color32::WHITE);
 }
 
 /// A section's entry in the sidebar: its icon in a coloured square, then its name.
@@ -307,6 +312,32 @@ fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
 }
 
+/// Pull's mode and the stash, Fork's "pullSheetRebase", "pullSheetStashAndReapply" and
+/// "deleteStashAfterApply" (all off by default).
+fn git(ui: &mut Ui, pane: &mut Pane<'_>) {
+    let s = &mut *pane.settings;
+    card(ui, |c| {
+        let ctrl = c.row("Pull", "Rebase keeps the history linear", vec2(SEG_W, SEG_H), true);
+        let modes = ["Merge", "Rebase"];
+        let picked = segmented(c.ui, ctrl, modes.len(), s.pull_rebase as usize, true, "pull_rebase", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, modes[i], theme::body(), fg);
+        });
+        if let Some(i) = picked {
+            s.pull_rebase = i == 1;
+        }
+        let ctrl = c.row("Stash and reapply", "Puts uncommitted changes aside during a pull, then back", vec2(36.0, 20.0), true);
+        if toggle(c.ui, ctrl, "pull_autostash", s.pull_autostash) {
+            s.pull_autostash = !s.pull_autostash;
+        }
+    });
+    card(ui, |c| {
+        let ctrl = c.row("Delete stash after Apply", "Once applied without conflicts; Undo (⌘Z) brings it back", vec2(36.0, 20.0), true);
+        if toggle(c.ui, ctrl, "delete_stash_after_apply", s.delete_stash_after_apply) {
+            s.delete_stash_after_apply = !s.delete_stash_after_apply;
+        }
+    });
+}
+
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
         if !self.settings_open {
@@ -393,7 +424,7 @@ mod tests {
 
     #[test]
     fn sections_have_unique_lowercase_keys_and_names() {
-        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch"]);
+        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Git"]);
         for (i, s) in SECTIONS.iter().enumerate() {
             assert!(!s.label.is_empty());
             assert_eq!(s.key, s.key.to_lowercase(), "{}", s.label);
@@ -406,6 +437,7 @@ mod tests {
     fn section_index_reads_any_case_and_falls_back_to_the_first() {
         assert_eq!(section_index("fetch"), 1);
         assert_eq!(section_index(" Fetch "), 1);
+        assert_eq!(section_index("GIT"), 2);
         // FOURCHETTE_SETTINGS=1, or a section that does not exist yet, opens Appearance.
         for other in ["1", "", "claude", "appearance"] {
             assert_eq!(section_index(other), 0, "{other}");

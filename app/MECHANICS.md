@@ -75,8 +75,8 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | compactBranchLabels | true | 2 px gap between branch labels |
 | createBranchSheetCheckout | true | "Switch to the new branch" ticked by default |
 | saveStashSheetStageNewFiles | true | Stash includes new files (`stash push -u`) |
-| deleteStashAfterApply | false | Apply keeps the stash; Pop removes it |
-| pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit <remote> <branch>`) |
+| deleteStashAfterApply | false | Apply keeps the stash; Pop removes it. A user setting (Settings › Git): on, Apply runs `stash pop` |
+| pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit --no-rebase <remote> <branch>`). User settings (Settings › Git): Merge or Rebase (`--rebase`), and "Stash and reapply" (`--autostash`) |
 | fetchSheetFetchAllRemotes / fetchSheetFetchAllTags | false / false | Fetch one remote, no `--tags` (Option-click = all remotes) |
 | pushSheetPushAllTags | false | no `--tags` |
 | contextSize | 3 | diffs use `--unified=3` |
@@ -91,7 +91,7 @@ in the Settings window. The exact git command Pull runs was not located.
 ## User settings (issue #16)
 
 The Settings window (⌘, or "Settings…" in the palette, Esc to close) is laid out like macOS System
-Settings (issue #52): a sidebar of sections with drawn icons (Appearance, Fetch; Up and Down move
+Settings (issue #52): a sidebar of sections with drawn icons (Appearance, Fetch, Git; Up and Down move
 between them) and, on the right, the section's settings in rounded cards. Appearance holds the mode
 (System, Dark, Light) and the variants as preview tiles; Fetch the automatic fetch (on/off and its
 interval). Choices apply at once and are kept in repos.json, all in a `"settings"` object
@@ -100,6 +100,14 @@ with `"appearance"` and `"variant"` at the top level, is still read (the `"setti
 when both hold a valid value) and is rewritten in the new layout at the next save. A missing or
 invalid key falls back to its default (System, Classic, on, 10 minutes) without touching the
 repository list.
+
+The Git section (issue #18) holds Fork's pull sheet and stash defaults, all off by default:
+Pull merges or rebases (`"pull_rebase"`), "Stash and reapply" puts uncommitted changes aside
+during the pull (`"pull_autostash"`), and "Delete stash after Apply" (`"delete_stash_after_apply"`)
+makes a stash's Apply a `stash pop`, which keeps the stash when applying it conflicts. Pull always
+names its mode (`--rebase` or `--no-rebase`), so the setting wins over `pull.rebase` in the
+person's Git config. A pull stopped on conflicts, or whose stashed changes conflict when put back
+(Git then keeps them in the stash list as "autostash"), is reported as an error saying so.
 
 ## Screens (from the compiled layouts in Resources/*.nib)
 
@@ -159,6 +167,11 @@ Dragging the toolbar's empty background moves the window; a double-click zooms i
   `reset --keep` (refuses rather than lose local edits); branches/tags are restored with
   `update-ref`; a new stash is popped back; a dropped stash is stored again; discarded edits are
   saved with `git stash create` first and re-applied; a new file sent to the Trash is moved back.
+  A rebase or merge left stopped on conflicts (a pull's) is aborted first. A pull also saves the
+  uncommitted changes: when it moved them onto the pulled commits ("Stash and reapply") and
+  `reset --keep` refuses, Undo resets with `--hard` and re-applies them as they were, only if they
+  were not edited since the pull (otherwise it refuses), and drops Git's "autostash" copy. A
+  dropped stash comes back under its own message.
   30 steps deep. Actions that change nothing are not recorded. Push and fetch are not undoable
   (they touch the server).
 * **Command palette** (⌘K or ⌘P): type to run any action, check out or merge any branch, open a

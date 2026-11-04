@@ -174,6 +174,54 @@ pub fn push_summary(out: &str, branch: &str, remote: &str) -> String {
     }
 }
 
+/// `pull --no-edit --rebase|--no-rebase [--autostash] <remote> <branch>`. The mode is always
+/// named, so the Settings window's choice wins over `pull.rebase` in the person's Git config (and
+/// Git never stops on "divergent branches" for want of one). `--autostash` puts uncommitted
+/// changes aside and back ("pullSheetStashAndReapply").
+pub fn pull_args(remote: &str, branch: &str, rebase: bool, autostash: bool) -> Vec<String> {
+    let mut a = vec!["pull".to_string(), "--no-edit".into(), if rebase { "--rebase" } else { "--no-rebase" }.into()];
+    if autostash {
+        a.push("--autostash".into());
+    }
+    a.push(remote.into());
+    a.push(branch.into());
+    a
+}
+
+/// "a.txt", "a.txt and b.txt", "a.txt, b.txt, c.txt and 2 more".
+fn file_list(files: &[String]) -> String {
+    match files {
+        [] => "some files".into(),
+        [a] => a.clone(),
+        [a, b] => format!("{a} and {b}"),
+        [a, b, c] => format!("{a}, {b} and {c}"),
+        [a, b, c, rest @ ..] => format!("{a}, {b}, {c} and {} more", rest.len()),
+    }
+}
+
+/// What a pull says once it returned. `res` is git's output (or error), `operation` the rebase or
+/// merge it left stopped on conflicts, `conflicts` the files left with conflict markers.
+pub fn pull_outcome(res: Result<String, String>, operation: Option<&str>, conflicts: &[String], remote: &str, branch: &str) -> Result<String, String> {
+    match (res, operation) {
+        (_, Some(op)) => Err(format!(
+            "Pull stopped on conflicts in {} (a {op} is in progress). Resolve them in a terminal, or Undo (⌘Z) to go back to before the pull.",
+            file_list(conflicts)
+        )),
+        // The pull went through, but the changes put aside didn't go back cleanly: Git keeps them
+        // in the stash list.
+        (Ok(_), None) if !conflicts.is_empty() => Err(format!(
+            "Pulled {remote}/{branch}, but your uncommitted changes conflict with it in {}. They are safe in the stash list (“autostash”); Undo (⌘Z) goes back to before the pull.",
+            file_list(conflicts)
+        )),
+        (Ok(out), None) if out.contains("Already up to date") || out.contains("is up to date") => Ok("Already up to date".into()),
+        (Ok(_), None) => Ok(format!("Pulled {remote}/{branch}")),
+        (Err(e), None) if e.contains("unstaged changes") || e.contains("uncommitted changes") || e.contains("would be overwritten") => {
+            Err(format!("{e}\nCommit or stash your changes first, or turn on “Stash and reapply” in Settings › Git."))
+        }
+        (Err(e), None) => Err(e),
+    }
+}
+
 /// Move an untracked file to the Trash instead of deleting it (sub_100053aac).
 pub fn trash(root: &Path, path: &str) -> Result<PathBuf, String> {
     let src = root.join(path);
@@ -397,6 +445,46 @@ impl Repo {
         }
     }
 
+    /// The Git operation stopped half-way in this working copy (on conflicts), named as the
+    /// command that aborts it: "rebase", "merge", "cherry-pick", "revert" or "am".
+    pub fn operation(&self) -> Option<String> {
+        let dir = PathBuf::from(self.git(&["rev-parse", "--absolute-git-dir"]).ok()?.trim());
+        let op = if dir.join("rebase-apply/applying").exists() {
+            "am"
+        } else if dir.join("rebase-merge").exists() || dir.join("rebase-apply").exists() {
+            "rebase"
+        } else if dir.join("MERGE_HEAD").exists() {
+            "merge"
+        } else if dir.join("CHERRY_PICK_HEAD").exists() {
+            "cherry-pick"
+        } else if dir.join("REVERT_HEAD").exists() {
+            "revert"
+        } else {
+            return None;
+        };
+        Some(op.into())
+    }
+
+    /// Files with unresolved conflicts.
+    pub fn conflicted_files(&self) -> Vec<String> {
+        self.git(&["diff", "--name-only", "--diff-filter=U"]).unwrap_or_default().lines().map(String::from).collect()
+    }
+
+    /// The uncommitted changes to tracked files as a stash commit that is not in the stash list
+    /// (`git stash create`), or None when there are none.
+    pub fn stash_create(&self) -> Option<String> {
+        self.git(&["stash", "create"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    }
+
+    /// A fingerprint of the uncommitted changes to tracked files (conflicted ones included), to
+    /// tell whether they were edited since.
+    pub fn worktree_fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.git(&["diff", "HEAD", "--binary"]).unwrap_or_default().hash(&mut h);
+        h.finish()
+    }
+
     /// The upstream as (remote, branch), if the current branch has one.
     pub fn upstream(&self) -> Option<(String, String)> {
         let up = self.git(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]).ok()?;
@@ -574,5 +662,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&bare);
         g(&["stash", "list"]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pull_names_its_mode_and_autostash() {
+        assert_eq!(pull_args("origin", "main", false, false), ["pull", "--no-edit", "--no-rebase", "origin", "main"]);
+        assert_eq!(pull_args("origin", "main", true, false), ["pull", "--no-edit", "--rebase", "origin", "main"]);
+        assert_eq!(pull_args("up", "dev", true, true), ["pull", "--no-edit", "--rebase", "--autostash", "up", "dev"]);
+        assert_eq!(pull_args("up", "dev", false, true), ["pull", "--no-edit", "--no-rebase", "--autostash", "up", "dev"]);
+    }
+
+    #[test]
+    fn pull_outcome_says_what_happened() {
+        let ok = |o: &str| pull_outcome(Ok(o.into()), None, &[], "origin", "main");
+        assert_eq!(ok("Already up to date.\n"), Ok("Already up to date".into()));
+        assert_eq!(ok("Current branch main is up to date.\n"), Ok("Already up to date".into()));
+        assert_eq!(ok("Fast-forward\n a.txt | 1 +\n"), Ok("Pulled origin/main".into()));
+        // The changes put aside didn't go back cleanly: an error, so it shows in red.
+        let files = vec!["a.txt".to_string()];
+        let e = pull_outcome(Ok("Applying autostash resulted in conflicts.".into()), None, &files, "origin", "main").unwrap_err();
+        assert!(e.starts_with("Pulled origin/main, but your uncommitted changes conflict with it in a.txt."), "{e}");
+        assert!(e.contains("stash list") && e.contains("Undo"), "{e}");
+        // A rebase stopped on conflicts, whatever git printed.
+        let e = pull_outcome(Err("hint: …".into()), Some("rebase"), &files, "origin", "main").unwrap_err();
+        assert!(e.starts_with("Pull stopped on conflicts in a.txt (a rebase is in progress)."), "{e}");
+        // Uncommitted changes in the way: point at the setting.
+        let e = pull_outcome(Err("error: cannot pull with rebase: You have unstaged changes.".into()), None, &[], "origin", "main").unwrap_err();
+        assert!(e.ends_with("turn on “Stash and reapply” in Settings › Git."), "{e}");
+        assert_eq!(pull_outcome(Err("fatal: no network".into()), None, &[], "origin", "main"), Err("fatal: no network".into()));
+        let many: Vec<String> = ["a", "b", "c", "d", "e"].map(String::from).to_vec();
+        assert_eq!(file_list(&many), "a, b, c and 2 more");
+        assert_eq!(file_list(&many[..2]), "a and b");
     }
 }
