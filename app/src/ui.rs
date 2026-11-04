@@ -396,6 +396,14 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
             k.line(&Ink::arc(12.0, 12.0, 8.0, 173.0, 20.0));
             k.line(&[(20.0, 19.0), (20.0, 14.7), (16.0, 14.7)]);
         }
+        // a page with a plus above a minus: what a diff adds and removes
+        "diff" => {
+            let page = Rect::from_min_max(k.t(4.0, 3.0), k.t(20.0, 21.0));
+            k.p.rect_stroke(page, CornerRadius::same(3), k.s, StrokeKind::Middle);
+            k.line(&[(12.0, 6.0), (12.0, 11.0)]);
+            k.line(&[(9.5, 8.5), (14.5, 8.5)]);
+            k.line(&[(9.5, 16.0), (14.5, 16.0)]);
+        }
         "ai" => {
             k.star(9.0, 14.5, 8.5);
             k.star(19.5, 5.0, 3.2);

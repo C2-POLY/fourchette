@@ -806,8 +806,8 @@ impl Tab {
         let resp = ui.add(egui::TextEdit::singleline(&mut self.summary).hint_text(faint_hint("Commit subject")).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 6)));
         let n = self.summary.chars().count();
         if n > 0 {
-            // Subject length warning at the original's limits (50 / 70 characters).
-            let col = if n > SUBJECT_LIMIT_HIGH { theme::c().deleted } else if n > SUBJECT_LIMIT_LOW { theme::c().modified } else { theme::c().faint };
+            // Subject length warning at the settings' limits (50 / 70 characters by default).
+            let col = if n > self.subject_limits.1 { theme::c().deleted } else if n > self.subject_limits.0 { theme::c().modified } else { theme::c().faint };
             ui.painter().text(pos2(resp.rect.right() - 8.0, resp.rect.center().y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), col);
         }
         ui.add(egui::TextEdit::multiline(&mut self.description).hint_text(faint_hint("Description")).desired_rows(3).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 6)));

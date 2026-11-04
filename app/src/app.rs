@@ -406,6 +406,12 @@ impl App {
                     self.library.settings = s;
                     self.library.save();
                 }
+                // The hidden palette command sets the same setting as the Settings window.
+                Cmd::SetCommitLimit(n) => {
+                    self.library.settings.max_commits = n;
+                    self.library.save();
+                    self.notify(format!("maxCommitCount set to {n}"), false);
+                }
                 Cmd::SetDetails(l) => self.set_details(l),
                 Cmd::ToggleDetails => self.set_details(self.tab().details_layout.toggled()),
                 Cmd::SetVariant(v) => {

@@ -579,4 +579,21 @@ mod tests {
         assert_eq!(TabKey::of(Key::CloseBracket, m(true, false, false)), None);
         assert!(matches!(TabKey::Close.cmd(3), Cmd::CloseTab(3)));
     }
+
+    #[test]
+    fn the_palette_command_sets_the_saved_setting_the_tabs_follow() {
+        let d = tmp("commit-limit");
+        let r1 = repo(&d, "one");
+        let mut a = app(&d);
+        a.open_path(r1, false);
+        let ctx = egui::Context::default();
+        a.run(vec![Cmd::SetCommitLimit(5_000)], &ctx);
+        assert_eq!(a.library.settings.max_commits, 5_000);
+        assert_eq!(toast(&a), Some("maxCommitCount set to 5000"));
+        tab::poll_tabs(&mut a.tabs, &ctx, a.library.settings, false);
+        assert_eq!(a.tabs[0].commit_limit, 5_000);
+        // Kept for the next launch.
+        assert_eq!(crate::library::Library::read(&d.join("repos.json")).settings.max_commits, 5_000);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

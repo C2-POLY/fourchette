@@ -86,7 +86,7 @@ pub const LOCK_RETRY_STEP_SECS: f32 = 0.5;
 pub const LOCK_MESSAGE: &str = "index.lock': File exists.";
 /// Default "maxCommitCount" (settings table, sub_10031b7cc).
 pub const MAX_COMMIT_COUNT: usize = 100_000;
-/// Default diff "contextSize" (sub_10031b7cc).
+/// Default diff "contextSize" (sub_10031b7cc); the person's choice is `Settings::diff_context`.
 pub const DIFF_CONTEXT: u32 = 3;
 
 /// Runs git and returns (stdout, stderr). Retries while the repository is locked.
@@ -408,23 +408,23 @@ impl Repo {
         })
     }
 
-    pub fn diff_commit_file(&self, hash: &str, path: &str) -> String {
-        self.git(&["show", "--format=", "-M", "--first-parent", &format!("--unified={DIFF_CONTEXT}"), hash, "--", path]).unwrap_or_else(|e| e)
+    pub fn diff_commit_file(&self, hash: &str, path: &str, context: u32) -> String {
+        self.git(&["show", "--format=", "-M", "--first-parent", &format!("--unified={context}"), hash, "--", path]).unwrap_or_else(|e| e)
     }
 
-    pub fn diff_worktree_file(&self, path: &str, staged: bool, untracked: bool) -> String {
+    pub fn diff_worktree_file(&self, path: &str, staged: bool, untracked: bool, context: u32) -> String {
         if untracked {
             // `git diff --no-index` exits with 1 when files differ, so read stdout directly.
             let out = Command::new("git")
-                .args(["diff", "--no-index", &format!("--unified={DIFF_CONTEXT}"), "--", "/dev/null", path])
+                .args(["diff", "--no-index", &format!("--unified={context}"), "--", "/dev/null", path])
                 .current_dir(&self.root)
                 .output();
             return out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
         }
         if staged {
-            self.git(&["diff", "--cached", "-M", &format!("--unified={DIFF_CONTEXT}"), "--", path]).unwrap_or_else(|e| e)
+            self.git(&["diff", "--cached", "-M", &format!("--unified={context}"), "--", path]).unwrap_or_else(|e| e)
         } else {
-            self.git(&["diff", &format!("--unified={DIFF_CONTEXT}"), "--", path]).unwrap_or_else(|e| e)
+            self.git(&["diff", &format!("--unified={context}"), "--", path]).unwrap_or_else(|e| e)
         }
     }
 
@@ -610,7 +610,7 @@ mod tests {
         assert_eq!(d.body, "with a body");
         assert_eq!(d.files.len(), 1);
         assert_eq!(d.files[0].path, "b.txt");
-        assert!(repo.diff_commit_file(&side.hash, "b.txt").contains("+two"));
+        assert!(repo.diff_commit_file(&side.hash, "b.txt", DIFF_CONTEXT).contains("+two"));
 
         // Working copy: one modified (staged), one untracked, one deleted (unstaged).
         std::fs::write(dir.join("a.txt"), "changed\n").unwrap();
@@ -621,8 +621,8 @@ mod tests {
         assert!(st.staged.iter().any(|f| f.path == "a.txt" && f.code == 'M'));
         assert!(st.unstaged.iter().any(|f| f.path == "new.txt" && f.code == '?'));
         assert!(st.unstaged.iter().any(|f| f.path == "b.txt" && f.code == 'D'));
-        assert!(repo.diff_worktree_file("new.txt", false, true).contains("+x"));
-        assert!(repo.diff_worktree_file("a.txt", true, false).contains("+changed"));
+        assert!(repo.diff_worktree_file("new.txt", false, true, DIFF_CONTEXT).contains("+x"));
+        assert!(repo.diff_worktree_file("a.txt", true, false, DIFF_CONTEXT).contains("+changed"));
 
         // Stage everything (as "Stage all" does), commit, unstage path.
         g(&["add", "-A"]);

@@ -16,6 +16,20 @@ pub const DEFAULT_PULL_AUTOSTASH: bool = false;
 /// "deleteStashAfterApply" default false: Apply keeps the stash (sub_10031b7cc).
 pub const DEFAULT_DELETE_STASH_AFTER_APPLY: bool = false;
 
+/// "contextSize" default (sub_10031b7cc): the lines of context around a change in a diff.
+pub const DEFAULT_DIFF_CONTEXT: u32 = 3;
+/// The context sizes the Settings window offers.
+pub const DIFF_CONTEXTS: [u32; 5] = [1, 3, 5, 10, 25];
+/// "commitSubjectLimitLow" / "commitSubjectLimitHigh" defaults (sub_10031b7cc).
+pub const DEFAULT_SUBJECT_LOW: usize = 50;
+pub const DEFAULT_SUBJECT_HIGH: usize = 70;
+/// The subject limits stay inside this range, and low stays under high.
+pub const SUBJECT_RANGE: std::ops::RangeInclusive<usize> = 10..=200;
+/// "maxCommitCount" default (settings table, sub_10031b7cc).
+pub const DEFAULT_MAX_COMMITS: usize = 100_000;
+/// The commit counts the Settings window offers.
+pub const MAX_COMMITS: [usize; 4] = [1_000, 10_000, 50_000, 100_000];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// Fetch the open repository's remote in the background.
@@ -28,6 +42,14 @@ pub struct Settings {
     pub pull_autostash: bool,
     /// A stash's Apply also deletes it once applied without conflicts (`stash pop`).
     pub delete_stash_after_apply: bool,
+    /// Lines of context around a change in a diff (`--unified=`).
+    pub diff_context: u32,
+    /// The commit subject counter turns orange above this, and Claude's soft limit.
+    pub subject_low: usize,
+    /// ... red above this, and Claude's hard limit. Always above `subject_low`.
+    pub subject_high: usize,
+    /// How many commits the history loads (`settings maxCommitCount <n>` in the palette sets it too).
+    pub max_commits: usize,
 }
 
 impl Default for Settings {
@@ -38,6 +60,10 @@ impl Default for Settings {
             pull_rebase: DEFAULT_PULL_REBASE,
             pull_autostash: DEFAULT_PULL_AUTOSTASH,
             delete_stash_after_apply: DEFAULT_DELETE_STASH_AFTER_APPLY,
+            diff_context: DEFAULT_DIFF_CONTEXT,
+            subject_low: DEFAULT_SUBJECT_LOW,
+            subject_high: DEFAULT_SUBJECT_HIGH,
+            max_commits: DEFAULT_MAX_COMMITS,
         }
     }
 }
@@ -46,12 +72,22 @@ impl Settings {
     /// Reads the `"settings"` object; each key that is missing or invalid keeps its default.
     pub fn from_json(v: &Value) -> Settings {
         let d = Settings::default();
+        let n = |key: &str| v[key].as_u64().filter(|n| *n > 0);
+        // The two subject limits only count together, and only when low is under high.
+        let limits = match (n("subject_low"), n("subject_high")) {
+            (Some(l), Some(h)) if l < h && SUBJECT_RANGE.contains(&(l as usize)) && SUBJECT_RANGE.contains(&(h as usize)) => (l as usize, h as usize),
+            _ => (d.subject_low, d.subject_high),
+        };
         Settings {
             auto_fetch: v["auto_fetch"].as_bool().unwrap_or(d.auto_fetch),
             fetch_minutes: v["fetch_minutes"].as_u64().map(|m| m as u32).filter(|m| FETCH_MINUTES.contains(m)).unwrap_or(d.fetch_minutes),
             pull_rebase: v["pull_rebase"].as_bool().unwrap_or(d.pull_rebase),
             pull_autostash: v["pull_autostash"].as_bool().unwrap_or(d.pull_autostash),
             delete_stash_after_apply: v["delete_stash_after_apply"].as_bool().unwrap_or(d.delete_stash_after_apply),
+            diff_context: n("diff_context").filter(|c| *c <= 100).map(|c| c as u32).unwrap_or(d.diff_context),
+            subject_low: limits.0,
+            subject_high: limits.1,
+            max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
         }
     }
 
@@ -62,12 +98,29 @@ impl Settings {
             "pull_rebase": self.pull_rebase,
             "pull_autostash": self.pull_autostash,
             "delete_stash_after_apply": self.delete_stash_after_apply,
+            "diff_context": self.diff_context,
+            "subject_low": self.subject_low,
+            "subject_high": self.subject_high,
+            "max_commits": self.max_commits,
         })
     }
 
     pub fn fetch_secs(self) -> f32 {
         self.fetch_minutes as f32 * 60.0
     }
+}
+
+/// "1,000", "100,000".
+pub fn count_label(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// "5 min", "30 min", "1 hour".
@@ -137,5 +190,41 @@ mod tests {
         // A value of the wrong type goes back to its default; the valid one next to it is kept.
         let s = Settings::from_json(&json!({"pull_rebase": "yes", "pull_autostash": 1, "delete_stash_after_apply": true}));
         assert_eq!(s, Settings { delete_stash_after_apply: true, ..Settings::default() });
+    }
+
+    #[test]
+    fn the_diff_and_commit_settings_default_and_round_trip() {
+        let d = Settings::default();
+        assert_eq!((d.diff_context, d.subject_low, d.subject_high, d.max_commits), (3, 50, 70, 100_000));
+        assert!(DIFF_CONTEXTS.contains(&d.diff_context) && MAX_COMMITS.contains(&d.max_commits));
+        let s = Settings { diff_context: 10, subject_low: 40, subject_high: 60, max_commits: 5_000, ..d };
+        assert_eq!(Settings::from_json(&s.to_json()), s);
+        // An older file without these keys gets the defaults and keeps the rest.
+        assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
+    }
+
+    #[test]
+    fn invalid_diff_and_commit_values_fall_back_one_by_one() {
+        let d = Settings::default();
+        for bad in [json!(0), json!(-1), json!("5"), json!(2.5), json!(null), json!(1000)] {
+            let s = Settings::from_json(&json!({"diff_context": bad, "max_commits": bad, "subject_low": 40, "subject_high": 60}));
+            assert_eq!(s.diff_context, d.diff_context, "{bad}");
+            assert_eq!((s.subject_low, s.subject_high), (40, 60), "{bad}");
+            assert_eq!(s.max_commits, if bad == json!(1000) { 1000 } else { d.max_commits }, "{bad}");
+        }
+        // Low at or above high, out of range, or only one of the two: both go back to 50 / 70.
+        for (l, h) in [(70, 70), (80, 60), (5, 70), (50, 500)] {
+            let s = Settings::from_json(&json!({"subject_low": l, "subject_high": h}));
+            assert_eq!((s.subject_low, s.subject_high), (50, 70), "{l}/{h}");
+        }
+        let s = Settings::from_json(&json!({"subject_low": 40}));
+        assert_eq!((s.subject_low, s.subject_high), (50, 70));
+    }
+
+    #[test]
+    fn counts_read_with_thousands_separators() {
+        assert_eq!(MAX_COMMITS.map(count_label), ["1,000", "10,000", "50,000", "100,000"]);
+        assert_eq!(count_label(7), "7");
+        assert_eq!(count_label(123_456_789), "123,456,789");
     }
 }

@@ -84,7 +84,7 @@ impl Tab {
             self.notify("Stage some changes first, then Claude can describe them.", true);
             return;
         }
-        let prompt = ai::commit_message_prompt(&diff, self.amend, SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH, ai::PAGE_GUIDE_COLUMN);
+        let prompt = ai::commit_message_prompt(&diff, self.amend, self.subject_limits.0, self.subject_limits.1, ai::PAGE_GUIDE_COLUMN);
         self.ai_spawn(AiJob::CommitMessage, prompt, None, ctx);
     }
 

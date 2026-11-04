@@ -601,6 +601,10 @@ mod tests {
                 "pull_rebase": false,
                 "pull_autostash": false,
                 "delete_stash_after_apply": false,
+                "diff_context": 3,
+                "subject_low": 50,
+                "subject_high": 70,
+                "max_commits": 100_000,
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");
