@@ -223,7 +223,7 @@ impl App {
                             cmds.push(Cmd::ScanFolder);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::c().faint));
+                            ui.add(egui::Label::new(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::c().faint)).truncate());
                         });
                     });
                 });
