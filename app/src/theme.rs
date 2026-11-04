@@ -4,6 +4,7 @@
 //! in both versions; the branch colours stay the same in all of them.
 //! The views read the colours of the variant and mode on screen through `c()`.
 use egui::{Color32, CornerRadius, FontId, Shadow, Stroke, TextStyle, Theme, ThemePreference, Visuals};
+use crate::settings::{CodeFont, UiFont};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 // Branch palette: the original program's 9 colours (see MECHANICS.md, sub_1001e0440).
@@ -571,13 +572,18 @@ fn visuals(k: &Colors, dark: bool) -> Visuals {
     v
 }
 
-/// Inter for the interface and JetBrains Mono for code, both built into the app
-/// (licences beside them in `assets/fonts`). egui's own fonts stay behind them
-/// for the glyphs they lack.
-pub fn fonts() -> egui::FontDefinitions {
+/// The font definitions for the chosen fonts. Inter and JetBrains Mono are built into the app
+/// (licences beside them in `assets/fonts`) and always stay behind the chosen font, then egui's
+/// own fonts, for the glyphs they lack. A system font is read with `read` (its path in, bytes
+/// out; face 0 for a .ttc) and put first; when it is missing or not a font, the built-in one stays first.
+pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> egui::FontDefinitions {
     use egui::{FontData, FontFamily};
     use std::sync::Arc;
     let mut f = egui::FontDefinitions::default();
+    let chosen = [
+        (FontFamily::Proportional, ui.label(), ui.path()),
+        (FontFamily::Monospace, code.label(), code.path()),
+    ];
     for (name, bytes, family) in [
         ("Inter", &include_bytes!("../assets/fonts/Inter-Regular.ttf")[..], FontFamily::Proportional),
         ("JetBrains Mono", &include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf")[..], FontFamily::Monospace),
@@ -585,12 +591,32 @@ pub fn fonts() -> egui::FontDefinitions {
         f.font_data.insert(name.into(), Arc::new(FontData::from_static(bytes)));
         f.families.entry(family).or_default().insert(0, name.into());
     }
+    for (family, name, path) in chosen {
+        let Some(bytes) = path.and_then(read).filter(|b| looks_like_a_font(b)) else { continue };
+        f.font_data.insert(name.into(), Arc::new(FontData::from_owned(bytes)));
+        f.families.entry(family).or_default().insert(0, name.into());
+    }
     f
+}
+
+/// Reads a system font file; None when it is missing or unreadable.
+pub fn read_system_font(path: &str) -> Option<Vec<u8>> {
+    std::fs::read(path).ok()
+}
+
+/// The first bytes of a TrueType, OpenType or collection file, so that a damaged file is left
+/// out instead of reaching the font parser.
+fn looks_like_a_font(b: &[u8]) -> bool {
+    matches!(b.get(..4), Some([0, 1, 0, 0] | b"OTTO" | b"ttcf" | b"true"))
+}
+
+/// Shows the chosen fonts at once (the system ones are read now).
+pub fn set_fonts(ctx: &egui::Context, ui: UiFont, code: CodeFont) {
+    ctx.set_fonts(fonts_for(ui, code, &read_system_font));
 }
 
 /// Sets up both modes once, then shows the variant and mode the person chose.
 pub fn apply(ctx: &egui::Context, appearance: Appearance, variant: Variant) {
-    ctx.set_fonts(fonts());
     set_variant(ctx, variant);
     ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(8.0, 4.0);
@@ -724,16 +750,75 @@ mod tests {
         assert_eq!(shade(c, 0.0), c);
     }
 
+    fn no_files(_: &str) -> Option<Vec<u8>> {
+        None
+    }
+
+    /// A stand-in for a system file: a real font (Inter's bytes).
+    fn fake_file(_: &str) -> Option<Vec<u8>> {
+        Some(include_bytes!("../assets/fonts/Inter-Regular.ttf").to_vec())
+    }
+
     #[test]
-    fn fonts_put_ours_first_and_keep_egui_behind() {
+    fn built_in_fonts_come_first_by_default_with_egui_behind() {
         use egui::FontFamily;
-        let f = fonts();
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, &no_files);
         let default = egui::FontDefinitions::default();
         for (family, ours) in [(FontFamily::Proportional, "Inter"), (FontFamily::Monospace, "JetBrains Mono")] {
             let names = &f.families[&family];
             assert_eq!(names[0], ours);
             assert_eq!(&names[1..], &default.families[&family][..]);
             assert!(f.font_data.contains_key(ours));
+        }
+    }
+
+    #[test]
+    fn a_chosen_system_font_goes_first_with_the_built_in_and_egui_behind() {
+        use egui::FontFamily;
+        let default = egui::FontDefinitions::default();
+        for (u, c) in UiFont::ALL[1..].iter().zip(&CodeFont::ALL[1..]) {
+            let f = fonts_for(*u, *c, &fake_file);
+            for (family, chosen, built_in) in [(FontFamily::Proportional, u.label(), "Inter"), (FontFamily::Monospace, c.label(), "JetBrains Mono")] {
+                let names = &f.families[&family];
+                assert_eq!(names[0], chosen);
+                assert_eq!(names[1], built_in);
+                assert_eq!(&names[2..], &default.families[&family][..]);
+                assert!(f.font_data.contains_key(chosen) && f.font_data.contains_key(built_in));
+                assert_eq!(f.font_data[chosen].index, 0, "face 0 of a collection");
+            }
+        }
+        // Only the font chosen is read: with the built-in interface font, the system one is not asked for.
+        let asked = std::cell::RefCell::new(vec![]);
+        fonts_for(UiFont::Inter, CodeFont::Menlo, &|p| {
+            asked.borrow_mut().push(p.to_string());
+            None
+        });
+        assert_eq!(*asked.borrow(), ["/System/Library/Fonts/Menlo.ttc"]);
+    }
+
+    #[test]
+    fn a_missing_or_damaged_font_falls_back_to_the_built_in_one() {
+        use egui::FontFamily;
+        let damaged = |_: &str| Some(b"not a font".to_vec());
+        let empty = |_: &str| Some(vec![]);
+        let missing = |p: &str| read_system_font(&format!("{p}.does-not-exist"));
+        let readers: [&dyn Fn(&str) -> Option<Vec<u8>>; 4] = [&no_files, &damaged, &empty, &missing];
+        for read in readers {
+            let f = fonts_for(UiFont::AvenirNext, CodeFont::Monaco, read);
+            assert_eq!(f.families[&FontFamily::Proportional][0], "Inter");
+            assert_eq!(f.families[&FontFamily::Monospace][0], "JetBrains Mono");
+            assert!(!f.font_data.contains_key("Avenir Next") && !f.font_data.contains_key("Monaco"));
+        }
+        assert_eq!(read_system_font("/nonexistent/Nope.ttf"), None);
+    }
+
+    #[test]
+    fn the_system_fonts_of_this_mac_are_real_fonts() {
+        // Skipped off macOS; on a Mac a font that is there must pass the check, or the choice would never show.
+        for p in UiFont::ALL.iter().filter_map(|f| f.path()).chain(CodeFont::ALL.iter().filter_map(|f| f.path())) {
+            if let Some(b) = read_system_font(p) {
+                assert!(looks_like_a_font(&b), "{p}");
+            }
         }
     }
 }

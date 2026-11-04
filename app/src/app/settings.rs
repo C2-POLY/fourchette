@@ -3,7 +3,7 @@
 //! applies and is saved at once, so there is no OK button; Esc, the close button or a click
 //! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
-use crate::settings::{count_label, minutes_label, Settings, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
+use crate::settings::{count_label, minutes_label, CodeFont, Settings, UiFont, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
 use crate::theme::{Appearance, Colors, Variant};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
@@ -21,6 +21,7 @@ const GAP: f32 = 16.0;
 const ROW_H: f32 = 56.0;
 const SEG_W: f32 = 264.0;
 const SEG_H: f32 = 28.0;
+const FONT_W: f32 = 200.0;
 const TILE_H: f32 = 64.0;
 const RADIUS: u8 = 12;
 
@@ -271,6 +272,24 @@ fn variant_tiles(c: &mut Card, current: Variant) -> Option<Variant> {
     picked
 }
 
+/// A compact drop-down in `rect` listing `options` by label; returns the one picked.
+fn font_picker<T: Copy + PartialEq>(ui: &mut Ui, rect: Rect, id: &str, current: T, options: &[T], label: fn(T) -> &'static str) -> Option<T> {
+    let mut picked = None;
+    // A child, not a scope: a scope would move the card's cursor back up to the control.
+    let mut child = ui.new_child(UiBuilder::new().id_salt(id).max_rect(rect).layout(Layout::right_to_left(Align::Center)));
+    {
+        let ui = &mut child;
+        egui::ComboBox::from_id_salt(id).selected_text(label(current)).width(rect.width() - 24.0).show_ui(ui, |ui| {
+            for &o in options {
+                if ui.selectable_label(o == current, label(o)).clicked() && o != current {
+                    picked = Some(o);
+                }
+            }
+        });
+    }
+    picked
+}
+
 fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
     card(ui, |c| {
         let ctrl = c.row("Mode", "System follows macOS", vec2(SEG_W, SEG_H), true);
@@ -287,6 +306,17 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
             if modes[i] != pane.appearance {
                 pane.cmds.push(Cmd::SetAppearance(modes[i]));
             }
+        }
+    });
+    card(ui, |c| {
+        let s = &mut *pane.settings;
+        let ctrl = c.row("Interface font", "Inter is built in; the others come from macOS", vec2(FONT_W, SEG_H), true);
+        if let Some(f) = font_picker(c.ui, ctrl, "ui_font", s.ui_font, &UiFont::ALL, UiFont::label) {
+            s.ui_font = f;
+        }
+        let ctrl = c.row("Code font", "Diffs, hashes and file contents", vec2(FONT_W, SEG_H), true);
+        if let Some(f) = font_picker(c.ui, ctrl, "code_font", s.code_font, &CodeFont::ALL, CodeFont::label) {
+            s.code_font = f;
         }
     });
     card(ui, |c| {

@@ -227,6 +227,9 @@ impl App {
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
         // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
         theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
+        // FOURCHETTE_FONTS=<ui>,<code> (for example `sf,menlo`) shows fonts for a screenshot without saving them.
+        let (ui_font, code_font) = fonts_from_env(&library.settings);
+        theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
         let mut app = App::with_library(library, screenshot);
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
@@ -403,6 +406,9 @@ impl App {
                     }
                 }
                 Cmd::SetSettings(s) => {
+                    if (s.ui_font, s.code_font) != (self.library.settings.ui_font, self.library.settings.code_font) {
+                        theme::set_fonts(ctx, s.ui_font, s.code_font);
+                    }
                     self.library.settings = s;
                     self.library.save();
                 }
@@ -488,4 +494,14 @@ impl App {
             found.is_empty(),
         );
     }
+}
+
+/// The saved fonts, or those of `FOURCHETTE_FONTS=<ui>,<code>` (either part may be left out).
+fn fonts_from_env(saved: &crate::settings::Settings) -> (crate::settings::UiFont, crate::settings::CodeFont) {
+    use crate::settings::{CodeFont, UiFont};
+    let v = std::env::var("FOURCHETTE_FONTS").unwrap_or_default();
+    let mut parts = v.split(',');
+    let ui = parts.next().and_then(UiFont::parse).unwrap_or(saved.ui_font);
+    let code = parts.next().and_then(CodeFont::parse).unwrap_or(saved.code_font);
+    (ui, code)
 }

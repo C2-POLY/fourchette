@@ -30,8 +30,103 @@ pub const DEFAULT_MAX_COMMITS: usize = 100_000;
 /// The commit counts the Settings window offers.
 pub const MAX_COMMITS: [usize; 4] = [1_000, 10_000, 50_000, 100_000];
 
+/// The interface font: Inter is built into the app, the others are read from the system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum UiFont {
+    #[default]
+    Inter,
+    SanFrancisco,
+    HelveticaNeue,
+    AvenirNext,
+}
+
+impl UiFont {
+    pub const ALL: [UiFont; 4] = [UiFont::Inter, UiFont::SanFrancisco, UiFont::HelveticaNeue, UiFont::AvenirNext];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            UiFont::Inter => "inter",
+            UiFont::SanFrancisco => "sf",
+            UiFont::HelveticaNeue => "helvetica",
+            UiFont::AvenirNext => "avenir",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            UiFont::Inter => "Inter",
+            UiFont::SanFrancisco => "San Francisco",
+            UiFont::HelveticaNeue => "Helvetica Neue",
+            UiFont::AvenirNext => "Avenir Next",
+        }
+    }
+
+    /// The system file (face 0 for a .ttc), none for the built-in font.
+    pub fn path(self) -> Option<&'static str> {
+        match self {
+            UiFont::Inter => None,
+            UiFont::SanFrancisco => Some("/System/Library/Fonts/SFNS.ttf"),
+            UiFont::HelveticaNeue => Some("/System/Library/Fonts/HelveticaNeue.ttc"),
+            UiFont::AvenirNext => Some("/System/Library/Fonts/Avenir Next.ttc"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<UiFont> {
+        UiFont::ALL.into_iter().find(|f| f.key() == s.trim().to_lowercase())
+    }
+}
+
+/// The code font: JetBrains Mono is built into the app, the others are read from the system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum CodeFont {
+    #[default]
+    JetBrainsMono,
+    SfMono,
+    Menlo,
+    Monaco,
+}
+
+impl CodeFont {
+    pub const ALL: [CodeFont; 4] = [CodeFont::JetBrainsMono, CodeFont::SfMono, CodeFont::Menlo, CodeFont::Monaco];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            CodeFont::JetBrainsMono => "jetbrains",
+            CodeFont::SfMono => "sfmono",
+            CodeFont::Menlo => "menlo",
+            CodeFont::Monaco => "monaco",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CodeFont::JetBrainsMono => "JetBrains Mono",
+            CodeFont::SfMono => "SF Mono",
+            CodeFont::Menlo => "Menlo",
+            CodeFont::Monaco => "Monaco",
+        }
+    }
+
+    pub fn path(self) -> Option<&'static str> {
+        match self {
+            CodeFont::JetBrainsMono => None,
+            CodeFont::SfMono => Some("/System/Library/Fonts/SFNSMono.ttf"),
+            CodeFont::Menlo => Some("/System/Library/Fonts/Menlo.ttc"),
+            CodeFont::Monaco => Some("/System/Library/Fonts/Monaco.ttf"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CodeFont> {
+        CodeFont::ALL.into_iter().find(|f| f.key() == s.trim().to_lowercase())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    /// The font of the interface (`UiFont::Inter` by default).
+    pub ui_font: UiFont,
+    /// The font of code, diffs and hashes (`CodeFont::JetBrainsMono` by default).
+    pub code_font: CodeFont,
     /// Fetch the open repository's remote in the background.
     pub auto_fetch: bool,
     /// One of `FETCH_MINUTES`.
@@ -55,6 +150,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            ui_font: UiFont::default(),
+            code_font: CodeFont::default(),
             auto_fetch: DEFAULT_AUTO_FETCH,
             fetch_minutes: DEFAULT_FETCH_MINUTES,
             pull_rebase: DEFAULT_PULL_REBASE,
@@ -79,6 +176,8 @@ impl Settings {
             _ => (d.subject_low, d.subject_high),
         };
         Settings {
+            ui_font: v["ui_font"].as_str().and_then(UiFont::parse).unwrap_or(d.ui_font),
+            code_font: v["code_font"].as_str().and_then(CodeFont::parse).unwrap_or(d.code_font),
             auto_fetch: v["auto_fetch"].as_bool().unwrap_or(d.auto_fetch),
             fetch_minutes: v["fetch_minutes"].as_u64().map(|m| m as u32).filter(|m| FETCH_MINUTES.contains(m)).unwrap_or(d.fetch_minutes),
             pull_rebase: v["pull_rebase"].as_bool().unwrap_or(d.pull_rebase),
@@ -93,6 +192,8 @@ impl Settings {
 
     pub fn to_json(self) -> Value {
         json!({
+            "ui_font": self.ui_font.key(),
+            "code_font": self.code_font.key(),
             "auto_fetch": self.auto_fetch,
             "fetch_minutes": self.fetch_minutes,
             "pull_rebase": self.pull_rebase,
@@ -226,5 +327,34 @@ mod tests {
         assert_eq!(MAX_COMMITS.map(count_label), ["1,000", "10,000", "50,000", "100,000"]);
         assert_eq!(count_label(7), "7");
         assert_eq!(count_label(123_456_789), "123,456,789");
+    }
+
+    #[test]
+    fn fonts_default_to_the_built_in_ones_and_round_trip() {
+        let d = Settings::default();
+        assert_eq!((d.ui_font, d.code_font), (UiFont::Inter, CodeFont::JetBrainsMono));
+        assert!(UiFont::Inter.path().is_none() && CodeFont::JetBrainsMono.path().is_none());
+        for u in UiFont::ALL {
+            for c in CodeFont::ALL {
+                let s = Settings { ui_font: u, code_font: c, ..d };
+                assert_eq!(Settings::from_json(&s.to_json()), s);
+            }
+        }
+        // The others come from /System/Library/Fonts.
+        assert!(UiFont::ALL[1..].iter().all(|f| f.path().is_some_and(|p| p.starts_with("/System/Library/Fonts/"))));
+        assert!(CodeFont::ALL[1..].iter().all(|f| f.path().is_some_and(|p| p.starts_with("/System/Library/Fonts/"))));
+    }
+
+    #[test]
+    fn invalid_fonts_fall_back_one_by_one() {
+        let d = Settings::default();
+        for bad in [json!("comic"), json!(3), json!(null), json!("")] {
+            let s = Settings::from_json(&json!({"ui_font": bad, "code_font": "menlo", "auto_fetch": false}));
+            assert_eq!(s, Settings { code_font: CodeFont::Menlo, auto_fetch: false, ..d }, "{bad}");
+        }
+        // A code font's key in the interface slot is not valid there.
+        assert_eq!(Settings::from_json(&json!({"ui_font": "menlo"})).ui_font, UiFont::Inter);
+        // An older file without these keys gets the defaults.
+        assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
     }
 }
