@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Fourchette: a fork is a fork. The handle is main's history; it splits into three
+       tines, three branches moving at once. Each dot is a commit, in the graph's colours. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#1b1e28" stroke="#2b303f" stroke-width="6"/>
+  <g fill="none" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#CB73E1" d="M512 590 C512 500 362 520 362 440 L362 270"/>
+    <path stroke="#64DA38" d="M512 590 C512 500 662 520 662 440 L662 270"/>
+    <path stroke="#1CADF8" d="M512 820 L512 270"/>
+  </g>
+  <g stroke="#1b1e28" stroke-width="18">
+    <circle fill="#CB73E1" cx="362" cy="270" r="48"/>
+    <circle fill="#1CADF8" cx="512" cy="270" r="48"/>
+    <circle fill="#64DA38" cx="662" cy="270" r="48"/>
+    <circle fill="#1CADF8" cx="512" cy="590" r="48"/>
+  </g>
+</svg>
