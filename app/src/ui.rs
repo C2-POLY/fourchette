@@ -390,6 +390,24 @@ pub fn toolbar_pill(ui: &mut Ui, caption: &str, value: &str) -> egui::Response {
     resp
 }
 
+/// The toolbar's "Update available" capsule: an arrow into a tray and the text, in the accent.
+pub fn update_pill(ui: &mut Ui, text: &str) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(text.to_string(), theme::secondary(), theme::c().accent_text);
+    let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x + 40.0, 26.0), Sense::click());
+    let p = ui.painter();
+    let c = theme::c();
+    let fill = if resp.hovered() { theme::tint(c.accent, c.sidebar, 0.32) } else { theme::tint(c.accent, c.sidebar, 0.18) };
+    p.rect(rect, CornerRadius::same(13), fill, Stroke::new(1.0_f32, theme::tint(c.accent, c.sidebar, 0.55)), StrokeKind::Inside);
+    // An arrow down onto a tray.
+    let ic = pos2(rect.left() + 17.0, rect.center().y);
+    let s = Stroke::new(1.5_f32, c.accent_text);
+    p.line_segment([ic + vec2(0.0, -5.5), ic + vec2(0.0, 2.0)], s);
+    p.add(Shape::line(vec![ic + vec2(-3.5, -1.5), ic + vec2(0.0, 2.0), ic + vec2(3.5, -1.5)], s));
+    p.add(Shape::line(vec![ic + vec2(-5.5, 2.5), ic + vec2(-5.5, 5.5), ic + vec2(5.5, 5.5), ic + vec2(5.5, 2.5)], s));
+    p.galley(pos2(rect.left() + 29.0, rect.center().y - galley.size().y / 2.0), galley, c.accent_text);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// Thin outline icons on a 24-unit grid (Tabler style), scaled to `size` points (20 in the toolbar).
 /// egui strokes have flat caps, so open ends get a small dot to look round.
 struct Ink<'a> {

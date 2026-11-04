@@ -6,6 +6,7 @@ mod repos;
 mod settings;
 mod tab;
 mod tabs;
+mod updater;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
@@ -139,6 +140,10 @@ pub enum Cmd {
     SelectTab(usize),
     /// Close the n-th tab; the last one stays.
     CloseTab(usize),
+    /// Open (true) or close the update dialog of the toolbar's "Update available".
+    UpdateDialog(bool),
+    /// The update dialog's "Update and Restart".
+    InstallUpdate,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
 }
@@ -199,6 +204,8 @@ pub struct App {
     palette: Option<Palette>,
     /// Actions picked in the macOS menu bar, run with the next frame's.
     menu_cmds: Vec<Cmd>,
+    /// New releases on GitHub: the check, the pill, the dialog and the install.
+    update: updater::UpdateState,
 }
 
 pub fn short(h: &str) -> &str {
@@ -226,6 +233,7 @@ impl App {
             was_focused: true,
             palette: None,
             menu_cmds: Vec::new(),
+            update: updater::UpdateState::default(),
         }
     }
 
@@ -239,6 +247,9 @@ impl App {
         let (ui_font, code_font) = fonts_from_env(&library.settings);
         theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
         let mut app = App::with_library(library, screenshot);
+        app.update = updater::UpdateState::new(app.screenshot.is_some());
+        // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release.
+        app.update.apply_env();
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
         // The tabs open at the last quit come back (not in a screenshot); without any, the
@@ -342,6 +353,11 @@ impl App {
 
     fn tab_mut(&mut self) -> &mut Tab {
         &mut self.tabs[self.active]
+    }
+
+    /// A dialog takes the window: the tab's, or the update dialog.
+    fn modal(&self) -> bool {
+        self.tab().dialog.is_some() || self.update.dialog
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -469,6 +485,8 @@ impl App {
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
                 Cmd::Board => self.board_toggle(),
+                Cmd::UpdateDialog(open) => self.update_dialog_open(open),
+                Cmd::InstallUpdate => self.update_install(ctx),
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);

@@ -524,7 +524,9 @@ impl Tab {
             | Cmd::OpenTab(_)
             | Cmd::SelectTab(_)
             | Cmd::CloseTab(_)
-            | Cmd::ShowTab { .. } => {}
+            | Cmd::ShowTab { .. }
+            | Cmd::UpdateDialog(_)
+            | Cmd::InstallUpdate => {}
         }
     }
 
