@@ -3,7 +3,7 @@
 //! applies and is saved at once, so there is no OK button; Esc, the close button or a click
 //! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
-use crate::settings::{count_label, minutes_label, Settings, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
+use crate::settings::{count_label, minutes_label, ClaudeModel, CommitLanguage, Settings, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
 use crate::theme::{Appearance, Colors, Variant};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
@@ -20,6 +20,10 @@ const PAD: f32 = 24.0;
 const GAP: f32 = 16.0;
 const ROW_H: f32 = 56.0;
 const SEG_W: f32 = 264.0;
+/// The Claude section's controls: five short model names, then three languages, narrower than
+/// `SEG_W` so that their help text fits beside them.
+const MODEL_W: f32 = 280.0;
+const LANG_W: f32 = 240.0;
 const SEG_H: f32 = 28.0;
 const TILE_H: f32 = 64.0;
 const RADIUS: u8 = 12;
@@ -45,11 +49,12 @@ pub(super) struct Section {
     body: fn(&mut Ui, &mut Pane<'_>),
 }
 
-pub(super) const SECTIONS: [Section; 4] = [
+pub(super) const SECTIONS: [Section; 5] = [
     Section { key: "appearance", label: "Appearance", tint: Color32::from_rgb(0x6e, 0x5b, 0xd6), icon: appearance_glyph, body: appearance },
     Section { key: "fetch", label: "Fetch", tint: Color32::from_rgb(0x1c, 0x8c, 0xf0), icon: fetch_glyph, body: fetch },
     Section { key: "git", label: "Git", tint: Color32::from_rgb(0xe8, 0x5d, 0x3a), icon: git_glyph, body: git },
     Section { key: "diff", label: "Diff and commit", tint: Color32::from_rgb(0xe0, 0x7a, 0x1f), icon: diff_glyph, body: diff_commit },
+    Section { key: "claude", label: "Claude", tint: Color32::from_rgb(0xc2, 0x4f, 0x9c), icon: claude_glyph, body: claude },
 ];
 
 /// The section a key names (any case), or the first one.
@@ -77,6 +82,11 @@ fn git_glyph(p: &Painter, c: Pos2) {
 
 fn diff_glyph(p: &Painter, c: Pos2) {
     crate::ui::glyph(p, c, "diff", 15.0, 1.4, Color32::WHITE);
+}
+
+/// The assistant's sparkles, as on the toolbar's Claude button.
+fn claude_glyph(p: &Painter, c: Pos2) {
+    crate::ui::glyph(p, c, "ai", 15.0, 1.4, Color32::WHITE);
 }
 
 /// A section's entry in the sidebar: its icon in a coloured square, then its name.
@@ -421,6 +431,36 @@ fn diff_commit(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
 }
 
+/// The model of every Claude request, and the language of the commit messages it writes.
+fn claude(ui: &mut Ui, pane: &mut Pane<'_>) {
+    let s = &mut *pane.settings;
+    card(ui, |c| {
+        let ctrl = c.row("Model", "Default: Claude Code's own", vec2(MODEL_W, SEG_H), true);
+        let models = ClaudeModel::ALL;
+        let chosen = models.iter().position(|m| *m == s.claude_model).unwrap_or(0);
+        if let Some(i) = segmented(c.ui, ctrl, models.len(), chosen, true, "claude_model", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, models[i].label(), theme::body(), fg);
+        }) {
+            s.claude_model = models[i];
+        }
+    });
+    card(ui, |c| {
+        let ctrl = c.row("Commit message language", "Automatic follows recent commits", vec2(LANG_W, SEG_H), true);
+        let langs = CommitLanguage::ALL;
+        let chosen = langs.iter().position(|l| *l == s.commit_language).unwrap_or(0);
+        if let Some(i) = segmented(c.ui, ctrl, langs.len(), chosen, true, "commit_language", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, langs[i].label(), theme::body(), fg);
+        }) {
+            s.commit_language = langs[i];
+        }
+    });
+    // Under the cards, lined up with the rows' names.
+    let note = "The model writes commit messages, explains commits and cleans up branches.\nThe language only applies to commit messages.";
+    egui::Frame::new().inner_margin(Margin::symmetric(16, 0)).show(ui, |ui| {
+        ui.label(egui::RichText::new(note).size(theme::FS_SMALL).color(theme::c().faint));
+    });
+}
+
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
         if !self.settings_open {
@@ -507,7 +547,7 @@ mod tests {
 
     #[test]
     fn sections_have_unique_lowercase_keys_and_names() {
-        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Git", "Diff and commit"]);
+        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Git", "Diff and commit", "Claude"]);
         for (i, s) in SECTIONS.iter().enumerate() {
             assert!(!s.label.is_empty());
             assert_eq!(s.key, s.key.to_lowercase(), "{}", s.label);
@@ -528,8 +568,9 @@ mod tests {
         assert_eq!(section_index("fetch"), 1);
         assert_eq!(section_index(" Fetch "), 1);
         assert_eq!(section_index("GIT"), 2);
+        assert_eq!(section_index("claude"), 4);
         // FOURCHETTE_SETTINGS=1, or a section that does not exist yet, opens Appearance.
-        for other in ["1", "", "claude", "appearance"] {
+        for other in ["1", "", "fonts", "appearance"] {
             assert_eq!(section_index(other), 0, "{other}");
         }
     }
