@@ -1,0 +1,15 @@
+{
+  "id": "unk_6ce35a00d45cb1c9",
+  "revision": 2,
+  "question": "What row height does Fork use in the commit list?",
+  "severity": "low",
+  "domain": "layout",
+  "status": "blocked",
+  "probes": [
+    "find the setRowHeight: call site in the revision list controller",
+    "capture the running window"
+  ],
+  "evidence_for": [],
+  "evidence_against": [],
+  "resolution": "Not found in the graph drawing code (sub_100105e34 / sub_100102064 use the row height passed in). Using 28 px, marked estimated in mechanics.json; it suits the bigger Kraken-style nodes."
+}

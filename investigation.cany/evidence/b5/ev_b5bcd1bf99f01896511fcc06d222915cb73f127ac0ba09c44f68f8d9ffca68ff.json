@@ -1,0 +1,979 @@
+{
+  "id": "ev_b5bcd1bf99f01896511fcc06d222915cb73f127ac0ba09c44f68f8d9ffca68ff",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": true,
+    "limit": 100,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "(worktree|Worktree)"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x100608220",
+        "references": [],
+        "section": "__const",
+        "text": "CheckoutBranchAsWorktree"
+      },
+      {
+        "address": "0x10060857d",
+        "references": [],
+        "section": "__const",
+        "text": "RemoveWorktree"
+      },
+      {
+        "address": "0x100608e70",
+        "references": [
+          {
+            "from": "0x100167d94",
+            "function": "-[_TtC4Fork24CreateWorktreeController windowNibName]"
+          }
+        ],
+        "section": "__const",
+        "text": "CreateWorktreeController"
+      },
+      {
+        "address": "0x10060a4b0",
+        "references": [],
+        "section": "__const",
+        "text": "MainWorktreeSidebarItem"
+      },
+      {
+        "address": "0x10060a4d0",
+        "references": [],
+        "section": "__const",
+        "text": "WorktreeSidebarItem"
+      },
+      {
+        "address": "0x10060a660",
+        "references": [
+          {
+            "from": "0x1002007dc",
+            "function": "-[_TtC4Fork24RemoveWorktreeController windowNibName]"
+          }
+        ],
+        "section": "__const",
+        "text": "RemoveWorktreeController"
+      },
+      {
+        "address": "0x10060bd1d",
+        "references": [],
+        "section": "__const",
+        "text": "OpenWorktree"
+      },
+      {
+        "address": "0x10060c990",
+        "references": [],
+        "section": "__const",
+        "text": "RepositoryWorktrees"
+      },
+      {
+        "address": "0x10060f640",
+        "references": [],
+        "section": "__const",
+        "text": "SidebarWorktreeContextMenu"
+      },
+      {
+        "address": "0x100610d18",
+        "references": [],
+        "section": "__const",
+        "text": "WorktreeFork"
+      },
+      {
+        "address": "0x100611210",
+        "references": [
+          {
+            "from": "0x1003f3ec4",
+            "function": "-[_TtC4Fork34CheckoutBranchAsWorktreeController windowNibName]"
+          }
+        ],
+        "section": "__const",
+        "text": "CheckoutBranchAsWorktreeController"
+      },
+      {
+        "address": "0x1006115fd",
+        "references": [],
+        "section": "__const",
+        "text": "CreateWorktree"
+      },
+      {
+        "address": "0x100611b05",
+        "references": [],
+        "section": "__const",
+        "text": "Worktree"
+      },
+      {
+        "address": "0x100612fb0",
+        "references": [],
+        "section": "__const",
+        "text": "CopyWorktreePath"
+      },
+      {
+        "address": "0x10064e160",
+        "references": [
+          {
+            "from": "0x100785f78",
+            "function": null
+          },
+          {
+            "from": "0x100786188",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "deleteWorktreeContainer"
+      },
+      {
+        "address": "0x10064e180",
+        "references": [
+          {
+            "from": "0x100785f98",
+            "function": null
+          },
+          {
+            "from": "0x100786198",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "deleteWorktreeWarningIcon"
+      },
+      {
+        "address": "0x10064e1a0",
+        "references": [
+          {
+            "from": "0x100785fb8",
+            "function": null
+          },
+          {
+            "from": "0x1007861a8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "deleteWorktreeCheckbox"
+      },
+      {
+        "address": "0x10064e1c0",
+        "references": [
+          {
+            "from": "0x100785fd8",
+            "function": null
+          },
+          {
+            "from": "0x1007861b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "deleteWorktreeCheckboxWorktree"
+      },
+      {
+        "address": "0x10064e1df",
+        "references": [
+          {
+            "from": "0x100785ff8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "removedWorktree"
+      },
+      {
+        "address": "0x10064e240",
+        "references": [
+          {
+            "from": "0x1007860b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "worktreeToRemove"
+      },
+      {
+        "address": "0x10064e400",
+        "references": [
+          {
+            "from": "0x100786190",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSView\",N,W,VdeleteWorktreeContainer"
+      },
+      {
+        "address": "0x10064e430",
+        "references": [
+          {
+            "from": "0x1007861a0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSImageView\",N,W,VdeleteWorktreeWarningIcon"
+      },
+      {
+        "address": "0x10064e460",
+        "references": [
+          {
+            "from": "0x1007861b0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSButton\",N,W,VdeleteWorktreeCheckbox"
+      },
+      {
+        "address": "0x10064e490",
+        "references": [
+          {
+            "from": "0x1007861c0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSTextField\",N,W,VdeleteWorktreeCheckboxWorktree"
+      },
+      {
+        "address": "0x10064e730",
+        "references": [
+          {
+            "from": "0x1000713c0",
+            "function": "sub_100070d94"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Also delete worktree"
+      },
+      {
+        "address": "0x100658ca0",
+        "references": [
+          {
+            "from": "0x10078dd80",
+            "function": null
+          },
+          {
+            "from": "0x10078ddc8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork24CheckoutBranchAsWorktree"
+      },
+      {
+        "address": "0x10065a6b0",
+        "references": [
+          {
+            "from": "0x10078eb90",
+            "function": null
+          },
+          {
+            "from": "0x10078ebd8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork14RemoveWorktree"
+      },
+      {
+        "address": "0x10065d2b0",
+        "references": [
+          {
+            "from": "0x100790f88",
+            "function": null
+          },
+          {
+            "from": "0x1007c74d8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork24CreateWorktreeController"
+      },
+      {
+        "address": "0x10065d320",
+        "references": [
+          {
+            "from": "0x1007910c8",
+            "function": null
+          },
+          {
+            "from": "0x1007a7560",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "worktreesContainerURL"
+      },
+      {
+        "address": "0x10065d3c0",
+        "references": [
+          {
+            "from": "0x10016a318",
+            "function": "-[_TtC4Fork24CreateWorktreeController initWithWindow:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork.CreateWorktreeController"
+      },
+      {
+        "address": "0x10065d3e0",
+        "references": [
+          {
+            "from": "0x1001691c8",
+            "function": "sub_100168b9c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Create worktree failed"
+      },
+      {
+        "address": "0x10065d400",
+        "references": [
+          {
+            "from": "0x1001699ac",
+            "function": "sub_100169970"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Creating worktree…"
+      },
+      {
+        "address": "0x10065d420",
+        "references": [
+          {
+            "from": "0x1001683e4",
+            "function": "-[_TtC4Fork24CreateWorktreeController initWithCoder:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork/CreateWorktreeController.swift"
+      },
+      {
+        "address": "0x100660dc0",
+        "references": [
+          {
+            "from": "0x1001d33c4",
+            "function": "sub_1001d2e20"
+          },
+          {
+            "from": "0x1001d354c",
+            "function": "sub_1001d2e20"
+          },
+          {
+            "from": "0x1001d3a9c",
+            "function": "sub_1001d2e20"
+          },
+          {
+            "from": "0x1001d429c",
+            "function": "sub_1001d40c4"
+          },
+          {
+            "from": "0x1001d434c",
+            "function": "sub_1001d40c4"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/WorkingDirectory/GetWorktreesGitCommand.swift"
+      },
+      {
+        "address": "0x100660e40",
+        "references": [
+          {
+            "from": "0x1001d428c",
+            "function": "sub_1001d40c4"
+          },
+          {
+            "from": "0x1001d433c",
+            "function": "sub_1001d40c4"
+          }
+        ],
+        "section": "__cstring",
+        "text": "readWorktreeGitdirFile(worktreeGitDirectory:)"
+      },
+      {
+        "address": "0x100660ed0",
+        "references": [
+          {
+            "from": "0x1001d4008",
+            "function": "sub_1001d3fc8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Can't open worktrees directory at '"
+      },
+      {
+        "address": "0x100662c80",
+        "references": [
+          {
+            "from": "0x1007961a0",
+            "function": null
+          },
+          {
+            "from": "0x100796210",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork23MainWorktreeSidebarItem"
+      },
+      {
+        "address": "0x100662cb0",
+        "references": [
+          {
+            "from": "0x100796258",
+            "function": null
+          },
+          {
+            "from": "0x1007962c8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork19WorktreeSidebarItem"
+      },
+      {
+        "address": "0x100665f50",
+        "references": [
+          {
+            "from": "0x100796c40",
+            "function": null
+          },
+          {
+            "from": "0x1007cb790",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork24RemoveWorktreeController"
+      },
+      {
+        "address": "0x100665f8c",
+        "references": [
+          {
+            "from": "0x1007961e0",
+            "function": null
+          },
+          {
+            "from": "0x100796298",
+            "function": null
+          },
+          {
+            "from": "0x100796ce0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "worktree"
+      },
+      {
+        "address": "0x100665fa0",
+        "references": [
+          {
+            "from": "0x1002012b0",
+            "function": "-[_TtC4Fork24RemoveWorktreeController initWithWindow:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork.RemoveWorktreeController"
+      },
+      {
+        "address": "0x100665fc0",
+        "references": [
+          {
+            "from": "0x1002009a8",
+            "function": "sub_1002008ec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Delete worktree '"
+      },
+      {
+        "address": "0x100665fe0",
+        "references": [
+          {
+            "from": "0x100200a90",
+            "function": "sub_1002008ec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Do you want to delete worktree '"
+      },
+      {
+        "address": "0x100666010",
+        "references": [
+          {
+            "from": "0x1002008c4",
+            "function": "-[_TtC4Fork24RemoveWorktreeController initWithCoder:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork/RemoveWorktreeController.swift"
+      },
+      {
+        "address": "0x100669ef0",
+        "references": [
+          {
+            "from": "0x10079b550",
+            "function": null
+          },
+          {
+            "from": "0x10079b598",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork12OpenWorktree"
+      },
+      {
+        "address": "0x10066b650",
+        "references": [
+          {
+            "from": "0x10079cfd8",
+            "function": null
+          },
+          {
+            "from": "0x10079d068",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork19RepositoryWorktrees"
+      },
+      {
+        "address": "0x10066b670",
+        "references": [
+          {
+            "from": "0x10079d038",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "worktreesByFullReference"
+      },
+      {
+        "address": "0x10066c490",
+        "references": [
+          {
+            "from": "0x1002a2cc8",
+            "function": "sub_1002a2868"
+          }
+        ],
+        "section": "__cstring",
+        "text": "' as Worktree…"
+      },
+      {
+        "address": "0x10066c940",
+        "references": [
+          {
+            "from": "0x1002b6e78",
+            "function": "sub_1002b6990"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Checkout as Worktree…"
+      },
+      {
+        "address": "0x1006774ec",
+        "references": [
+          {
+            "from": "0x100782f08",
+            "function": null
+          },
+          {
+            "from": "0x100787158",
+            "function": null
+          },
+          {
+            "from": "0x10078d7b0",
+            "function": null
+          },
+          {
+            "from": "0x100791068",
+            "function": null
+          },
+          {
+            "from": "0x1007a6a78",
+            "function": null
+          },
+          {
+            "from": "0x1007a7500",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x100677520",
+        "references": [
+          {
+            "from": "0x1007a6ab8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "shouldExpandWorktrees"
+      },
+      {
+        "address": "0x100678260",
+        "references": [
+          {
+            "from": "0x1007a7460",
+            "function": null
+          },
+          {
+            "from": "0x1007daa50",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork34CheckoutBranchAsWorktreeController"
+      },
+      {
+        "address": "0x1006782a0",
+        "references": [
+          {
+            "from": "0x1003f550c",
+            "function": "-[_TtC4Fork34CheckoutBranchAsWorktreeController initWithWindow:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork.CheckoutBranchAsWorktreeController"
+      },
+      {
+        "address": "0x1006782d0",
+        "references": [
+          {
+            "from": "0x1003f5a98",
+            "function": "sub_1003f58e0"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Checkout Branch As Worktree"
+      },
+      {
+        "address": "0x1006782f0",
+        "references": [
+          {
+            "from": "0x1003f4b7c",
+            "function": "sub_1003f461c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Checkout branch as worktree failed"
+      },
+      {
+        "address": "0x100678320",
+        "references": [
+          {
+            "from": "0x1003f41f4",
+            "function": "-[_TtC4Fork34CheckoutBranchAsWorktreeController initWithCoder:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork/CheckoutBranchAsWorktreeController.swift"
+      },
+      {
+        "address": "0x100678bd0",
+        "references": [
+          {
+            "from": "0x1007a8078",
+            "function": null
+          },
+          {
+            "from": "0x1007a80c0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork14CreateWorktree"
+      },
+      {
+        "address": "0x100678bf0",
+        "references": [
+          {
+            "from": "0x10040860c",
+            "function": "sub_1004085d8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Create Worktree…"
+      },
+      {
+        "address": "0x10067e450",
+        "references": [
+          {
+            "from": "0x1007adf58",
+            "function": null
+          },
+          {
+            "from": "0x1007adfa0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork16CopyWorktreePath"
+      },
+      {
+        "address": "0x1006a65be",
+        "references": [],
+        "section": "__swift5_typeref",
+        "text": "$s4Fork26SidebarWorktreeContextMenuP"
+      },
+      {
+        "address": "0x1006a8a35",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006a9778",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006a9870",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "deleteWorktreeContainer"
+      },
+      {
+        "address": "0x1006a9890",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "deleteWorktreeWarningIcon"
+      },
+      {
+        "address": "0x1006a98b0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "deleteWorktreeCheckbox"
+      },
+      {
+        "address": "0x1006a98d0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "deleteWorktreeCheckboxWorktree"
+      },
+      {
+        "address": "0x1006a98ef",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "removedWorktree"
+      },
+      {
+        "address": "0x1006a9950",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktreeToRemove"
+      },
+      {
+        "address": "0x1006aa145",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006ac1f3",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006ad678",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006ad6d0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktreesContainerURL"
+      },
+      {
+        "address": "0x1006aeae7",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktree"
+      },
+      {
+        "address": "0x1006aecbb",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktree"
+      },
+      {
+        "address": "0x1006b0a70",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktreesByFullReference"
+      },
+      {
+        "address": "0x1006b4bfc",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006b4c30",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "shouldExpandWorktrees"
+      },
+      {
+        "address": "0x1006b4f35",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktrees"
+      },
+      {
+        "address": "0x1006b4f70",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "worktreesContainerURL"
+      },
+      {
+        "address": "0x1006cbfd0",
+        "references": [
+          {
+            "from": "0x1007b5f18",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "deleteWorktreeCheckbox"
+      },
+      {
+        "address": "0x1006cbfe7",
+        "references": [
+          {
+            "from": "0x1007b5f40",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "deleteWorktreeCheckboxChanged:"
+      },
+      {
+        "address": "0x1006cc006",
+        "references": [
+          {
+            "from": "0x1007b5f28",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "deleteWorktreeCheckboxWorktree"
+      },
+      {
+        "address": "0x1006cc025",
+        "references": [
+          {
+            "from": "0x1007b5ef8",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "deleteWorktreeContainer"
+      },
+      {
+        "address": "0x1006cc03d",
+        "references": [
+          {
+            "from": "0x1007b5f08",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "deleteWorktreeWarningIcon"
+      },
+      {
+        "address": "0x1006d272f",
+        "references": [
+          {
+            "from": "0x1007b5f20",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setDeleteWorktreeCheckbox:"
+      },
+      {
+        "address": "0x1006d274a",
+        "references": [
+          {
+            "from": "0x1007b5f30",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setDeleteWorktreeCheckboxWorktree:"
+      },
+      {
+        "address": "0x1006d276d",
+        "references": [
+          {
+            "from": "0x1007b5f00",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setDeleteWorktreeContainer:"
+      },
+      {
+        "address": "0x1006d2789",
+        "references": [
+          {
+            "from": "0x1007b5f10",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setDeleteWorktreeWarningIcon:"
+      },
+      {
+        "address": "0x1006d642a",
+        "references": [
+          {
+            "from": "0x1007b7d20",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "showCreateWorktreeSheet:"
+      }
+    ],
+    "total": 89
+  },
+  "summary": "89 strings match \"(worktree|Worktree)\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 89,
+    "total": 89
+  },
+  "locations": [],
+  "links": []
+}

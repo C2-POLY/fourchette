@@ -1,0 +1,225 @@
+# Mechanics sheet — Fork (original) → Fourchette (rebuild)
+
+Target: `/Applications/Fork.app/Contents/MacOS/Fork` (Mach-O arm64, Swift/AppKit), sha256 `a2b5ee90…bfca69`.
+Ghidra's bridge returned no result for these functions, so they were read with the built-in
+lifter and the raw disassembly. Evidence ids are in brackets.
+
+## Commit graph drawing
+
+| Value | Original | Where |
+|---|---|---|
+| Lane width | 11 pt per lane (`lane * 11`) | `sub_100102064` (`mov w23,#0xb`), `sub_100105180`, `sub_100105e34` [ev_e6386e8f, ev_c717e265] |
+| Graph left inset | 3 pt (`x = lane*11 + 3`) | `sub_100102064` (`fmov d0,#3.0`), `sub_100105180` |
+| Line width | 1.5 pt | `sub_100102064` (`fmov d0,#1.5` → `setLineWidth:`) |
+| Curve offset for lane changes | 5 pt (bezier control points ±5) | `sub_100102064` (`fmov #5.0 / #-5.0`) |
+| Lines meet at | row middle (`height * 0.5`) | `sub_100102064` (`fmov d1,#0.5`) |
+| Commit dot | filled oval 5×5 centred on the lane | `sub_100105180` (`-2.5`, `5.0, 5.0`) |
+| Highlighted commit (HEAD) dot | 12×12 circle, white fill, lane-colour 2 pt ring, chevron inside | `sub_100105180` (`-6.0`, `12.0, 12.0`, `#2.0`) |
+| Colour choice | `palette[colourId % 9]` | `sub_100102064` (`sdiv/msub` by palette count) |
+| Graph area width | `lanes * 11` added to the column | `sub_100105e34` (`fmov d2,#11.0; fmul`) |
+| Ref label width | text width + 10 padding + 20 icon | `sub_100105e34` (`#10.0`, `#20.0`) |
+| Ref label inset | 2 pt top/left, height − 4 | `sub_100105e34` (`#2.0`, `#-4.0`) |
+| Gap between ref labels | 2 pt (compact) or 4 pt | `sub_100105e34` (`fcsel` between `#2.0`/`#4.0`) |
+
+### Branch colour palette (9 colours, built once in `sub_1001e0440`, constants at `0x10060a080`)
+
+| # | RGB | Hex |
+|---|---|---|
+| 0 | 1.000, 0.584, 0.008 | #FF9502 (orange) |
+| 1 | 1.000, 0.800, 0.000 | #FFCC00 (yellow) |
+| 2 | 1.000, 0.231, 0.188 | #FF3B30 (red) |
+| 3 | 0.635, 0.518, 0.369 | #A2845E (brown) |
+| 4 | 0.392, 0.855, 0.220 | #64DA38 (green) |
+| 5 | 0.110, 0.678, 0.973 | #1CADF8 (blue) |
+| 6 | 0.796, 0.451, 0.882 | #CB73E1 (purple) |
+| 7 | 0.557, 0.557, 0.569 | #8E8E91 (grey) |
+| 8 | 1.000, 0.161, 0.408 | #FF2968 (pink) |
+
+## Git commands the original runs (strings + references)
+
+| Purpose | Command / format | Where |
+|---|---|---|
+| Commit details | `--pretty=format:%H~#.%aN~#.%aE~#.%at~#.%cN~#.%cE~#.%ct~#.%P~#.%B` | `sub_100399eec` [ev_5cd6532d] |
+| Refs | `for-each-ref --format=%(objectname)\t%(refname)\t%(HEAD)\t%(upstream)\t%(*objectname)…` | `sub_100296878` [ev_6b3d67c7] |
+| Working copy | `--no-optional-locks status --porcelain --renames --untracked-files=all -z [--ignored] -- <paths>`; asks for just the changed paths when ≤ 1000 (`0x3e8`), otherwise refreshes everything | `sub_1003ab2d8` [ev_580e8e14] |
+| Field separator | `~#.` | same strings |
+
+Short option names (≤ 15 bytes) are packed into the code as numbers rather than stored as text.
+They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7270 0x6e75 0x65` = `--prune`.
+
+## Actions (decompiled, built-in lifter — Ghidra's bridge returned no result for this file)
+
+| Action | What the original runs / does | Where |
+|---|---|---|
+| Fetch | `fetch --prune [--tags] [--force] <remote>` or `--all`, then `--progress`; env `NO_PROMPT`. Sheet title "Fetch '<remote>'". One remote by default ("fetchSheetFetchAllRemotes" = false). | `sub_1000c56b8` [ev_986f87a0], `sub_10045e7d4` [ev_59f82972] |
+| Fetch result | "Already up to date" when no refs changed, otherwise "Fetched N branch"/"branches"; "Could not resolve host '…'" on network errors | `sub_1000c56b8` |
+| Push | `-c push.default=upstream push <remote> <local>:refs/heads/<remote branch> [--force-with-lease] [--tags] [--set-upstream] --verbose --progress`; env `GIT_LFS_PROGRESS` | `sub_10016e1ec` [ev_6f10b85c] |
+| Force push | `push <remote> <local>:refs/heads/<branch> --force-with-lease --verbose --progress` | `sub_10016dd54` [ev_3053161c] |
+| Push result | "Everything is up-to-date" when git says up-to-date; "Could not resolve host '…'"; "Updated '…'" | `sub_10016e1ec` |
+| Commit | Message written to a temp file (UTF-8), then `[-c gpg.program=…] commit [--gpg-sign=…] [--signoff] [--amend] [--no-verify] --file=<temp>`; falls back to `-m <message>` if the file can't be written | `sub_100318828` [ev_eaf0a00d] |
+| Commit result | "Committed N file(s) to <branch> (<sha>)" / "Amended commit with N file(s) in <branch>"; "repository is locked" when `index.lock` exists | `sub_100318828` |
+| Discard | Tracked files: reset through git with the paths on stdin. **Untracked files are moved to the Trash** (NSFileManager), not deleted | `sub_100053aac` [ev_86e3bc3d] |
+| Locked repository | On `index.lock': File exists.` it retries up to **3** times, waiting **0.5 s × attempt** ("Retrying in %.1f") | `sub_100053aac` |
+| Auto status refresh | Refreshes when more than "automaticStatusUpdateInterval" seconds passed (default **60**; 60.0 is also the fallback) | `sub_10048580c` [ev_28a44267] |
+| Auto fetch | "fetchRemotesAutomatically" on by default; a timer (`updateTimerTick:`) fetches each open repository | `sub_10049189c` [ev_7c550d93], `sub_100490a98` |
+
+## Settings and their defaults (`sub_10031b7cc`, registerDefaults) [ev_ce11436f]
+
+| Setting | Default | Used in the rebuild |
+|---|---|---|
+| useTopologicalCommitOrder | true | history uses `--topo-order` |
+| maxCommitCount | 100000 (`0x186a0`) | commit limit |
+| fetchRemotesAutomatically | true | auto fetch on |
+| automaticStatusUpdateInterval | 60 (s) | status refresh every 60 s |
+| commitSubjectLimitLow / High | 50 / 70 | subject counter turns orange above 50, red above 70 |
+| compactBranchLabels | true | 2 px gap between branch labels |
+| createBranchSheetCheckout | true | "Switch to the new branch" ticked by default |
+| saveStashSheetStageNewFiles | true | Stash includes new files (`stash push -u`) |
+| deleteStashAfterApply | false | Apply keeps the stash; Pop removes it |
+| pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit <remote> <branch>`) |
+| fetchSheetFetchAllRemotes / fetchSheetFetchAllTags | false / false | Fetch one remote, no `--tags` (Option-click = all remotes) |
+| pushSheetPushAllTags | false | no `--tags` |
+| contextSize | 3 | diffs use `--unified=3` |
+| localBranchSortOrder / remoteBranchSortOrder / tagSortOrder | 2 / 2 / 1 | meaning of the numbers not followed (*not used*) |
+| repositoryManagerScanDepth | 6 | not used |
+
+Not found in code (*estimated*): how often the automatic fetch runs (the timer interval was not
+located; the two other timers in this area are 0.05 s and 0.2 s debounces, `sub_1003ade30`,
+`sub_1004739bc`) — the rebuild uses 10 minutes. The exact git command Pull runs was not located.
+
+## Screens (from the compiled layouts in Resources/*.nib)
+
+* Sidebar groups: **Branches, Remotes, Tags, Stashes** (`0x100610cc8…cf8`), a search field and a filter toggle (SidebarController.nib).
+* Toolbar actions: **Fetch, Pull, Push, Stash, Branch** (strings in `__const`).
+* Commit details (RevisionSummaryTabController.nib): subject, description, **SHA, AUTHOR, COMMITTER, PARENTS, REFS**, changed files with a diff under each.
+* Commit view (CommitController.nib): unstaged / staged file lists, **Commit subject**, **Description**, **Commit** button, Amend.
+
+## New features (not in the original — the person asked for a real edge)
+
+* **Universal Undo** (toolbar button, ⌘Z, palette). Before every local action (commit, amend,
+  checkout, merge, rebase, reset, cherry-pick, revert, branch/tag create or delete, stash, pop,
+  discard, pull) the app records HEAD, every branch and tag tip and the stash list. Undo puts
+  them back: commits are undone with `reset --soft` so the changes return staged; other moves use
+  `reset --keep` (refuses rather than lose local edits); branches/tags are restored with
+  `update-ref`; a new stash is popped back; a dropped stash is stored again; discarded edits are
+  saved with `git stash create` first and re-applied; a new file sent to the Trash is moved back.
+  30 steps deep. Actions that change nothing are not recorded. Push and fetch are not undoable
+  (they touch the server).
+* **Command palette** (⌘K or ⌘P): type to run any action, check out or merge any branch, open a
+  recent repository, go to a tag, or jump to a commit by message, author or hash. It is modelled
+  on the original's **Quick Launch** window (decompiled, see below).
+
+* **AI assistant** (toolbar "Assistant", ⌘K "Assistant" group). Not in the original.
+  Uses the person's **Claude subscription** through the Claude Code command line, never an API key:
+  `claude -p --output-format json --tools "" --no-session-persistence --strict-mcp-config
+  --setting-sources project [--json-schema …]`, prompt on stdin, run from the temp folder, with
+  `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK/VERTEX` removed from its
+  environment. `--bare` is **not** used because it only accepts an API key. `--tools ""` means
+  Claude can't run anything: it only reads what the app sends.
+  * **Branch clean-up**: for each local branch (not the current one or the base) the app sends:
+    merged into base (`branch --merged`), commits not in base / behind (`rev-list --left-right
+    --count`), upstream and whether it's gone (`%(upstream:track)`), last commit date, author,
+    subject. Base = `origin/HEAD`'s branch, else main/master/develop/trunk. Claude answers
+    delete / keep / review + reason (JSON schema). The app keeps only branches that exist, turns
+    "delete" into "review" for a branch with unmerged commits, and pre-ticks only "delete". The
+    person ticks and confirms; merged branches go with `branch -d`, others with `branch -D`;
+    one Undo step restores them all.
+  * **Suggest a commit message** from `diff --cached` (+ 12 recent subjects for style; subject
+    asked ≤ 50 characters, the original's commitSubjectLimitLow).
+  * **Explain a commit** in plain words from `show --stat --patch`.
+  * At most 60 000 characters are sent per question.
+
+### The original's own Claude / OpenAI features (decompiled, built-in lifter)
+
+The original already has "Generate commit message with Claude" / "…with OpenAI" (menu
+`sub_1003ba93c`) and "Code Review with OpenAI…" (`AiCodeReviewController`, `OpenAiService`).
+
+| Rule | Value | Where |
+|---|---|---|
+| Where Claude Code is looked for | exactly `/opt/homebrew/bin/claude`, then `~/.local/bin/claude` (`~` expanded), first that exists | `sub_1003e513c` [ev_8419e4f0], strings 0x1006476b0 / 0x1006476d0 |
+| Not found | "Cannot find Claude" | `sub_1003e4338` [ev_b4685c69] |
+| How it's run | `claude "<prompt>"` — one argument, working folder = the repository, output not a terminal (so Claude Code answers once and exits); Claude reads the repository itself | `sub_1003e4338` → `sub_1002560f8` [ev_bf0c8f66]; array header 0x100604560 = 1 element |
+| Prompt | "Generate commit message for {staged changes \| staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)}.\n- Only respond with the commit message.\n- Start directly with the subject line (no preamble).\n- The header must be less than {commitSubjectLimitLow} (soft limit) and {commitSubjectLimitHigh} (hard limit).\n- Hard wrap lines at {pageGuideLinePosition} characters.\n- Don't use the 'generated' footer." | `sub_1003e4338` |
+| Reading the answer | split at the first line break: subject before, description after, both trimmed of newlines | `sub_1003e4338` (`range(of: "\n")`, `trimmingCharacters(in: .newlines)`) |
+| Progress text | "Generating with Claude…" | `sub_1003e4338` |
+| OpenAI variant | same rules + "Do not start any lines with the hash symbol." and "Below is my git diff:\n\n```\n<diff>" | `sub_1004a7d4c` |
+| OpenAI code review prompt | "Make code review for changes.\nDo not thank.\n\nBelow is the git diff:" | `sub_1004a85ec` |
+
+Rebuild: same two Claude locations first (then the PATH), same "Cannot find Claude" text, the
+original's prompt word for word with 50 / 70 and the amend wording + `git diff --cached HEAD^`,
+same first-line split, same progress text. Differences, on purpose: Claude gets **no tools** and
+runs from the temp folder (so it can't touch the repository); the diff is therefore sent after the
+prompt the way the original's OpenAI prompt does. `pageGuideLinePosition`'s default wasn't found:
+72 is used (*estimated*). Branch clean-up and commit explanation have no counterpart in the original.
+
+### Worktrees (decompiled, built-in lifter)
+
+Git refuses to delete a branch that is checked out in a worktree, and Claude Code creates many.
+
+| Rule in the original | Value | Where |
+|---|---|---|
+| Delete-branch sheet | title "Delete Branch" / "Delete N Branches", text "Delete local branch from your repository" / "Delete local branches from your repository" | `sub_100070d94` [ev_1cfd7358] |
+| Worktree in that sheet | only when **one** branch is deleted and it is in `worktreesByFullReference`: a warning icon, the worktree's folder name (`lastPathComponent`) and a checkbox "Also delete worktree"; hidden for several branches | `sub_100070d94` |
+| Remote option | "Also delete remote branch" / "…corresponding remote branch(es)" | `sub_100070d94` |
+| Delete-worktree sheet | title "Delete worktree '<folder>'", text "Do you want to delete worktree '<folder>'?", button "Delete" | `sub_1002008ec` [ev_49d9e7d2] |
+| Sidebar | Worktrees group (main worktree + linked ones), context menu: Open, Copy Worktree Path, Remove; "showWorktrees" default false | class names 0x10060a4b0…0x100612fb0, `sub_10031b7cc` |
+
+Rebuild:
+* Worktrees are read with `git worktree list --porcelain` (main = first entry; `prunable` or a
+  missing folder = "folder gone"; `locked` noted).
+* Deleting a branch (sidebar menu, ⌘K, or the AI clean-up) removes its worktree first, then
+  `branch -d` (merged) / `-D` (ticked "Delete even though it isn't merged"). The sidebar sheet
+  uses the original's wording and "Also delete worktree" (ticked by default — *estimated*, the
+  nib's default wasn't read). Unticked → Delete is disabled ("Git can't delete a branch that is
+  checked out in a worktree").
+* Uncommitted work in the worktree is saved first (`git add -A` + `git stash create` inside it),
+  then `git worktree remove --force` (twice if locked); a missing folder is cleaned with
+  `git worktree prune`. *The original's exact remove command wasn't located (short strings are
+  inline); this is estimated.*
+* Undo re-creates the worktree with `git worktree add <path> <branch>` and re-applies the saved work.
+* AI clean-up: Claude is told which branches sit in a worktree and whether it has uncommitted
+  changes; a dirty worktree is never pre-ticked.
+* The Worktrees sidebar section is shown whenever linked worktrees exist (the original hides it by
+  default — changed because the person uses Claude Code worktrees a lot). "Clean up missing
+  worktrees" runs `git worktree prune`.
+
+### The original's Quick Launch (decompiled, built-in lifter)
+
+| Rule | Value | Where |
+|---|---|---|
+| Item row height | 25 pt | `tableView:heightOfRow:` 0x10011464c → `sub_100116548` (`fmov d8,#25.0`) [ev_90393ac3] |
+| Group header row height | 17 pt (rows of `HeaderCommandProviderItem`) | `sub_100116548` (`fmov d8,#17.0`) |
+| Groups (providers) | DefaultCommandProvider (commands), ReferenceCommandProvider (branches/tags), WorkspaceCommandProvider (repositories), RepositoryFileCommandProvider (files) | class names `0x100607b80…0x100610e60` [ev_fdc1f5ed] |
+| Row content | icon, title, secondary text | QuickLaunchTableCellView outlets `iconImageView`, `titleTextField`, `secondaryTextField` |
+| Placement | x = main window midX − width × 0.5; y = main window midY − height / 3 (AppKit, bottom-left origin) → centred, a third of its height above the middle | `sub_1001f8330` (`fmov #-0.5`, `fmov #-3.0; fdiv`) [ev_c141765a] |
+| Checkout mode | `showQuickLaunchCheckout:` opens it listing branches; the repository status view's branch button calls it | 0x1001f37c0 → `sub_1001f8330(1)`; 0x1002f00e8 [ev_4d0a888b] |
+| Hidden command | `settings maxCommitCount <n>`: exactly 3 words split on spaces, key must be `maxCommitCount`, the number may start with + or − | `handleSettingsCommand(_:)` `sub_100114e44` [ev_d243fa8b] |
+| Recent repositories | "Open Recent Repository:" header | QuickLaunchWindowController.nib |
+
+Rebuild: rows 25 px, headers 17 px, groups Commands / Branches / Tags / Repositories / Commits,
+same placement formula, branch button opens the branch-only mode, `settings maxCommitCount <n>`
+works (only positive numbers are taken). The file provider isn't rebuilt (there is no file view).
+
+### The original's confirmation alerts (decompiled)
+
+All follow one pattern: a question "Do you want to …?", the informative line "You can't undo
+this action", then the action's verb and Cancel. Examples: "Do you want to discard the changes in
+the selected lines?" + "Discard N Lines"/"Discard Line" (`sub_1003b95c0` [ev_2b8656df]),
+"Do you want to delete the workspace '…'?" + "Delete" (`sub_10026d55c` [ev_ddde9283]),
+"Do you want to remove the selected custom command?" + "Remove" (`sub_1000de8c0` [ev_72d353fe]).
+The original has an `UndoManager` class only for text fields and the interactive rebase
+(`undoRedoManager`, `undoButton`); there is no repository-wide undo — that is the new feature.
+Rebuild: same question / verb / Cancel layout; the informative line says the action can be taken
+back with Undo (⌘Z), because here it can.
+
+## The new look (person's request: "closer to Kraken")
+
+The person asked for a nicer, Kraken-like style, so the graph is drawn bigger on a dark theme.
+These are design choices, not values from the original:
+
+* Lane width 20 px (original 11), line width 2.5 px (original 1.5), commit node = 9 px radius
+  avatar circle with the author's initials (original 5 pt dot), merge commits = 4.5 px dot.
+* Row height 28 px — the original's row height was not found in code (*estimated*).
+* Colours: the original 9-colour palette is kept for branches; the window uses a dark navy theme.
+* Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
+  stores a colour byte per lane; how it picks it was not fully followed).

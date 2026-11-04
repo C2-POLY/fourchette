@@ -1,0 +1,42 @@
+{
+  "id": "ev_0dcbabeca61d1b19521e0b58429a99327d3a65023f5cb09937bfdea9a356d744",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_bytes_show",
+  "params": {
+    "address": "0x10060a080",
+    "length": 128
+  },
+  "result": {
+    "address": "0x10060a080",
+    "ascii": ".......................?.......?TTTTTT.?.......?.......?.......?[[[[[[.?.......?yyyyyy.?.......?.......?222222.?.......?.......?",
+    "file_offset": 15786112,
+    "hex": "09000000000000001300000000000000b3b2b2b2b2b2e23f9e9d9d9d9d9dcd3f545454545454e43f919090909090e03f989797979797d73f191919191919d93f5b5b5b5b5b5beb3fb6b5b5b5b5b5e53f797979797979e93fdddcdcdcdcdcdc3fd2d1d1d1d1d1e13f323232323232e23f959494949494c43f1a1a1a1a1a1ada3f",
+    "length": 128
+  },
+  "summary": "128 bytes at 0x10060a080.",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [],
+  "coverage": {
+    "status": "complete",
+    "examined": 128,
+    "total": 128
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x10060a080"
+    }
+  ],
+  "links": []
+}

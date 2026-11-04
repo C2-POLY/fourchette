@@ -1,0 +1,162 @@
+{
+  "id": "ev_8923a39fbf304737d521240f1d35182f37b3d9e7811eface1d4786106127372e",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 200,
+    "mode": "literal",
+    "offset": 0,
+    "pattern": "--pretty=format"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x100647450",
+        "references": [
+          {
+            "from": "0x10003d630",
+            "function": "sub_10003d460"
+          },
+          {
+            "from": "0x100451244",
+            "function": "sub_100451128"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H"
+      },
+      {
+        "address": "0x100647550",
+        "references": [],
+        "section": "__cstring",
+        "text": "--pretty=format:%at"
+      },
+      {
+        "address": "0x100647580",
+        "references": [],
+        "section": "__cstring",
+        "text": "--pretty=format:%H%at\t%aN~#~%aE"
+      },
+      {
+        "address": "0x100648370",
+        "references": [
+          {
+            "from": "0x100006be8",
+            "function": "sub_100006ab4"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:--ForkRevisionHeaderStart--%n"
+      },
+      {
+        "address": "0x100648480",
+        "references": [
+          {
+            "from": "0x100006514",
+            "function": "sub_1000063fc"
+          },
+          {
+            "from": "0x100312bd4",
+            "function": "sub_100312898"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H%n%aN%n%aE%n%at%n%s"
+      },
+      {
+        "address": "0x10064d3e0",
+        "references": [
+          {
+            "from": "0x10005ceec",
+            "function": "sub_10005ccd8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H±.%T±.%P"
+      },
+      {
+        "address": "0x100652b20",
+        "references": [
+          {
+            "from": "0x1000c3f7c",
+            "function": "sub_1000c3cd0"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H%P"
+      },
+      {
+        "address": "0x10065f950",
+        "references": [
+          {
+            "from": "0x1001a98a8",
+            "function": "sub_1001a9750"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H±.%aN±.%aE±.%at±.%s"
+      },
+      {
+        "address": "0x100675fb0",
+        "references": [
+          {
+            "from": "0x10039ba4c",
+            "function": "sub_10039b818"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H~#.%aN~#.%aE~#.%at~#.%cN~#.%cE~#.%ct~#.%P~#.%B<!--RevisionMessageEnd-->"
+      },
+      {
+        "address": "0x1006761a0",
+        "references": [
+          {
+            "from": "0x100399fa4",
+            "function": "sub_100399eec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%H~#.%aN~#.%aE~#.%at~#.%cN~#.%cE~#.%ct~#.%P~#.%B"
+      },
+      {
+        "address": "0x100676ed0",
+        "references": [
+          {
+            "from": "0x1003ca630",
+            "function": "sub_1003ca544"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--pretty=format:%HF|!-%s"
+      }
+    ],
+    "total": 11
+  },
+  "summary": "11 strings match \"--pretty=format\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 11,
+    "total": 11
+  },
+  "locations": [],
+  "links": []
+}

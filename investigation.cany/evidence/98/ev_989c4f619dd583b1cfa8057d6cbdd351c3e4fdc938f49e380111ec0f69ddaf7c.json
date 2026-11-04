@@ -1,0 +1,291 @@
+{
+  "id": "ev_989c4f619dd583b1cfa8057d6cbdd351c3e4fdc938f49e380111ec0f69ddaf7c",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 40,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "(Bash\\(|allowedTools|allowed-tools|--print|-p$|git diff|git log|git status|pageGuideLinePosition|dangerously|permission)"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x100615830",
+        "references": [
+          {
+            "from": "0x1005c1e48",
+            "function": "sub_1005c1a58"
+          }
+        ],
+        "section": "__const",
+        "text": "             at PermissionDeniedAddrNotAvailable"
+      },
+      {
+        "address": "0x10063b896",
+        "references": [
+          {
+            "from": "0x100778e40",
+            "function": null
+          }
+        ],
+        "section": "__const",
+        "text": "permission deniedconnection refusednetwork unreachableconnection abortednot connectedaddress in useaddress not availablenetwork downbroken pipeentity already existsoperation would blocknot a directoryis a directorydirectory not emptyread-only filesystem or storage mediumfilesystem loop or indirection limit (e.g. symlink loop)stale network file handleinvalid input parameterinvalid datatimed outwrite zeroseek on unseekable filefilesystem quota exceededfile too largeresource busyexecutable file busycross-device link or renametoo many linksargument list too longoperation interruptedunsupportedunexpected end of fileout of memoryother erroruncategorized error"
+      },
+      {
+        "address": "0x10064c450",
+        "references": [
+          {
+            "from": "0x100047ba4",
+            "function": "sub_100047870"
+          },
+          {
+            "from": "0x100058f04",
+            "function": "sub_100058bc8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Permission denied (publickey)"
+      },
+      {
+        "address": "0x10064f0b0",
+        "references": [
+          {
+            "from": "0x10007fc40",
+            "function": "sub_10007f8e8"
+          },
+          {
+            "from": "0x10007fd8c",
+            "function": "sub_10007fd44"
+          },
+          {
+            "from": "0x10030e284",
+            "function": "sub_10030e240"
+          },
+          {
+            "from": "0x1003a2fdc",
+            "function": "sub_1003a2a80"
+          },
+          {
+            "from": "0x1003a3ae8",
+            "function": "sub_1003a3a8c"
+          },
+          {
+            "from": "0x1003e4474",
+            "function": "sub_1003e4338"
+          },
+          {
+            "from": "0x100421a20",
+            "function": "sub_100421390"
+          },
+          {
+            "from": "0x10042217c",
+            "function": "sub_100422120"
+          },
+          {
+            "from": "0x1004a7ec8",
+            "function": "sub_1004a7d4c"
+          },
+          {
+            "from": "0x1007a01f8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "pageGuideLinePosition"
+      },
+      {
+        "address": "0x100659820",
+        "references": [
+          {
+            "from": "0x100123bcc",
+            "function": "sub_100123850"
+          },
+          {
+            "from": "0x1001240fc",
+            "function": "sub_100123dd0"
+          }
+        ],
+        "section": "__cstring",
+        "text": ": Permission denied"
+      },
+      {
+        "address": "0x1006598c0",
+        "references": [
+          {
+            "from": "0x100128554",
+            "function": "sub_100128550"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Uninstalling cli tool with elevated permissions..."
+      },
+      {
+        "address": "0x100659aa0",
+        "references": [
+          {
+            "from": "0x10012834c",
+            "function": "sub_100128348"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Installing cli tool with elevated permissions..."
+      },
+      {
+        "address": "0x100677900",
+        "references": [
+          {
+            "from": "0x1003e4574",
+            "function": "sub_1003e4338"
+          }
+        ],
+        "section": "__cstring",
+        "text": "staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)"
+      },
+      {
+        "address": "0x100678930",
+        "references": [
+          {
+            "from": "0x1003ffa64",
+            "function": "sub_1003ffa60"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Notification permission not granted"
+      },
+      {
+        "address": "0x10067ad00",
+        "references": [
+          {
+            "from": "0x10043bb20",
+            "function": "sub_10043b848"
+          }
+        ],
+        "section": "__cstring",
+        "text": "echo ${sha:abbr} changed files:\n\ngit diff --name-only ${sha}~1 ${sha}"
+      },
+      {
+        "address": "0x10067ad50",
+        "references": [
+          {
+            "from": "0x10043bae0",
+            "function": "sub_10043b848"
+          }
+        ],
+        "section": "__cstring",
+        "text": "echo ${repo:name} status:\n\ngit status --porcelain"
+      },
+      {
+        "address": "0x10067ad90",
+        "references": [
+          {
+            "from": "0x10043ba94",
+            "function": "sub_10043b848"
+          }
+        ],
+        "section": "__cstring",
+        "text": "count=$(git log --oneline ${ref:full} | wc -l)\n\necho ${ref} commits count: $count"
+      },
+      {
+        "address": "0x10067adf0",
+        "references": [
+          {
+            "from": "0x10043bafc",
+            "function": "sub_10043b848"
+          }
+        ],
+        "section": "__cstring",
+        "text": "count=$(git log --oneline -- ${file} | wc -l)\n\necho ${file:name} changes count: $count"
+      },
+      {
+        "address": "0x10067f000",
+        "references": [
+          {
+            "from": "0x100496220",
+            "function": "sub_100496214"
+          }
+        ],
+        "section": "__cstring",
+        "text": "pageGuideLinePositionChanged"
+      },
+      {
+        "address": "0x10067ff90",
+        "references": [
+          {
+            "from": "0x1004a86dc",
+            "function": "sub_1004a85ec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Make code review for changes.\nDo not thank.\n\nBelow is the git diff:\n\n```\n"
+      },
+      {
+        "address": "0x100680110",
+        "references": [
+          {
+            "from": "0x1004a80bc",
+            "function": "sub_1004a7d4c"
+          }
+        ],
+        "section": "__cstring",
+        "text": " (hard limit).\nDo not start any lines with the hash symbol.\nOnly respond with the commit message.\n\nBelow is my git diff:\n\n```\n"
+      },
+      {
+        "address": "0x1006b1be0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "pageGuideLinePosition"
+      },
+      {
+        "address": "0x1006cfa6e",
+        "references": [
+          {
+            "from": "0x1007b5660",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "pageGuideLinePositionChanged:"
+      },
+      {
+        "address": "0x1006d8c41",
+        "references": [
+          {
+            "from": "0x1007b96c0",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "updaterShouldPromptForPermissionToCheckForUpdates:"
+      }
+    ],
+    "total": 19
+  },
+  "summary": "19 strings match \"(Bash\\(|allowedTools|allowed-tools|--print|-p$|git diff|git log|git status|pageGuideLinePosition|dangerously|permission)\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 19,
+    "total": 19
+  },
+  "locations": [],
+  "links": []
+}

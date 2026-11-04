@@ -1,0 +1,644 @@
+{
+  "version": 2,
+  "name": "Fork",
+  "request": "Je veux la même application, mais avec quelque chose de visuellement plus sympa, quelque chose qui se rapproche un peu plus de Kraken.",
+  "target": {
+    "kind": "local",
+    "path": "/Applications/Fork.app"
+  },
+  "stack": "Rust + egui (eframe)",
+  "status": "ready",
+  "note": "Ready: all 3 checks pass, 28 of 28 claims hold. 3 questions about the original are still open.",
+  "created_ms": 1793783650216,
+  "updated_ms": 1793792782969,
+  "checks": [
+    {
+      "round": 1,
+      "check": "build",
+      "passed": true,
+      "similarity": null,
+      "note": "Build succeeded.",
+      "artifacts": [],
+      "at_ms": 1793786846900
+    },
+    {
+      "round": 1,
+      "check": "app-screenshot",
+      "passed": true,
+      "similarity": null,
+      "note": "The program starts and draws (2720×1680).",
+      "artifacts": [
+        "checks/round-1/screenshot.png"
+      ],
+      "at_ms": 1793786850161
+    },
+    {
+      "round": 1,
+      "check": "mechanics",
+      "passed": true,
+      "similarity": null,
+      "note": "app/mechanics.json has 28 values (26 with a source, 2 estimated).",
+      "artifacts": [],
+      "at_ms": 1793786850170,
+      "claims": [
+        {
+          "title": "original lane width (11) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original graph left inset (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original line width (1.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lane curve offset (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lines meet at row fraction (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original commit dot size (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "head commit circle size (12) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "palette size (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label padding (10) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label gap (4) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look lane width (20) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look line width (2.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look node radius (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look merge dot radius (4.5) is used in the code",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "check": "build",
+      "passed": true,
+      "similarity": null,
+      "note": "Build succeeded.",
+      "artifacts": [],
+      "at_ms": 1793787812936
+    },
+    {
+      "round": 2,
+      "check": "app-screenshot",
+      "passed": true,
+      "similarity": null,
+      "note": "The program starts and draws (1360×840).",
+      "artifacts": [
+        "checks/round-2/screenshot.png"
+      ],
+      "at_ms": 1793787815236
+    },
+    {
+      "round": 2,
+      "check": "mechanics",
+      "passed": true,
+      "similarity": null,
+      "note": "app/mechanics.json has 56 values (52 with a source, 4 estimated).",
+      "artifacts": [],
+      "at_ms": 1793787815237,
+      "claims": [
+        {
+          "title": "original lane width (11) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original graph left inset (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original line width (1.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lane curve offset (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lines meet at row fraction (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original commit dot size (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "head commit circle size (12) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "palette size (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label padding (10) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label gap (not compact) (4) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look lane width (20) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look line width (2.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look node radius (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look merge dot radius (4.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retries (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retry step (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "automatic status update interval (60) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit low (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit high (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "compact ref label gap (2) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "max commit count (100000) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "diff context lines (3) is used in the code",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "check": "build",
+      "passed": true,
+      "similarity": null,
+      "note": "Build succeeded.",
+      "artifacts": [],
+      "at_ms": 1793790081826
+    },
+    {
+      "round": 3,
+      "check": "app-screenshot",
+      "passed": true,
+      "similarity": null,
+      "note": "The program starts and draws (2720×1680).",
+      "artifacts": [
+        "checks/round-3/screenshot.png"
+      ],
+      "at_ms": 1793790085490
+    },
+    {
+      "round": 3,
+      "check": "mechanics",
+      "passed": true,
+      "similarity": null,
+      "note": "app/mechanics.json has 70 values (65 with a source, 5 estimated).",
+      "artifacts": [],
+      "at_ms": 1793790085490,
+      "claims": [
+        {
+          "title": "original lane width (11) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original graph left inset (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original line width (1.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lane curve offset (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lines meet at row fraction (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original commit dot size (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "head commit circle size (12) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "palette size (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label padding (10) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label gap (not compact) (4) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look lane width (20) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look line width (2.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look node radius (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look merge dot radius (4.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retries (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retry step (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "automatic status update interval (60) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit low (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit high (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "compact ref label gap (2) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "max commit count (100000) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "diff context lines (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "undo depth (30) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch row height (25) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch group header height (17) is used in the code",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "check": "build",
+      "passed": true,
+      "similarity": null,
+      "note": "Build succeeded.",
+      "artifacts": [],
+      "at_ms": 1793790999429
+    },
+    {
+      "round": 4,
+      "check": "app-screenshot",
+      "passed": true,
+      "similarity": null,
+      "note": "The program starts and draws (2720×1680).",
+      "artifacts": [
+        "checks/round-4/screenshot.png"
+      ],
+      "at_ms": 1793791003093
+    },
+    {
+      "round": 4,
+      "check": "mechanics",
+      "passed": true,
+      "similarity": null,
+      "note": "app/mechanics.json has 85 values (78 with a source, 7 estimated).",
+      "artifacts": [],
+      "at_ms": 1793791003094,
+      "claims": [
+        {
+          "title": "original lane width (11) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original graph left inset (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original line width (1.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lane curve offset (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lines meet at row fraction (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original commit dot size (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "head commit circle size (12) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "palette size (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label padding (10) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label gap (not compact) (4) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look lane width (20) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look line width (2.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look node radius (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look merge dot radius (4.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retries (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retry step (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "automatic status update interval (60) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit low (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit high (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "compact ref label gap (2) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "max commit count (100000) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "diff context lines (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "undo depth (30) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ai commit subject limit (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "claude commit soft limit in prompt (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "claude commit hard limit in prompt (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch row height (25) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch group header height (17) is used in the code",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "check": "build",
+      "passed": true,
+      "similarity": null,
+      "note": "Build succeeded.",
+      "artifacts": [],
+      "at_ms": 1793792779352
+    },
+    {
+      "round": 5,
+      "check": "app-screenshot",
+      "passed": true,
+      "similarity": null,
+      "note": "The program starts and draws (2720×1680).",
+      "artifacts": [
+        "checks/round-5/screenshot.png"
+      ],
+      "at_ms": 1793792782949
+    },
+    {
+      "round": 5,
+      "check": "mechanics",
+      "passed": true,
+      "similarity": null,
+      "note": "app/mechanics.json has 94 values (85 with a source, 9 estimated).",
+      "artifacts": [],
+      "at_ms": 1793792782949,
+      "claims": [
+        {
+          "title": "original lane width (11) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original graph left inset (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original line width (1.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lane curve offset (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "lines meet at row fraction (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "original commit dot size (5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "head commit circle size (12) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "palette size (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label padding (10) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ref label gap (not compact) (4) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look lane width (20) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look line width (2.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look node radius (9) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "new look merge dot radius (4.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retries (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "locked repository retry step (0.5) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "automatic status update interval (60) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit low (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "commit subject limit high (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "compact ref label gap (2) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "max commit count (100000) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "diff context lines (3) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "undo depth (30) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "ai commit subject limit (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "claude commit soft limit in prompt (50) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "claude commit hard limit in prompt (70) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch row height (25) is used in the code",
+          "passed": true
+        },
+        {
+          "title": "quick launch group header height (17) is used in the code",
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "agent_session": "913ac16b-8e21-480b-9c06-8fb9800a375d",
+  "allowed_actions": [],
+  "last_reply": "Je regarde d'abord comment Fork gère lui-même les worktrees (il en a dans sa barre latérale), pour reprendre ses vraies règles.Fork's own \"delete branch\" dialog has an \"Also delete worktree\" box, and there's a separate \"Do you want to delete worktree '…'?\" dialog. Reading both:The Git layer works: a branch held by a worktree is freed by removing the worktree first, and Undo brings back the worktree with its unsaved draft. Now plugging it into Undo:Now the AI clean-up: it has to know which branches have a worktree and whether that worktree has unsaved work.Je branche maintenant la suppression : chaque branche passe par « retirer son worktree d'abord, puis la branche », et Annuler remet les deux.Showing the worktree in the clean-up window:Now the single-branch delete dialog with Fork's \"Also delete worktree\" box, plus a Worktrees section in the sidebar:Adding the Worktrees section to the sidebar, just above the stashes:Builds. A test of the whole path through Undo: delete a branch whose worktree has a draft, then Undo.Quand tu supprimes une branche (par le menu, la palette ⌘K ou le nettoyage par Claude), l'appli supprime maintenant d'abord le worktree où elle est ouverte, puis la branche. Le message de confirmation reprend celui de Fork, avec la case « Also delete worktree » (supprimer aussi le worktree). Si ce worktree contient des changements non validés, l'appli les met de côté avant de le retirer : Annuler (⌘Z) recrée le worktree avec son travail, et le nettoyage par Claude ne coche jamais une branche dans ce cas. Une section « Worktrees » dans la barre latérale les liste, permet d'en supprimer un, et propose « Clean up missing worktrees » pour effacer d'un clic ceux dont le dossier a disparu. Les tests de suppression puis d'annulation, la compilation et la vérification passent. Deux points restent estimés : la case cochée par défaut, et la commande exacte que Fork utilise pour retirer un worktree.",
+  "asset_budget_usd": 5.0,
+  "generate_assets": false
+}

@@ -1,0 +1,920 @@
+{
+  "id": "ev_8934f919ca21d5c00c6ed23a15da26e21c13923f158e2238c367ead8f387b606",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 80,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "(claude|--print|--output-format|--model|--max-turns|--allowedTools|--tools|stream-json|commit message|Conventional|imperative|staged changes|diff)"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x100604480",
+        "references": [],
+        "section": "__const",
+        "text": "SideBySideCommitTextDiffView"
+      },
+      {
+        "address": "0x100604710",
+        "references": [
+          {
+            "from": "0x10001bc54",
+            "function": "sub_10001bc0c"
+          }
+        ],
+        "section": "__const",
+        "text": "OnionSkinImageDiffView"
+      },
+      {
+        "address": "0x1006052e0",
+        "references": [],
+        "section": "__const",
+        "text": "CommitDiffTextView"
+      },
+      {
+        "address": "0x100605590",
+        "references": [],
+        "section": "__const",
+        "text": "WorkingDirectoryRevisionDiffTarget"
+      },
+      {
+        "address": "0x100606080",
+        "references": [],
+        "section": "__const",
+        "text": "SplitTextDiffView"
+      },
+      {
+        "address": "0x10060698c",
+        "references": [],
+        "section": "__const",
+        "text": "VisualDiff"
+      },
+      {
+        "address": "0x100607690",
+        "references": [
+          {
+            "from": "0x1000e511c",
+            "function": "-[_TtC4Fork30DiffSelectionPopoverController nibName]"
+          }
+        ],
+        "section": "__const",
+        "text": "DiffSelectionPopoverController"
+      },
+      {
+        "address": "0x1006076b0",
+        "references": [],
+        "section": "__const",
+        "text": "DiffSelectionPopoverControllerDelegate"
+      },
+      {
+        "address": "0x100607967",
+        "references": [],
+        "section": "__const",
+        "text": "BinaryDiffView"
+      },
+      {
+        "address": "0x100609e80",
+        "references": [],
+        "section": "__const",
+        "text": "RevisionDiffTarget"
+      },
+      {
+        "address": "0x10060a1b0",
+        "references": [],
+        "section": "__const",
+        "text": "Diff"
+      },
+      {
+        "address": "0x10060a5e0",
+        "references": [],
+        "section": "__const",
+        "text": "OpenExternalDiff"
+      },
+      {
+        "address": "0x10060a620",
+        "references": [],
+        "section": "__const",
+        "text": "ExternalDiffTarget"
+      },
+      {
+        "address": "0x10060b3b0",
+        "references": [],
+        "section": "__const",
+        "text": "SwipeImageDiffSplitView"
+      },
+      {
+        "address": "0x10060b3d0",
+        "references": [
+          {
+            "from": "0x10023ec64",
+            "function": "sub_10023eba8"
+          }
+        ],
+        "section": "__const",
+        "text": "SwipeImageDiffView"
+      },
+      {
+        "address": "0x10060b410",
+        "references": [],
+        "section": "__const",
+        "text": "SplitCommitTextDiffView"
+      },
+      {
+        "address": "0x10060baf0",
+        "references": [],
+        "section": "__const",
+        "text": "SideBySideTextDiffView"
+      },
+      {
+        "address": "0x10060bdd0",
+        "references": [],
+        "section": "__const",
+        "text": "Diff"
+      },
+      {
+        "address": "0x10060c160",
+        "references": [],
+        "section": "__const",
+        "text": "DiffContentTableCellView"
+      },
+      {
+        "address": "0x10060c180",
+        "references": [],
+        "section": "__const",
+        "text": "DiffTableViewControllerDelegate"
+      },
+      {
+        "address": "0x10060ca30",
+        "references": [
+          {
+            "from": "0x100290abc",
+            "function": "sub_100290988"
+          },
+          {
+            "from": "0x1002cba00",
+            "function": "sub_1002cb8b0"
+          },
+          {
+            "from": "0x1002ce308",
+            "function": "sub_1002ce168"
+          },
+          {
+            "from": "0x1002d238c",
+            "function": "sub_1002d223c"
+          }
+        ],
+        "section": "__const",
+        "text": "Load Diff"
+      },
+      {
+        "address": "0x10060d2b0",
+        "references": [],
+        "section": "__const",
+        "text": "CommitFileDiffView"
+      },
+      {
+        "address": "0x10060d2e0",
+        "references": [],
+        "section": "__const",
+        "text": "CommitDiffTextViewDelegate"
+      },
+      {
+        "address": "0x10060d300",
+        "references": [],
+        "section": "__const",
+        "text": "FileDiffViewSubviewProtocol"
+      },
+      {
+        "address": "0x10060d31c",
+        "references": [],
+        "section": "__const",
+        "text": "FileDiffView"
+      },
+      {
+        "address": "0x10060f210",
+        "references": [],
+        "section": "__const",
+        "text": "DiffTextViewScrollPositionCache"
+      },
+      {
+        "address": "0x10060fc70",
+        "references": [],
+        "section": "__const",
+        "text": "TextDiffViewSubviewProtocol"
+      },
+      {
+        "address": "0x10060fc90",
+        "references": [],
+        "section": "__const",
+        "text": "CommitTextDiffViewSubviewProtocol"
+      },
+      {
+        "address": "0x10060fcc0",
+        "references": [],
+        "section": "__const",
+        "text": "CommitTextDiffView"
+      },
+      {
+        "address": "0x10060fcd3",
+        "references": [],
+        "section": "__const",
+        "text": "TextDiffView"
+      },
+      {
+        "address": "0x100610220",
+        "references": [
+          {
+            "from": "0x100392388",
+            "function": "sub_1003922e8"
+          }
+        ],
+        "section": "__const",
+        "text": "Commit Message"
+      },
+      {
+        "address": "0x100610230",
+        "references": [
+          {
+            "from": "0x100399b1c",
+            "function": "sub_100399b0c"
+          }
+        ],
+        "section": "__const",
+        "text": "Commit message"
+      },
+      {
+        "address": "0x100611540",
+        "references": [],
+        "section": "__const",
+        "text": "DiffLineNumberRulerView"
+      },
+      {
+        "address": "0x100611558",
+        "references": [],
+        "section": "__const",
+        "text": "DiffViewMode"
+      },
+      {
+        "address": "0x100611659",
+        "references": [],
+        "section": "__const",
+        "text": "DiffTextView"
+      },
+      {
+        "address": "0x100611710",
+        "references": [
+          {
+            "from": "0x10040f924",
+            "function": "-[_TtC4Fork25DiffPopUpWindowController windowNibName]"
+          }
+        ],
+        "section": "__const",
+        "text": "DiffPopUpWindowController"
+      },
+      {
+        "address": "0x100611bd0",
+        "references": [
+          {
+            "from": "0x100424e24",
+            "function": "sub_100424de0"
+          }
+        ],
+        "section": "__const",
+        "text": "SubmoduleDiffView"
+      },
+      {
+        "address": "0x100613290",
+        "references": [],
+        "section": "__const",
+        "text": "DiffDocumentSchemeView"
+      },
+      {
+        "address": "0x100613d8d",
+        "references": [],
+        "section": "__const",
+        "text": "DiffContent"
+      },
+      {
+        "address": "0x100613dc0",
+        "references": [],
+        "section": "__const",
+        "text": "ParsedDiffContent"
+      },
+      {
+        "address": "0x100613df0",
+        "references": [],
+        "section": "__const",
+        "text": "UnmergedDiffContent"
+      },
+      {
+        "address": "0x100613e18",
+        "references": [],
+        "section": "__const",
+        "text": "TextDiffContent"
+      },
+      {
+        "address": "0x100613e40",
+        "references": [],
+        "section": "__const",
+        "text": "BinaryDiffContent"
+      },
+      {
+        "address": "0x100613e70",
+        "references": [],
+        "section": "__const",
+        "text": "LfsDiffContent"
+      },
+      {
+        "address": "0x100613e90",
+        "references": [],
+        "section": "__const",
+        "text": "UnknownBinaryDiffContent"
+      },
+      {
+        "address": "0x100613f10",
+        "references": [],
+        "section": "__const",
+        "text": "SubmoduleDiffContent"
+      },
+      {
+        "address": "0x1006154e0",
+        "references": [
+          {
+            "from": "0x100535374",
+            "function": "sub_100534744"
+          }
+        ],
+        "section": "__const",
+        "text": "expand topo walkopen .idx file 'read diff type:\nimilarity index read full line:\nopen object db 'unclosed quote:\nassertion `left  right` failed: range end index ) when slicing `"
+      },
+      {
+        "address": "0x10061e533",
+        "references": [
+          {
+            "from": "0x10052b670",
+            "function": "sub_10052b5b8"
+          }
+        ],
+        "section": "__const",
+        "text": "create str from diff"
+      },
+      {
+        "address": "0x10061e8d6",
+        "references": [
+          {
+            "from": "0x10054c14c",
+            "function": "sub_10054bea4"
+          }
+        ],
+        "section": "__const",
+        "text": "read metadatammap 'Cannot decode object header at decompress packed object at 'parse  commit headerdecode signature identity as utf8 string for 'author header:\ndecode message as string for 'parse object kind in 'parse oid for 'open stash at '/logs/refs/stash'parse stash compute indegrees to depth get commit parents for process parents for compute_indegrees_to_depth get commit info for explore_to_depth get_commit_parents process_parents for get_gen_and_committer_time get gen and committer time for open chain commit graph 'open alt chain commit graph 'open alt commit graph 'read to end 'decode loose object header in open commit-graph at 'read object parse commit time and parents for try find commit in commit-graph get commit read alternates in 'read context line:\nread added line:\nread deleted line:\n@ -read hunk header eol:\ninary files read binary files differ line:\nopy from opy to read copy-to path:\nread copy-from path:\niff --eleted file mode read deleted file mode:\nread deleted file mode eol:\nndex read src object sha:\new file mode read new mode:\nread new mode eol:\nread new file mode:\nread new file mode eol:\nread old mode:\nread old mode eol:\nename from ename to read rename-to path:\nread rename-from path:\nread similarity index:\nread similarity index eol:\nread pragma line:\nfind src prefix:\nfind dst prefix:\nskip dst prefix:\nfind dst end:\nread index sha separator:\nread old start in hunk header:\nread old length in hunk header:\nread old-new separator in hunk header:\nread new start in hunk header:\nread hunk header closing @@:\nread hunk header context:\nsrc/process.rsstdout piped"
+      },
+      {
+        "address": "0x10061f59b",
+        "references": [
+          {
+            "from": "0x100530ff8",
+            "function": "sub_1005303d4"
+          },
+          {
+            "from": "0x100531bd0",
+            "function": "sub_1005315d4"
+          }
+        ],
+        "section": "__const",
+        "text": "skip headerfind commit message separator:\nskip 'tree' header:\n"
+      },
+      {
+        "address": "0x10061f5d9",
+        "references": [
+          {
+            "from": "0x100530e00",
+            "function": "sub_1005303d4"
+          }
+        ],
+        "section": "__const",
+        "text": "parse 'author' headerskip commit message separator:\n"
+      },
+      {
+        "address": "0x10062d8f0",
+        "references": [
+          {
+            "from": "0x100504640",
+            "function": "sub_1005045b8"
+          },
+          {
+            "from": "0x10055e7a8",
+            "function": "sub_10055e6b8"
+          },
+          {
+            "from": "0x10055f9b4",
+            "function": "sub_10055f8c0"
+          },
+          {
+            "from": "0x100573be4",
+            "function": "sub_1005735dc"
+          },
+          {
+            "from": "0x100574aec",
+            "function": "sub_1005747c0"
+          },
+          {
+            "from": "0x100585ed4",
+            "function": "sub_100585df0"
+          },
+          {
+            "from": "0x100585ee4",
+            "function": "sub_100585df0"
+          },
+          {
+            "from": "0x100766700",
+            "function": null
+          }
+        ],
+        "section": "__const",
+        "text": "out of boundsinternal error: entered unreachable code: AEligÆAMPAacuteÁAbreveĂAcircÂAcyАAfrAgraveÀAlphaΑAmacrĀAnd⩓AogonĄApplyFunction⁡AringÅAssign≔AtildeÃÄBackslash∖⫧Barwed⌆BcyБBecause∵BernoullisℬΒBfrBreve˘Bumpeq≎Ч©CacuteĆCap⋒CapitalDifferentialDⅅCayleysℭCcaronČCcedilÇCcircĈCconint∰ĊCedilla¸CenterDot·CfrChiΧCircleDot⊙CircleMinus⊖CirclePlus⊕CircleTimes⊗ClockwiseContourIntegral∲CloseCurlyDoubleQuote”CloseCurlyQuote’Colon∷Colone⩴Congruent≡Conint∯ContourIntegral∮ℂCoproduct∐CounterClockwiseContourIntegral∳Cross⨯Cup⋓CupCap≍DD⤑ЂЅЏDagger‡↡Dashv⫤DcaronĎDcyДDel∇DeltaΔDfr´DiacriticalDot˙DiacriticalDoubleAcute˝˜Diamond⋄DifferentialDⅆDot¨DotDot⃜≐DoubleContourIntegralDoubleDotDoubleDownArrow⇓DoubleLeftArrow⇐DoubleLeftRightArrow⇔DoubleLeftTeeDoubleLongLeftArrow⟸DoubleLongLeftRightArrow⟺DoubleLongRightArrow⟹⇒DoubleRightTee⊨DoubleUpArrow⇑DoubleUpDownArrow⇕DoubleVerticalBar∥DownArrow↓DownArrowBar⤓⇵DownBrevȇDownLeftRightVector⥐DownLeftTeeVector⥞DownLeftVector↽DownLeftVectorBar⥖DownRightTeeVector⥟DownRightVector⇁DownRightVectorBar⥗DownTee⊤DownTeeArrow↧DownarrowDstrokĐENGŊETHÐEacuteÉEcaronĚEcircÊEcyЭĖEfrEgraveÈElement∈EmacrĒ◻EmptyVerySmallSquare▫EogonĘEpsilonΕEqual⩵EqualTilde≂Equilibrium⇌ℰ⩳EtaΗËExists∃ExponentialEⅇFcyФFfrFilledSmallSquare◼FilledVerySmallSquare▪ForAll∀FouriertrfℱЃGammaΓGammadϜGbreveĞGcedilĢGcircĜGcyГĠGfrGg⋙GreaterEqual≥⋛≧GreaterGreater⪢GreaterLess≷GreaterSlantEqual⩾GreaterTilde≳Gt≫HARDcyЪHacekˇHatHcircĤHfrℌHilbertSpaceℋℍHorizontalLine─HstrokĦHumpDownHumpHumpEqual≏ЕIJligĲЁIacuteÍIcircÎIcyИİIfrℑIgraveÌImImacrĪImaginaryIⅈImpliesInt∬∫Intersection⋂InvisibleComma⁣InvisibleTimes⁢IogonĮΙℐItildeĨIukcyІÏJcircĴJcyЙJfrJsercyЈJukcyЄХЌKappaΚKcedilĶKcyКKfrЉLacuteĹLambdaΛ⟪Laplacetrfℒ↞LcaronĽLcedilĻLcyЛ⟨LeftArrow←LeftArrowBar⇤LeftArrowRightArrow⇆LeftCeiling⌈LeftDoubleBracket⟦LeftDownTeeVector⥡LeftDownVector⇃LeftDownVectorBar⥙LeftFloor⌊LeftRightArrow↔LeftRightVector⥎LeftTee⊣LeftTeeArrow↤LeftTeeVector⥚LeftTriangle⊲LeftTriangleBar⧏LeftTriangleEqual⊴⥑LeftUpTeeVector⥠LeftUpVector↿LeftUpVectorBar⥘LeftVector↼LeftVectorBar⥒LeftarrowLeftrightarrow⋚LessFullEqual≦LessGreater≶⪡LessSlantEqual⩽LessTilde≲LfrLl⋘Lleftarrow⇚LmidotĿLongLeftArrow⟵LongLeftRightArrow⟷LongRightArrow⟶LongleftarrowLongleftrightarrowLongrightarrowLowerLeftArrow↙LowerRightArrow↘Lsh↰LstrokŁLt≪Map⤅McyМMediumSpace MellintrfℳMfrMinusPlus∓MuΜЊNacuteŃNcaronŇNcedilŅNcyНNegativeMediumSpace​NegativeThickSpaceNegativeThinSpaceNegativeVeryThinSpaceNestedGreaterGreaterNestedLessLessNewLineNfrNoBreak⁠ ℕNot⫬NotCongruent≢NotCupCap≭NotDoubleVerticalBar∦NotElement∉≠NotEqualTilde≂̸NotExists∄NotGreater≯NotGreaterEqual≱NotGreaterFullEqual≧̸NotGreaterGreater≫̸NotGreaterLess≹NotGreaterSlantEqual⩾̸NotGreaterTilde≵NotHumpDownHump≎̸NotHumpEqual≏̸NotLeftTriangle⋪NotLeftTriangleBar⧏̸NotLeftTriangleEqual⋬NotLess≮NotLessEqual≰NotLessGreater≸NotLessLess≪̸NotLessSlantEqual⩽̸NotLessTilde≴NotNestedGreaterGreater⪢̸NotNestedLessLess⪡̸NotPrecedes⊀⪯̸NotPrecedesSlantEqual⋠NotReverseElement∌⋫NotRightTriangleBar⧐̸NotRightTriangleEqual⋭NotSquareSubset⊏̸NotSquareSubsetEqual⋢NotSquareSuperset⊐̸NotSquareSupersetEqual⋣NotSubset⊂⃒NotSubsetEqual⊈NotSucceeds⊁⪰̸NotSucceedsSlantEqual⋡≿̸NotSuperset⊃⃒⊉≁NotTildeEqual≄NotTildeFullEqual≇NotTildeTilde≉NotVerticalBar∤NtildeÑNuΝOEligŒOacuteÓOcircÔOcyОOdblacŐOfrOgraveÒOmacrŌOmegaΩOmicronΟOpenCurlyDoubleQuote“OpenCurlyQuote‘Or⩔OslashØOtildeÕOtimes⨷ÖOverBar‾OverBrace⏞OverBracket⎴OverParenthesis⏜∂PcyПPfrPhiΦPiΠPlusMinus±PoincareplaneℙPr⪻≺PrecedesEqual⪯PrecedesSlantEqual≼PrecedesTilde≾Prime″Product∏ProportionProportional∝PsiΨQfrℚRBarr⤐REG®RacuteŔ⟫↠Rarrtl⤖RcaronŘRcedilŖRcyРReℜReverseElement∋ReverseEquilibrium⇋ReverseUpEquilibrium⥯RfrRhoΡRightAngleBracket⟩RightArrow→RightArrowBar⇥RightArrowLeftArrow⇄RightCeiling⌉RightDoubleBracket⟧RightDownTeeVector⥝RightDownVector⇂RightDownVectorBar⥕RightFloor⌋⊢RightTeeArrow↦RightTeeVector⥛RightTriangle⊳⧐RightTriangleEqual⊵RightUpDownVector⥏⥜RightUpVector↾⥔RightVector⇀RightVectorBar⥓RightarrowℝRoundImplies⥰Rrightarrow⇛ℛRsh↱RuleDelayed⧴SHCHcyЩШSOFTcyЬSacuteŚSc⪼ScaronŠScedilŞScircŜScyСSfrShortDownArrowShortLeftArrowShortRightArrowShortUpArrow↑SigmaΣSmallCircle∘√Squa"
+      },
+      {
+        "address": "0x100646564",
+        "references": [
+          {
+            "from": "0x1004f9010",
+            "function": "sub_1004f8fe4"
+          }
+        ],
+        "section": "__const",
+        "text": "Maskjavaxamlxsltyamlfypp.EQ..GE..GT..LE..LT..NE..OR.bindcasedataelseexitgotolockonlyopenpasspurereadsavestopthenwait%TAGnull<!--\\endBOTHCALLCASECASTCUBEDROPEACHELSEEXECEXITFREEFROMFULLHOLDINTOJOINLEFTLIKELOOPNONEONLYOPENOVERROWSSOMETHENUNDOUSERWHENWITHbothcastcubedropeachexecfreefromholdintojoinleftlikeloopnoneoverrowssomeundouserwhenwithBLOBCHARCLOBDATEHOURREALTEXTTIMEYEARblobclobtextyearNULLTRUEfuncinitlazysafeTypeweakswapBoolUIntselfdoneelifesacbashcurldiffdirsechoevalexprfindglobgrepgziphdidjobskilllessmakemoreniceparlpopdrubysipssttysudosynctailtcshtesttraptypeimplmoveprivprocCopyCStrFromIntoPathSelfiterpushskiptakevec!nextredo=enddictfilehelp"
+      },
+      {
+        "address": "0x1006472ef",
+        "references": [
+          {
+            "from": "0x1007e5ec8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "diffContent"
+      },
+      {
+        "address": "0x1006472fb",
+        "references": [
+          {
+            "from": "0x1007e5ee0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "diffPath"
+      },
+      {
+        "address": "0x1006476b0",
+        "references": [],
+        "section": "__cstring",
+        "text": "/opt/homebrew/bin/claude"
+      },
+      {
+        "address": "0x1006476d0",
+        "references": [],
+        "section": "__cstring",
+        "text": "~/.local/bin/claude"
+      },
+      {
+        "address": "0x1006485b0",
+        "references": [
+          {
+            "from": "0x100781e88",
+            "function": null
+          },
+          {
+            "from": "0x1007ba0a0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork28SideBySideCommitTextDiffView"
+      },
+      {
+        "address": "0x1006486b0",
+        "references": [
+          {
+            "from": "0x10000f470",
+            "function": "sub_10000f408"
+          },
+          {
+            "from": "0x10008dee0",
+            "function": "sub_10008de84"
+          },
+          {
+            "from": "0x10016bbe4",
+            "function": "sub_10016b970"
+          },
+          {
+            "from": "0x10016bed0",
+            "function": "sub_10016be78"
+          },
+          {
+            "from": "0x10016d4ac",
+            "function": "sub_10016d450"
+          },
+          {
+            "from": "0x1002438dc",
+            "function": "sub_100243880"
+          },
+          {
+            "from": "0x1002666b4",
+            "function": "sub_10026664c"
+          },
+          {
+            "from": "0x10031be10",
+            "function": "sub_10031b7cc"
+          }
+        ],
+        "section": "__cstring",
+        "text": "diffShowHiddenSymbols"
+      },
+      {
+        "address": "0x1006486d0",
+        "references": [
+          {
+            "from": "0x10000f7c8",
+            "function": "-[_TtC4Fork28SideBySideCommitTextDiffView initWithFrame:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork.SideBySideCommitTextDiffView"
+      },
+      {
+        "address": "0x1006491f0",
+        "references": [
+          {
+            "from": "0x100782570",
+            "function": null
+          },
+          {
+            "from": "0x1007babb0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork22OnionSkinImageDiffView"
+      },
+      {
+        "address": "0x100649230",
+        "references": [
+          {
+            "from": "0x1007825d0",
+            "function": null
+          },
+          {
+            "from": "0x1007999d0",
+            "function": null
+          },
+          {
+            "from": "0x1007b1ae8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "highlightImageDiff"
+      },
+      {
+        "address": "0x100649400",
+        "references": [
+          {
+            "from": "0x10001c21c",
+            "function": "sub_10001bc0c"
+          },
+          {
+            "from": "0x10001c35c",
+            "function": "sub_10001c324"
+          },
+          {
+            "from": "0x10016c9c8",
+            "function": "sub_10016c954"
+          },
+          {
+            "from": "0x10016dc94",
+            "function": "sub_10016dc38"
+          },
+          {
+            "from": "0x10023f3a4",
+            "function": "sub_10023eba8"
+          },
+          {
+            "from": "0x10023f590",
+            "function": "sub_10023f558"
+          },
+          {
+            "from": "0x10031bf8c",
+            "function": "sub_10031b7cc"
+          },
+          {
+            "from": "0x1004c2ed4",
+            "function": "sub_1004c2e9c"
+          },
+          {
+            "from": "0x1004c4090",
+            "function": "sub_1004c3798"
+          }
+        ],
+        "section": "__cstring",
+        "text": "imageDiffHighlightPixels"
+      },
+      {
+        "address": "0x10064b4b0",
+        "references": [
+          {
+            "from": "0x100784258",
+            "function": null
+          },
+          {
+            "from": "0x1007bc4b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork18CommitDiffTextView"
+      },
+      {
+        "address": "0x10064cc10",
+        "references": [
+          {
+            "from": "0x100785028",
+            "function": null
+          },
+          {
+            "from": "0x100785098",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork34WorkingDirectoryRevisionDiffTarget"
+      },
+      {
+        "address": "0x10064cc40",
+        "references": [
+          {
+            "from": "0x1007850e0",
+            "function": null
+          },
+          {
+            "from": "0x100785128",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtCC4Fork34WorkingDirectoryRevisionDiffTarget8Revision"
+      },
+      {
+        "address": "0x10064cc80",
+        "references": [
+          {
+            "from": "0x100785170",
+            "function": null
+          },
+          {
+            "from": "0x1007851b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtCC4Fork34WorkingDirectoryRevisionDiffTarget5Amend"
+      },
+      {
+        "address": "0x10064f9d0",
+        "references": [
+          {
+            "from": "0x100786f68",
+            "function": null
+          },
+          {
+            "from": "0x1007bf968",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork17SplitTextDiffView"
+      },
+      {
+        "address": "0x10064fa10",
+        "references": [
+          {
+            "from": "0x100781f48",
+            "function": null
+          },
+          {
+            "from": "0x100787008",
+            "function": null
+          },
+          {
+            "from": "0x100799e20",
+            "function": null
+          },
+          {
+            "from": "0x10079aee8",
+            "function": null
+          },
+          {
+            "from": "0x1007b12a0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "diff"
+      },
+      {
+        "address": "0x10064fa20",
+        "references": [
+          {
+            "from": "0x10008dff8",
+            "function": "-[_TtC4Fork17SplitTextDiffView initWithFrame:]"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Fork.SplitTextDiffView"
+      },
+      {
+        "address": "0x1006555d0",
+        "references": [
+          {
+            "from": "0x10078b5a0",
+            "function": null
+          },
+          {
+            "from": "0x1007c2c88",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork30DiffSelectionPopoverController"
+      },
+      {
+        "address": "0x100656800",
+        "references": [
+          {
+            "from": "0x10078c198",
+            "function": null
+          },
+          {
+            "from": "0x1007c3968",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtC4Fork14BinaryDiffView"
+      },
+      {
+        "address": "0x100656820",
+        "references": [
+          {
+            "from": "0x10078c218",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "diffImageChanged"
+      },
+      {
+        "address": "0x100656880",
+        "references": [
+          {
+            "from": "0x10078c2d8",
+            "function": null
+          },
+          {
+            "from": "0x10078c588",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "swipeImageDiffView"
+      },
+      {
+        "address": "0x1006568a0",
+        "references": [
+          {
+            "from": "0x10078c2f8",
+            "function": null
+          },
+          {
+            "from": "0x10078c598",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "onionSkinImageDiffView"
+      },
+      {
+        "address": "0x1006568c0",
+        "references": [
+          {
+            "from": "0x10078c318",
+            "function": null
+          },
+          {
+            "from": "0x10078c5a8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "diffModesContainer"
+      },
+      {
+        "address": "0x100656ac0",
+        "references": [
+          {
+            "from": "0x10078c590",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"_TtC4Fork18SwipeImageDiffView\",N,W,VswipeImageDiffView"
+      },
+      {
+        "address": "0x100656b00",
+        "references": [
+          {
+            "from": "0x10078c5a0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"_TtC4Fork22OnionSkinImageDiffView\",N,W,VonionSkinImageDiffView"
+      },
+      {
+        "address": "0x100656b50",
+        "references": [
+          {
+            "from": "0x10078c5b0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSStackView\",N,W,VdiffModesContainer"
+      },
+      {
+        "address": "0x100656c40",
+        "references": [
+          {
+            "from": "0x1000ee0e8",
+            "function": "sub_1000edc38"
+          },
+          {
+            "from": "0x1000ee180",
+            "function": "sub_1000edc38"
+          },
+          {
+            "from": "0x1000eff68",
+            "function": "sub_1000ef7dc"
+          },
+          {
+            "from": "0x1000f07f0",
+            "function": "sub_1000f0064"
+          },
+          {
+            "from": "0x1000f0984",
+            "function": "sub_1000f08ec"
+          },
+          {
+            "from": "0x1000f0d88",
+            "function": "sub_1000f0ad8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Controls/Diff/BinaryDiff/BinaryDiffView.swift"
+      }
+    ],
+    "total": 379
+  },
+  "summary": "379 strings match \"(claude|--print|--output-format|--model|--max-turns|--allowedTools|--tools|stream-json|commit message|Conventional|imperative|staged changes|diff)\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "partial",
+    "examined": 80,
+    "total": 379,
+    "next_offset": 80
+  },
+  "locations": [],
+  "links": []
+}

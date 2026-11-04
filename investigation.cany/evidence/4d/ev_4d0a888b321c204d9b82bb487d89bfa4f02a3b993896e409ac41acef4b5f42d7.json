@@ -1,0 +1,71 @@
+{
+  "id": "ev_4d0a888b321c204d9b82bb487d89bfa4f02a3b993896e409ac41acef4b5f42d7",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x1001f37c0"
+  },
+  "result": {
+    "calls": [
+      "_objc_msgSend@stub",
+      "_objc_opt_self@stub",
+      "_objc_release@stub",
+      "_objc_retainAutoreleasedReturnValue@stub",
+      "_swift_dynamicCastClass@stub",
+      "_swift_unknownObjectRelease@stub",
+      "sub_1001f8330",
+      "sub_1001fd070"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x1001f37c0",
+    "function": "-[_TtC4Fork20ForkWindowController showQuickLaunchCheckout:]",
+    "gotos": 0,
+    "inline_asm": 0,
+    "pseudo_code": "int64_t -[_TtC4Fork20ForkWindowController showQuickLaunchCheckout:]()\n{\n    stack_20[0] = x20; stack_20[1] = x19;\n    _objc_opt_self@stub(*(uint64_t*)0x1007b9b28);\n    _objc_msgSend@stub(x0, *(uint64_t*)0x1007b4288);\n    x0 = _objc_retainAutoreleasedReturnValue@stub();\n    x20 = xzr;\n    _objc_msgSend@stub(x0, *(uint64_t*)0x1007b4de8);\n    x0 = _objc_retainAutoreleasedReturnValue@stub();\n    x19 = xzr;\n    _objc_release@stub(xzr);\n    if (x19 == 0) {\n        x20 = stack_0[0]; x19 = stack_0[1];\n        return x0;\n    } else {\n        x0 = sub_1001fd070(0);\n        x0 = _swift_dynamicCastClass@stub(xzr, xzr);\n        if (x0 != 0) {\n            x20 = xzr;\n            sub_1001f8330(1);\n        }\n        x20 = stack_0[0]; x19 = stack_0[1];\n        return _swift_unknownObjectRelease@stub(xzr); /* tail call */\n    }\n}\n",
+    "signature": "int64_t -[_TtC4Fork20ForkWindowController showQuickLaunchCheckout:]()",
+    "strings": [],
+    "structured": true
+  },
+  "summary": "Pseudo-C for -[_TtC4Fork20ForkWindowController showQuickLaunchCheckout:] (25 lines).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x1001f37c0"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

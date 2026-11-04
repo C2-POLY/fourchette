@@ -1,0 +1,49 @@
+{
+  "id": "ev_b38f668898ebdf2a1353bfbc53b3bb5a913261a30f77bcd472544851ec28864b",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "apple_objc_classes_list",
+  "params": {
+    "pattern": "Undo"
+  },
+  "result": {
+    "classes": [
+      "_TtC4ForkP33_EB24AE0940CB15DC2B7C2AD7C3D7AF6211UndoManager"
+    ],
+    "details": [
+      {
+        "address": "0x1007f03c8",
+        "category": null,
+        "methods": 0,
+        "name": "_TtC4ForkP33_EB24AE0940CB15DC2B7C2AD7C3D7AF6211UndoManager",
+        "superclass": null,
+        "swift": true
+      }
+    ]
+  },
+  "summary": "1 Objective-C classes and categories matching \"Undo\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "static_metadata_only",
+      "message": "classes registered at run time (objc_allocateClassPair) are not listed"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 1,
+    "total": 1
+  },
+  "locations": [],
+  "links": []
+}

@@ -1,0 +1,191 @@
+{
+  "id": "ev_6b3d67c7310906b37b39b4fd6ee1bbd22803d192b9dfab147de65e69af3a809a",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 60,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "^(log|--topo-order|--date-order|--branches|--all|status|--porcelain.*|for-each-ref|--format=.*)$"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x1006048b0",
+        "references": [],
+        "section": "__const",
+        "text": "Status"
+      },
+      {
+        "address": "0x10060cbac",
+        "references": [],
+        "section": "__const",
+        "text": "Status"
+      },
+      {
+        "address": "0x100647530",
+        "references": [],
+        "section": "__cstring",
+        "text": "--format=%H±%gD"
+      },
+      {
+        "address": "0x1006498a0",
+        "references": [
+          {
+            "from": "0x100021758",
+            "function": "sub_100021688"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--format=%(taggername) %(taggeremail) %(taggerdate)%0a%0a%(contents)"
+      },
+      {
+        "address": "0x100651739",
+        "references": [
+          {
+            "from": "0x100788860",
+            "function": null
+          },
+          {
+            "from": "0x1007894f0",
+            "function": null
+          },
+          {
+            "from": "0x10079d5b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "status"
+      },
+      {
+        "address": "0x10066bed0",
+        "references": [
+          {
+            "from": "0x1002969e0",
+            "function": "sub_100296878"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--format=%(objectname)\t%(refname)\t%(HEAD)\t%(upstream)\t%(*objectname)\t%(committerdate:raw)\t%(*committerdate:raw)"
+      },
+      {
+        "address": "0x10066c080",
+        "references": [
+          {
+            "from": "0x10029bd88",
+            "function": "sub_10029bbc4"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--format=%(objecttype)%x20%(objectname)%x09%(path)"
+      },
+      {
+        "address": "0x1006aa8b0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "status"
+      },
+      {
+        "address": "0x1006aabd5",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "status"
+      },
+      {
+        "address": "0x1006aadc4",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "status"
+      },
+      {
+        "address": "0x1006b0751",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "status"
+      },
+      {
+        "address": "0x1006b0bad",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "status"
+      },
+      {
+        "address": "0x1007e6618",
+        "references": [],
+        "section": "__data",
+        "text": "--all"
+      },
+      {
+        "address": "0x1007e6c50",
+        "references": [],
+        "section": "__data",
+        "text": "--all"
+      },
+      {
+        "address": "0x1007e6d88",
+        "references": [],
+        "section": "__data",
+        "text": "status"
+      },
+      {
+        "address": "0x1007e6d98",
+        "references": [],
+        "section": "__data",
+        "text": "--porcelain"
+      },
+      {
+        "address": "0x1007e77d0",
+        "references": [],
+        "section": "__data",
+        "text": "--all"
+      },
+      {
+        "address": "0x1007e7828",
+        "references": [],
+        "section": "__data",
+        "text": "--all"
+      },
+      {
+        "address": "0x1007e7a20",
+        "references": [],
+        "section": "__data",
+        "text": "status"
+      },
+      {
+        "address": "0x1007e7a30",
+        "references": [],
+        "section": "__data",
+        "text": "--porcelain"
+      }
+    ],
+    "total": 20
+  },
+  "summary": "20 strings match \"^(log|--topo-order|--date-order|--branches|--all|status|--porcelain.*|for-each-ref|--format=.*)$\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 20,
+    "total": 20
+  },
+  "locations": [],
+  "links": []
+}

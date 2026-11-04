@@ -1,0 +1,84 @@
+{
+  "id": "ev_5cd6532d54af55f5d9fc51ca83f7b05ae517d5174fd488ab147e15050a033ee8",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x100399eec"
+  },
+  "result": {
+    "calls": [
+      "_$sSS10FoundationE6format_S2Sh_s7CVarArg_pdtcfC@stub",
+      "_swift_allocObject@stub",
+      "_swift_bridgeObjectRelease@stub",
+      "_swift_bridgeObjectRetain@stub",
+      "_swift_storeEnumTagMultiPayload@stub",
+      "sub_100002bbc",
+      "sub_10000cc74",
+      "sub_10000ccc8",
+      "sub_10000cd44",
+      "sub_10008a9fc",
+      "sub_100254de8",
+      "sub_100294e08",
+      "sub_10039a1a4"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x100399eec",
+    "function": "sub_100399eec",
+    "gotos": 0,
+    "inline_asm": 2,
+    "pseudo_code": "int64_t sub_100399eec(int64_t x0, int64_t x1, int64_t x2, int64_t x3)\n{\n    stack_f0[0] = x28; stack_f0[1] = x27;\n    stack_100[0] = x26; stack_100[1] = x25;\n    stack_110[0] = x24; stack_110[1] = x23;\n    stack_120[0] = x22; stack_120[1] = x21;\n    stack_130[0] = x20; stack_130[1] = x19;\n    x21 = xzr;\n    x22 = xzr;\n    x24 = xzr;\n    stack_0 = x8;\n    x27 = *(void*)(x0 + 0x18)[0]; x20 = *(void*)(x0 + 0x18)[1];\n    x19 = 0x14;\n    x19 = -0x3000000000000000;\n    __asm(\"lsr x28, x1, #0x20\");\n    var_98[0] = xzr; var_98[1] = xzr;\n    __asm(\"lsr x26, x2, #0x20\");\n    var_88[0] = x27; var_88[1] = x20;\n    var_78[0] = xzr; var_78[1] = xzr;\n    x8 = -0x1000000000000000;\n    var_68[0] = xzr; var_68[1] = x8;\n    x0 += 0xc88;\n    x1 += 0x450;\n    sub_100002bbc();\n    x0 = _swift_allocObject@stub(x0, 0x60, 7);\n    x23 = xzr;\n    0 = *(uint64_t*)0x100604550;\n    *(void*)(x0 + 16) = 0;\n    w8 = 0x6873;\n    w8 = 0x776f0000;\n    x9 = -0x1c00000000000000;\n    *(void*)(x0 + 0x20)[0] = x8; *(void*)(x0 + 0x20)[1] = x9;\n    x8 = 0x2d2d;\n    x8 = 0x6f6e0000;\n    x8 = 0x702d00000000;\n    x8 = 0x7461000000000000;\n    x9 = 0x6863;\n    x9 = -0x1600000000000000;\n    *(void*)(x0 + 0x30)[0] = x8; *(void*)(x0 + 0x30)[1] = x9;\n    x8 = \"--pretty=format:%H~#.%aN~#.%aE~#.%at~#.%cN~#.%cE~#.%ct~#.%P~#.%B\";\n    x8 -= 0x20;\n    x8 |= -0x8000000000000000;\n    x9 = x19 + 0x2c;\n    *(void*)(x0 + 0x40)[0] = x9; *(void*)(x0 + 0x40)[1] = x8;\n    x8 = \"%08x%08x%08x%08x%08x\";\n    x19 = x8 - 0x20;\n    x0 += 0xc98;\n    x1 += 0x460;\n    sub_100002bbc();\n    x0 = _swift_allocObject@stub(x0, 0xe8, 7);\n    x25 = xzr;\n    0 = *(uint64_t*)0x1006043d0;\n    *(void*)(x0 + 16) = 0;\n    *(void*)(x0 + 0x38)[0] = x8; *(void*)(x0 + 0x38)[1] = x9;\n    *(void*)(x0 + 0x20) = w24;\n    *(void*)(x0 + 0x60)[0] = x8; *(void*)(x0 + 0x60)[1] = x9;\n    *(void*)(x0 + 0x48) = w28;\n    *(void*)(x0 + 0x88)[0] = x8; *(void*)(x0 + 0x88)[1] = x9;\n    *(void*)(x0 + 0x70) = w22;\n    *(void*)(x0 + 0xb0)[0] = x8; *(void*)(x0 + 0xb0)[1] = x9;\n    *(void*)(x0 + 0x98) = w26;\n    *(void*)(x0 + 0xd8)[0] = x8; *(void*)(x0 + 0xd8)[1] = x9;\n    *(void*)(x0 + 0xc0) = w21;\n    _swift_bridgeObjectRetain@stub(xzr);\n    x0 = 0x14;\n    x0 = _$sSS10FoundationE6format_S2Sh_s7CVarArg_pdtcfC@stub(-0x3000000000000000, x19 | -0x8000000000000000, xzr);\n    *(void*)(x23 + 0x50)[0] = x0; *(void*)(x23 + 0x50)[1] = x1;\n    _swift_bridgeObjectRetain@stub(xzr);\n    sub_10000cc74(0, -0x1000000000000000);\n    sub_10000ccc8(x29 - 0x98);\n    stack_68[0] = xzr; stack_68[1] = xzr;\n    stack_78[0] = x27; stack_78[1] = x20;\n    stack_88[0] = x23; stack_88[1] = xzr;\n    x8 = -0x1000000000000000;\n    stack_98[0] = xzr; stack_98[1] = x8;\n    x8 = sp + 8;\n    x20 = sp + 0x68;\n    sub_100254de8(0, 0);\n    sub_10000ccc8(sp + 0x68);\n    x21 = stack_8[0]; x20 = stack_8[1];\n    x0 = stack_20;\n    w8 = stack_30;\n    if (((w8 >> 4) & 1) != 0) {\n        x9 = stack_28;\n        x10 = stack_18;\n        w8 &= 0xffffffef;\n        stack_38[0] = x21; stack_38[1] = x20;\n        stack_48[0] = x10; stack_48[1] = x0;\n        stack_58 = x9;\n        stack_60 = w8;\n        x20 = sp + 0x38;\n        x8 = stack_0;\n        sub_100294e08();\n        sub_10000cd44(sp + 8);\n    } else {\n        x19 = stack_0;\n        _swift_bridgeObjectRelease@stub();\n        x0 = sub_10039a1a4(xzr, xzr);\n        x21 = xzr;\n        _swift_bridgeObjectRelease@stub(xzr);\n        if (x21 == 0) {\n            x8 = \"Cannot parse revision details\";\n            x8 -= 0x20;\n            x8 |= -0x8000000000000000;\n            x9 = 0x14;\n            x9 = -0x3000000000000000;\n            x9 += 9;\n            *(void*)(x19)[0] = x9; *(void*)(x19)[1] = x8;\n            x0 = sub_10008a9fc(0);\n            _swift_storeEnumTagMultiPayload@stub(xzr, xzr, 11);\n            x0 += 0x918;\n            x1 += 0x310;\n            x0 = sub_100002bbc();\n            x1 = xzr;\n            x0 = xzr;\n            w2 = 1;\n        } else {\n            *(void*)(x19) = x21;\n            x0 += 0x918;\n            x1 += 0x310;\n            x0 = sub_100002bbc();\n            x1 = xzr;\n            x0 = xzr;\n            w2 = 0;\n        }\n        _swift_storeEnumTagMultiPayload@stub();\n    }\n    x20 = stack_130[0]; x19 = stack_130[1];\n    x22 = stack_120[0]; x21 = stack_120[1];\n    x24 = stack_110[0]; x23 = stack_110[1];\n    x26 = stack_100[0]; x25 = stack_100[1];\n    x28 = stack_f0[0]; x27 = stack_f0[1];\n    return x0;\n}\n",
+    "signature": "int64_t sub_100399eec(int64_t x0, int64_t x1, int64_t x2, int64_t x3)",
+    "strings": [
+      "--pretty=format:%H~#.%aN~#.%aE~#.%at~#.%cN~#.%cE~#.%ct~#.%P~#.%B",
+      "%08x%08x%08x%08x%08x",
+      "Cannot parse revision details"
+    ],
+    "structured": true
+  },
+  "summary": "Pseudo-C for sub_100399eec (134 lines).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "inline_asm",
+      "message": "2 instructions have no C rule and are shown as __asm(...)"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x100399eec"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

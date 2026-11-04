@@ -1,0 +1,79 @@
+{
+  "id": "ev_72d353fe61b58fbb88ecc08e718d45a038e39765720f618a8e3c9bdfb21f729d",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x1000de8c0"
+  },
+  "result": {
+    "calls": [
+      "_$s10Foundation10NSNotFoundSivg@stub",
+      "_$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub",
+      "__Block_copy@stub",
+      "__Block_release@stub",
+      "_objc_allocWithZone@stub",
+      "_objc_msgSend@stub",
+      "_objc_opt_self@stub",
+      "_objc_release@stub",
+      "_objc_retain@stub",
+      "_objc_retainAutoreleasedReturnValue@stub",
+      "_swift_allocObject@stub",
+      "_swift_release@stub",
+      "_swift_unknownObjectWeakLoadStrong@stub"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x1000de8c0",
+    "function": "sub_1000de8c0",
+    "gotos": 0,
+    "inline_asm": 0,
+    "pseudo_code": "int64_t sub_1000de8c0()\n{\n    stack_30[0] = x24; stack_30[1] = x23;\n    stack_40[0] = x22; stack_40[1] = x21;\n    stack_50[0] = x20; stack_50[1] = x19;\n    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3bb8);\n    x0 = _objc_retainAutoreleasedReturnValue@stub();\n    x21 = xzr;\n    _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3968);\n    x0 = _objc_retainAutoreleasedReturnValue@stub();\n    x19 = xzr;\n    _objc_release@stub(xzr);\n    if (x19 == 0) {\n        x20 = stack_50[0]; x19 = stack_50[1];\n        x22 = stack_40[0]; x21 = stack_40[1];\n        x24 = stack_30[0]; x23 = stack_30[1];\n        return x0;\n    } else {\n        x8 = *(uint64_t*)0x1007ecb58;\n        x0 = _swift_unknownObjectWeakLoadStrong@stub(x20 + x8);\n        if (x0 == 0) {\n            __debugbreak();\n        } else {\n            x21 = xzr;\n            x0 = _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3e58);\n            x22 = xzr;\n            x0 = _$s10Foundation10NSNotFoundSivg@stub();\n            x23 = xzr;\n            _objc_release@stub(xzr);\n            if (x22 == x23) {\n                x20 = stack_50[0]; x19 = stack_50[1];\n                x22 = stack_40[0]; x21 = stack_40[1];\n                x24 = stack_30[0]; x23 = stack_30[1];\n                return _objc_release@stub(xzr); /* tail call */\n            } else {\n                xzr = x22 + 1;\n                if (xzr == 0) {\n                    x20 = stack_50[0]; x19 = stack_50[1];\n                    x22 = stack_40[0]; x21 = stack_40[1];\n                    x24 = stack_30[0]; x23 = stack_30[1];\n                    return _objc_release@stub(xzr); /* tail call */\n                } else {\n                    _objc_allocWithZone@stub(*(uint64_t*)0x1007b9ac0);\n                    x0 = _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3948);\n                    x21 = xzr;\n                    x0 = 0x6369;\n                    x0 = 0x6e6f0000;\n                    x0 = 0x315f00000000;\n                    x1 = 0x3178;\n                    x1 = 0x38320000;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(0x3832000000000000, -0x1400000000000000);\n                    x23 = xzr;\n                    _objc_opt_self@stub(*(uint64_t*)0x1007b9aa0);\n                    _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3d70, xzr);\n                    x0 = _objc_retainAutoreleasedReturnValue@stub();\n                    x24 = xzr;\n                    _objc_release@stub(xzr);\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ee0, xzr);\n                    _objc_release@stub(xzr);\n                    x8 = \"Do you want to remove the selected custom command?\";\n                    x8 -= 0x20;\n                    x9 = 0x1a;\n                    x9 = -0x3000000000000000;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(x9 + 0x18, x8 | -0x8000000000000000);\n                    x23 = xzr;\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ee8, xzr);\n                    _objc_release@stub(xzr);\n                    x8 = \"You can't undo this action\";\n                    x8 -= 0x20;\n                    x0 = 0x1a;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(-0x3000000000000000, x8 | -0x8000000000000000);\n                    x23 = xzr;\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ef0, xzr);\n                    _objc_release@stub(xzr);\n                    x0 = 0x6552;\n                    x0 = 0x6f6d0000;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(0x657600000000, -0x1a00000000000000);\n                    x23 = xzr;\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ef8, xzr);\n                    _objc_retainAutoreleasedReturnValue@stub();\n                    _objc_release@stub();\n                    _objc_release@stub(xzr);\n                    x0 = 0x6143;\n                    x0 = 0x636e0000;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(0x6c6500000000, -0x1a00000000000000);\n                    x23 = xzr;\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ef8, xzr);\n                    _objc_retainAutoreleasedReturnValue@stub();\n                    _objc_release@stub();\n                    _objc_release@stub(xzr);\n                    x0 += 0x8d8;\n                    x0 = _swift_allocObject@stub(x0, 0x20, 7);\n                    *(void*)(x0 + 16)[0] = x20; *(void*)(x0 + 16)[1] = x22;\n                    x8 += 0x2d8;\n                    stack_20[0] = x8; stack_20[1] = x0;\n                    stack_0 = x8;\n                    0 = *(uint64_t*)0x100604308;\n                    stack_8 = 0;\n                    x8 += 0x7c8;\n                    x9 += 0x8f0;\n                    stack_10[0] = x8; stack_10[1] = x9;\n                    x0 = __Block_copy@stub(sp);\n                    x22 = xzr;\n                    x23 = stack_28;\n                    _objc_retain@stub(xzr);\n                    _swift_release@stub(xzr);\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3f00, xzr, xzr);\n                    __Block_release@stub(xzr);\n                    _objc_release@stub(xzr);\n                    _objc_release@stub(xzr);\n                    x20 = stack_50[0]; x19 = stack_50[1];\n                    x22 = stack_40[0]; x21 = stack_40[1];\n                    x24 = stack_30[0]; x23 = stack_30[1];\n                    return x0;\n                }\n            }\n        }\n    }\n}\n",
+    "signature": "int64_t sub_1000de8c0()",
+    "strings": [
+      "Do you want to remove the selected custom command?",
+      "You can't undo this action"
+    ],
+    "structured": true
+  },
+  "summary": "Pseudo-C for sub_1000de8c0 (119 lines).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x1000de8c0"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

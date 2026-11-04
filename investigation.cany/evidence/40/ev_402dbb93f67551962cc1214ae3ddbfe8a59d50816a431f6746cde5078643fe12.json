@@ -1,0 +1,69 @@
+{
+  "id": "ev_402dbb93f67551962cc1214ae3ddbfe8a59d50816a431f6746cde5078643fe12",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x100111054"
+  },
+  "result": {
+    "calls": [
+      "_objc_msgSendSuper2@stub",
+      "sub_1001110ec"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x100111054",
+    "function": "-[_TtC4Fork17QuickLaunchWindow initWithContentRect:styleMask:backing:defer:]",
+    "gotos": 0,
+    "inline_asm": 8,
+    "pseudo_code": "int64_t -[_TtC4Fork17QuickLaunchWindow initWithContentRect:styleMask:backing:defer:](int64_t x0, int64_t x2, int64_t x3, int64_t x4)\n{\n    stack_10[0] = 0; stack_10[1] = 0;\n    stack_20[0] = 0; stack_20[1] = 0;\n    stack_30[0] = x22; stack_30[1] = x21;\n    stack_40[0] = x20; stack_40[1] = x19;\n    x19 = xzr;\n    x20 = xzr;\n    x21 = xzr;\n    __asm(\"fmov d8, d3\");\n    __asm(\"fmov d9, d2\");\n    __asm(\"fmov d10, d1\");\n    __asm(\"fmov d11, d0\");\n    x22 = xzr;\n    x0 = sub_1001110ec();\n    stack_0[0] = x22; stack_0[1] = x0;\n    __asm(\"fmov d0, d11\");\n    __asm(\"fmov d1, d10\");\n    __asm(\"fmov d2, d9\");\n    __asm(\"fmov d3, d8\");\n    _objc_msgSendSuper2@stub(sp, *(uint64_t*)0x1007b4a00, xzr, xzr, xzr);\n    x20 = stack_40[0]; x19 = stack_40[1];\n    x22 = stack_30[0]; x21 = stack_30[1];\n    0 = stack_20[0]; 0 = stack_20[1];\n    0 = stack_10[0]; 0 = stack_10[1];\n    return x0;\n}\n",
+    "signature": "int64_t -[_TtC4Fork17QuickLaunchWindow initWithContentRect:styleMask:backing:defer:](int64_t x0, int64_t x2, int64_t x3, int64_t x4)",
+    "strings": [],
+    "structured": true
+  },
+  "summary": "Pseudo-C for -[_TtC4Fork17QuickLaunchWindow initWithContentRect:styleMask:backing:defer:] (27 lines).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "inline_asm",
+      "message": "8 instructions have no C rule and are shown as __asm(...)"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x100111054"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

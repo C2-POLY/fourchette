@@ -1,0 +1,42 @@
+{
+  "id": "ev_78b942493cb31c927d0f320555ff1a2be7111dabe1947dd6923ea8adc2f4bfbb",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_bytes_show",
+  "params": {
+    "address": "0x1006060c8",
+    "length": 8
+  },
+  "result": {
+    "address": "0x1006060c8",
+    "ascii": ".......?",
+    "file_offset": 15769800,
+    "hex": "9a9999999999a93f",
+    "length": 8
+  },
+  "summary": "8 bytes at 0x1006060c8.",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [],
+  "coverage": {
+    "status": "complete",
+    "examined": 8,
+    "total": 8
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x1006060c8"
+    }
+  ],
+  "links": []
+}

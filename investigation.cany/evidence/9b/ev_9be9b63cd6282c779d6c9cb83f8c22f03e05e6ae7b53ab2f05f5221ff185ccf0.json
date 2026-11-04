@@ -1,0 +1,166 @@
+{
+  "id": "ev_9be9b63cd6282c779d6c9cb83f8c22f03e05e6ae7b53ab2f05f5221ff185ccf0",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 60,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "Git/Commands/.*(Pull|Stash|Checkout|Fetch|Push|Merge|CreateBranch|DeleteBranch|Reset|Revert|CherryPick|Stage|Unstage|Discard|Tag)[A-Za-z]*\\.swift"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x10064cfc0",
+        "references": [
+          {
+            "from": "0x100053e00",
+            "function": "sub_100053aac"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/WorkingDirectory/DiscardFilesGitCommand.swift"
+      },
+      {
+        "address": "0x10064d470",
+        "references": [
+          {
+            "from": "0x10005da98",
+            "function": "sub_10005d86c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Stashes/RenameStashGitCommand.swift"
+      },
+      {
+        "address": "0x100658880",
+        "references": [
+          {
+            "from": "0x100116d6c",
+            "function": "sub_100116b78"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Merge/ResolveMergeConflictGitCommand.swift"
+      },
+      {
+        "address": "0x10065e8c0",
+        "references": [
+          {
+            "from": "0x10018f884",
+            "function": "sub_10018ddfc"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/RepositoryStatus/RefreshRepositoryDataGitCommand.swift"
+      },
+      {
+        "address": "0x100669e90",
+        "references": [
+          {
+            "from": "0x1002741a4",
+            "function": "sub_100273c00"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Revision/ResetFilesAtRevisionGitCommand.swift"
+      },
+      {
+        "address": "0x10066c020",
+        "references": [
+          {
+            "from": "0x10029ba8c",
+            "function": "sub_10029b620"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Submodules/GetUnpushedSubmodulesGitCommand.swift"
+      },
+      {
+        "address": "0x100674450",
+        "references": [
+          {
+            "from": "0x100360cb4",
+            "function": "sub_10036087c"
+          },
+          {
+            "from": "0x100360da0",
+            "function": "sub_10036087c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Merge/MergeTestGitCommand.swift"
+      },
+      {
+        "address": "0x100678130",
+        "references": [
+          {
+            "from": "0x1003f306c",
+            "function": "sub_1003f2f18"
+          },
+          {
+            "from": "0x1003f32dc",
+            "function": "sub_1003f2f18"
+          },
+          {
+            "from": "0x1003f35bc",
+            "function": "sub_1003f2f18"
+          },
+          {
+            "from": "0x1003f378c",
+            "function": "sub_1003f2f18"
+          },
+          {
+            "from": "0x1003f3848",
+            "function": "sub_1003f2f18"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Merge/CheckoutUnmergedFileGitCommand.swift"
+      },
+      {
+        "address": "0x100679660",
+        "references": [
+          {
+            "from": "0x10041a22c",
+            "function": "sub_10041a180"
+          },
+          {
+            "from": "0x10041a2c8",
+            "function": "sub_10041a180"
+          }
+        ],
+        "section": "__cstring",
+        "text": "/Users/dan/src/fork/ForkMac/Fork/Git/Commands/Remotes/DisableAutomaticFetchGitCommand.swift"
+      }
+    ],
+    "total": 9
+  },
+  "summary": "9 strings match \"Git/Commands/.*(Pull|Stash|Checkout|Fetch|Push|Merge|CreateBranch|DeleteBranch|Reset|Revert|CherryPick|Stage|Unstage|Discard|Tag)[A-Za-z]*\\.swift\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 9,
+    "total": 9
+  },
+  "locations": [],
+  "links": []
+}

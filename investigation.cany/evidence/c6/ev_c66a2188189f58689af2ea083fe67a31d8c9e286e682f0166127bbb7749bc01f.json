@@ -1,0 +1,230 @@
+{
+  "id": "ev_c66a2188189f58689af2ea083fe67a31d8c9e286e682f0166127bbb7749bc01f",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 40,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "(--file|--cleanup|--allow-empty|--no-verify|COMMIT_EDITMSG|Commit subject|Amend|--author)"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x1006055bc",
+        "references": [],
+        "section": "__const",
+        "text": "Amend"
+      },
+      {
+        "address": "0x100617aba",
+        "references": [
+          {
+            "from": "0x100741da8",
+            "function": null
+          }
+        ],
+        "section": "__const",
+        "text": "StreamEnd"
+      },
+      {
+        "address": "0x10064cc80",
+        "references": [
+          {
+            "from": "0x100785170",
+            "function": null
+          },
+          {
+            "from": "0x1007851b8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "_TtCC4Fork34WorkingDirectoryRevisionDiffTarget5Amend"
+      },
+      {
+        "address": "0x10064ce50",
+        "references": [
+          {
+            "from": "0x1000523c0",
+            "function": "sub_100051cec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "getChangesAsBinaryPatchInternal(_:changedFile:amend:srcRevision:)"
+      },
+      {
+        "address": "0x10066ae60",
+        "references": [
+          {
+            "from": "0x10028728c",
+            "function": "sub_1002869ac"
+          }
+        ],
+        "section": "__cstring",
+        "text": "execute(_:changedFiles:amend:)"
+      },
+      {
+        "address": "0x10066fd20",
+        "references": [
+          {
+            "from": "0x10031959c",
+            "function": "sub_100318828"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Amended commit with "
+      },
+      {
+        "address": "0x10066fd40",
+        "references": [
+          {
+            "from": "0x100318e78",
+            "function": "sub_100318828"
+          }
+        ],
+        "section": "__cstring",
+        "text": "execute(_:message:signOff:amend:commitAndPush:noVerify:monitor:)"
+      },
+      {
+        "address": "0x1006765c3",
+        "references": [
+          {
+            "from": "0x1007a5ee8",
+            "function": null
+          },
+          {
+            "from": "0x1007a6068",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "amendCheckBox"
+      },
+      {
+        "address": "0x10067661c",
+        "references": [
+          {
+            "from": "0x1007a5f88",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "rebaseAmendSha"
+      },
+      {
+        "address": "0x100676810",
+        "references": [
+          {
+            "from": "0x1007a6070",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSButton\",N,W,VamendCheckBox"
+      },
+      {
+        "address": "0x100676b50",
+        "references": [
+          {
+            "from": "0x1003a9700",
+            "function": "sub_1003a928c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "Amend Last Commit"
+      },
+      {
+        "address": "0x1006a2451",
+        "references": [],
+        "section": "__swift5_typeref",
+        "text": "9gitModule_SS7messageSb5amendSb13commitAndPushSS5errort"
+      },
+      {
+        "address": "0x1006a4067",
+        "references": [],
+        "section": "__swift5_typeref",
+        "text": "11changedFile_Sb5amendt"
+      },
+      {
+        "address": "0x1006a435f",
+        "references": [],
+        "section": "__swift5_typeref",
+        "text": "G13unmergedFilesSb11interactiveAE05amendD0t"
+      },
+      {
+        "address": "0x1006b4786",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "amendCheckBox"
+      },
+      {
+        "address": "0x1006b47dc",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "rebaseAmendSha"
+      },
+      {
+        "address": "0x1006c86a7",
+        "references": [
+          {
+            "from": "0x1007b7598",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "amendCheckBox"
+      },
+      {
+        "address": "0x1006c98c4",
+        "references": [
+          {
+            "from": "0x1007b75d8",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "amendCheckBoxPressed:"
+      },
+      {
+        "address": "0x1006d16e5",
+        "references": [
+          {
+            "from": "0x1007b75a0",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setAmendCheckBox:"
+      }
+    ],
+    "total": 19
+  },
+  "summary": "19 strings match \"(--file|--cleanup|--allow-empty|--no-verify|COMMIT_EDITMSG|Commit subject|Amend|--author)\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 19,
+    "total": 19
+  },
+  "locations": [],
+  "links": []
+}

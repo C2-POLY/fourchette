@@ -1,0 +1,138 @@
+{
+  "id": "ev_62ae54d03029256028a70937bd46fc23b66ffc3970fd9f990a6864116e8b4899",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_functions_search",
+  "params": {
+    "case_sensitive": false,
+    "limit": 50,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "RevisionListGraphView|RevisionVisualGraph|CommitGraph"
+  },
+  "result": {
+    "functions": 14,
+    "imports": 0,
+    "matches": [
+      {
+        "address": "0x1001006cc",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView intrinsicContentSize]",
+        "size": 28
+      },
+      {
+        "address": "0x10010091c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView init]",
+        "size": 32
+      },
+      {
+        "address": "0x100100aa4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView initWithCoder:]",
+        "size": 40
+      },
+      {
+        "address": "0x100100b34",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView dealloc]",
+        "size": 136
+      },
+      {
+        "address": "0x100100bbc",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView .cxx_destruct]",
+        "size": 168
+      },
+      {
+        "address": "0x100100ebc",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView mouseDown:]",
+        "size": 80
+      },
+      {
+        "address": "0x1001010d4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView updateTrackingAreas]",
+        "size": 40
+      },
+      {
+        "address": "0x1001010fc",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView mouseEntered:]",
+        "size": 76
+      },
+      {
+        "address": "0x100101148",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView mouseExited:]",
+        "size": 76
+      },
+      {
+        "address": "0x1001012f0",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView mouseMoved:]",
+        "size": 80
+      },
+      {
+        "address": "0x100101458",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView drawRect:]",
+        "size": 40
+      },
+      {
+        "address": "0x100103834",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView refreshPopover:]",
+        "size": 68
+      },
+      {
+        "address": "0x100103be4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView initWithFrame:]",
+        "size": 44
+      },
+      {
+        "address": "0x100103c30",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork21RevisionListGraphView popoverDidClose:]",
+        "size": 180
+      }
+    ],
+    "total": 14
+  },
+  "summary": "14 functions and 0 imports match \"RevisionListGraphView|RevisionVisualGraph|CommitGraph\".",
+  "confidence": "derived",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [],
+  "coverage": {
+    "status": "complete",
+    "examined": 14,
+    "total": 14
+  },
+  "locations": [],
+  "links": []
+}

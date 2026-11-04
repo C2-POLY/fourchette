@@ -1,0 +1,12 @@
+# Rust build output
+/app/target/
+
+# State written by the rebuild tool while it works (transcript, logs, usage, scratch)
+/feed.json
+/usage.json
+/build-activity.log
+/inbox/
+/pinned/
+/checks/
+
+.DS_Store

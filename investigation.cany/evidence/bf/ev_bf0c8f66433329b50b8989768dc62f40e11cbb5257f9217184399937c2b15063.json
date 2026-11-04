@@ -1,0 +1,93 @@
+{
+  "id": "ev_bf0c8f66433329b50b8989768dc62f40e11cbb5257f9217184399937c2b15063",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x1002560f8"
+  },
+  "result": {
+    "calls": [
+      "_objc_msgSend@stub",
+      "_objc_opt_self@stub",
+      "_objc_release@stub",
+      "_objc_retainAutoreleasedReturnValue@stub",
+      "_swift_arrayInitWithCopy@stub",
+      "_swift_bridgeObjectRelease@stub",
+      "_swift_bridgeObjectRetain@stub",
+      "_swift_bridgeObjectRetain_n@stub",
+      "_swift_initStackObject@stub",
+      "_swift_isUniquelyReferenced_nonNull_native@stub",
+      "_swift_once@stub",
+      "_swift_retain@stub",
+      "sub_100002bbc",
+      "sub_100006164",
+      "sub_10007ceb8",
+      "sub_100257f14",
+      "sub_1002631f8",
+      "sub_100263234",
+      "sub_10029dfd8",
+      "sub_10031a740",
+      "sub_10037e508",
+      "sub_10040bee0"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x1002560f8",
+    "function": "sub_1002560f8",
+    "gotos": 7,
+    "inline_asm": 9,
+    "pseudo_code": "int64_t sub_1002560f8(int64_t x0, int64_t x1, int64_t x2, int64_t x3, int64_t x4, int64_t x5)\n{\n    stack_60[0] = x28; stack_60[1] = x27;\n    stack_10[0] = x26; stack_10[1] = x25;\n    stack_20[0] = x24; stack_20[1] = x23;\n    stack_30[0] = x22; stack_30[1] = x21;\n    stack_40[0] = x20; stack_40[1] = x19;\n    x23 = xzr;\n    x22 = xzr;\n    x19 = xzr;\n    stack_40[0] = x1; stack_40[1] = x3;\n    stack_30[0] = x0; stack_30[1] = x2;\n    stack_58 = x8;\n    x9 = *(void*)(x20)[0]; x25 = *(void*)(x20)[1];\n    w8 = 0x6967;\n    w8 = 0x740000;\n    stack_0 = x9;\n    __asm(\"csel x20, x8, x9, eq\");\n    x8 = -0x1d00000000000000;\n    __asm(\"csel x21, x8, x25, eq\");\n    x24 = *(void*)(x23 + 0x20);\n    _swift_bridgeObjectRetain@stub(xzr);\n    stack_18 = x25;\n    _swift_bridgeObjectRetain_n@stub(xzr, 2);\n    stack_20 = x24;\n    stack_50 = x22;\n    x20 = xzr;\n    sub_10029dfd8(xzr, xzr, xzr);\n    _swift_bridgeObjectRelease@stub(xzr);\n    _objc_opt_self@stub(*(uint64_t*)0x1007b9a18);\n    _objc_msgSend@stub(x0, *(uint64_t*)0x1007b39b8);\n    x0 = _objc_retainAutoreleasedReturnValue@stub();\n    x20 = xzr;\n    x0 = sub_10031a740();\n    x21 = xzr;\n    x22 = xzr;\n    _objc_release@stub(xzr);\n    stack_28 = x23;\n    stack_8[0] = x22; stack_8[1] = x21;\n    x0 = sub_100257f14(xzr, *(void*)(x23 + 0x28), xzr, xzr);\n    x22 = xzr;\n    x8 = *(void*)(x0 + 16);\n    stack_78 = x8;\n    if (x8 == 0) {\nlabel_10025630c:\n        x19 = sp + 0xe8;\n        _swift_bridgeObjectRelease@stub(xzr);\n        x24 = stack_18;\n        if (x24 == 0) {\n            x22 = stack_48[0]; x21 = stack_48[1];\n            x24 = stack_8[0]; x13 = stack_8[1];\n            if (x24 == 0) {\n                x8 = *(uint64_t*)0x1007e5478;\n                xzr = x8 + 1;\n                x23 = stack_40;\n                if (xzr != 0) {\n                    x0 += 0x478;\n                    x1 += 0x418;\n                    _swift_once@stub();\n                }\n                x8 += 0x60;\nlabel_1002563b4:\n                x25 = *(void*)(x8)[0]; x24 = *(void*)(x8)[1];\n                _swift_bridgeObjectRetain@stub(xzr);\n                x13 = xzr;\n                x0 = xzr;\n            } else {\n                x0 = stack_40;\n                if (x24 == 1) {\n                    x24 = 0x672f;\n                    x24 = 0x74690000;\n                    x24 = -0x1400000000000000;\n                    x13 = 0x752f;\n                    x13 = 0x72730000;\n                    x13 = 0x622f00000000;\n                    x13 = 0x6e69000000000000;\n                } else {\n                    if (x24 == 2) {\n                        x23 = xzr;\n                        x8 = *(uint64_t*)0x1007e5340;\n                        xzr = x8 + 1;\n                        if (xzr != 0) {\n                            x0 += 0x340;\n                            x1 += 0xd0;\n                            _swift_once@stub();\n                        }\n                        x8 += 0x6b0;\n                        goto label_1002563b4;\n                    }\n                }\n            }\n        } else {\n            x1 = stack_8[0]; x0 = stack_8[1];\n            sub_10007ceb8();\n            x13 = stack_0;\n            x22 = stack_48[0]; x21 = stack_48[1];\n            x0 = stack_40;\n        }\n        x10 = stack_30[0]; x9 = stack_30[1];\n        x8 = stack_20[0]; x11 = stack_20[1];\n        0 = *(void*)(x11 + 16);\n        __asm(\"csel x8, x12, x8, eq\");\n        0 = *(void*)(x11 + 0x30);\n        var_f0[0] = 0; var_f0[1] = 0;\n        stack_f8 = 0;\n        *(void*)(x19 + 0x30) = 0;\n        var_c8[0] = x13; var_c8[1] = x24;\n        *(void*)(x19 + 0xe0) = 0;\n        var_a8[0] = x8; var_a8[1] = x20;\n        *(void*)(x19 + 0x100) = 0;\n        var_88[0] = x10; var_88[1] = x0;\n        var_78[0] = x9; var_78[1] = x22;\n        var_68 = x21;\n        stack_e8[0] = x13; stack_e8[1] = x24;\n        stack_108[0] = x8; stack_108[1] = x20;\n        stack_128[0] = x10; stack_128[1] = x0;\n        stack_138[0] = x9; stack_138[1] = x22;\n        stack_148 = x21;\n        _swift_retain@stub();\n        _swift_retain@stub(xzr);\n        _swift_retain@stub(xzr);\n        sub_1002631f8(x29 - 0xc8, sp + 0x80);\n        x2 += 0x358;\n        x3 += 0x7a0;\n        sub_100006164(x29 - 0xe0, sp + 0x80);\n        x2 += 0xa58;\n        x3 += 0x8f0;\n        sub_100006164(x29 - 0xf0, sp + 0x80);\n        sub_100263234(sp + 0xe8);\n        x8 = sp + 0x80;\n        x20 = x29 - 0xc8;\n        sub_10040bee0();\n        sub_100263234(x29 - 0xc8);\n        x8 = stack_80;\n        w9 = stack_a8;\n        if (((w9 >> 31) & 1) != 0) {\n            0 = stack_98;\n            0 = stack_88;\n            w9 &= 0x7f;\n            w9 |= 0x20;\n        } else {\n            x8 &= 0xffffffff;\n            w9 = 7;\n            __asm(\"csel w9, w9, wzr, eq\");\n            __asm(\"movi v0.2d, #0x0\");\n            __asm(\"movi v1.2d, #0x0\");\n        }\n        x10 = stack_58;\n        *(void*)(x10) = x8;\n        *(void*)(x10 + 8) = 0;\n        *(void*)(x10 + 0x18) = 0;\n        *(void*)(x10 + 0x28) = w9;\n        x20 = stack_40[0]; x19 = stack_40[1];\n        x22 = stack_30[0]; x21 = stack_30[1];\n        x24 = stack_20[0]; x23 = stack_20[1];\n        x26 = stack_10[0]; x25 = stack_10[1];\n        x28 = stack_0[0]; x27 = stack_0[1];\n        return x0;\n    } else {\n        x23 = 0;\n        x19 = x22 + 0x38;\n        0 = *(uint64_t*)0x100604730;\n        stack_60 = 0;\n        while (true) {\n            x8 = *(void*)(x22 + 16);\n            if (x23 >= x8 /* unsigned */) {\n                goto label_100256500;\n            } else {\n                x21 = *(void*)(x19 - 8)[0]; x26 = *(void*)(x19 - 8)[1];\n                x28 = *(void*)(x19 - 0x18)[0]; x24 = *(void*)(x19 - 0x18)[1];\n                x0 += 0xc88;\n                x1 += 0x450;\n                sub_100002bbc();\n                x0 = _swift_initStackObject@stub(x0, sp + 0x150);\n                x27 = xzr;\n                *(void*)(x27 + 0x20) = x28;\n                0 = stack_60;\n                *(void*)(x0 + 16) = 0;\n                *(void*)(x0 + 0x28)[0] = x24; *(void*)(x0 + 0x28)[1] = x21;\n                *(void*)(x0 + 0x38) = x26;\n                x21 = *(void*)(x20 + 16);\n                x28 = x21 + 2;\n                if (/* Overflow after adds */ flags) {\n                    goto label_100256504;\n                } else {\n                    x25 = xzr;\n                    _swift_bridgeObjectRetain@stub(xzr);\n                    _swift_bridgeObjectRetain@stub(xzr);\n                    x0 = _swift_isUniquelyReferenced_nonNull_native@stub(xzr);\n                    if (w0 == 0) {\nlabel_100256294:\n                        __asm(\"csel x1, x21, x28, gt\");\n                        x0 = sub_10037e508(x0, x1, 1, xzr);\n                        x20 = xzr;\n                        x8 = *(void*)(x0 + 0x18);\n                        __asm(\"lsr x8, x8, #0x1\");\n                    } else {\n                        x8 = *(void*)(x20 + 0x18);\n                        __asm(\"lsr x8, x8, #0x1\");\n                        if (x8 < x28) {\n                            goto label_100256294;\n                        }\n                    }\n                    x9 = *(void*)(x20 + 16);\n                    x8 -= x9;\n                    if (x8 < 2) {\n                        goto label_100256508;\n                    } else {\n                        x8 = x20 + x9;\n                        _swift_arrayInitWithCopy@stub(x8 + 0x20, xzr, 2);\n                        _swift_bridgeObjectRelease@stub(xzr);\n                        x8 = *(void*)(x20 + 16);\n                        x8 += 2;\n                        if (/* Overflow after adds */ flags) {\n                            goto label_10025650c;\n                        } else {\n                            x23 += 1;\n                            *(void*)(x20 + 16) = x8;\n                            x19 += 0x20;\n                            x8 = stack_78;\n                            if (x8 == x23) break;\n                            continue;\n                        }\n                    }\n                }\n            }\n        }\n        goto label_10025630c;\n    }\nlabel_100256500:\n    __debugbreak();\nlabel_100256504:\n    __debugbreak();\nlabel_100256508:\n    __debugbreak();\nlabel_10025650c:\n    __debugbreak();\n}\n",
+    "signature": "int64_t sub_1002560f8(int64_t x0, int64_t x1, int64_t x2, int64_t x3, int64_t x4, int64_t x5)",
+    "strings": [],
+    "structured": false
+  },
+  "summary": "Pseudo-C for sub_1002560f8 (238 lines, partly unstructured).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "unstructured_flow",
+      "message": "7 gotos remain where the control flow isn't a simple if/loop"
+    },
+    {
+      "code": "inline_asm",
+      "message": "9 instructions have no C rule and are shown as __asm(...)"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x1002560f8"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

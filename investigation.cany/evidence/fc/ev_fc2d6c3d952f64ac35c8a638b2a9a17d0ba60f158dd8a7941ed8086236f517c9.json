@@ -1,0 +1,57 @@
+{
+  "id": "ev_fc2d6c3d952f64ac35c8a638b2a9a17d0ba60f158dd8a7941ed8086236f517c9",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "core_evidence_browse",
+  "params": {
+    "show": {
+      "kind": "part",
+      "name": "strings"
+    },
+    "source": {
+      "evidence_id": "ev_ae1d1b71592f9735b9bad5a74c9e24f9b46132d5afbc85275417b1a41e6be636",
+      "kind": "saved"
+    }
+  },
+  "result": {
+    "coverage": {
+      "at_end": true,
+      "examined": 1,
+      "next_offset": null,
+      "status": "all-in-view",
+      "total": 1
+    },
+    "from_evidence": "ev_ae1d1b71592f9735b9bad5a74c9e24f9b46132d5afbc85275417b1a41e6be636",
+    "from_tool": "native_function_pseudocode",
+    "shown": {
+      "part": "strings",
+      "value": [
+        "Invalid argument type",
+        "Fatal error",
+        "Fork/ReferenceCommandProvider.swift"
+      ]
+    }
+  },
+  "summary": "Part of native_function_pseudocode evidence (all-in-view).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [],
+  "coverage": {
+    "status": "complete",
+    "examined": 1,
+    "total": 1
+  },
+  "locations": [],
+  "links": [
+    "ev_ae1d1b71592f9735b9bad5a74c9e24f9b46132d5afbc85275417b1a41e6be636"
+  ]
+}

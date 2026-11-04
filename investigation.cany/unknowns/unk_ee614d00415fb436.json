@@ -1,0 +1,15 @@
+{
+  "id": "unk_ee614d00415fb436",
+  "revision": 2,
+  "question": "What does the running Fork main window look like (layout proportions, toolbar)? The window capture showed no window (likely a licence/welcome dialog or no repository open).",
+  "severity": "medium",
+  "domain": "ui",
+  "status": "blocked",
+  "probes": [
+    "capture the window with a repository path argument",
+    "decode RepositoryController nib view frames"
+  ],
+  "evidence_for": [],
+  "evidence_against": [],
+  "resolution": "Running the original a second time was declined, so its window was never pictured. The layout comes from its compiled screens instead: sidebar with Branches/Remotes/Tags/Stashes, the history list, commit details (SHA, author, committer, parents, refs, files), and the commit panel. The person asked for a Kraken-like style, so proportions and the toolbar follow that request (design choice, not measured)."
+}

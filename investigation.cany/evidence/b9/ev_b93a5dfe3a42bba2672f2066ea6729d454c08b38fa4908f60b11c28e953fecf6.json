@@ -1,0 +1,231 @@
+{
+  "id": "ev_b93a5dfe3a42bba2672f2066ea6729d454c08b38fa4908f60b11c28e953fecf6",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": false,
+    "limit": 200,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "^--(recurse-submodules|progress|include-untracked|set-upstream|force-with-lease|porcelain.*|untracked-files.*|name-status|topo-order|date-order|max-count.*|no-edit|prune|tags|ignore-submodules.*|find-renames.*|no-color|no-optional-locks|first-parent|cached|amend|allow-empty|cleanup.*|no-verify|quiet|ff-only|no-ff|rebase|autostash|keep-index|message|staged|track|no-track|decorate.*|boundary|parents|reverse|exclude.*|branches|remotes|stdin|null|raw|numstat|patch|unified.*|diff-filter.*|no-renames|no-commit-id|root|ignore-space.*|word-diff.*|-z)$"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x1006475f0",
+        "references": [
+          {
+            "from": "0x1000392ac",
+            "function": "sub_100038908"
+          },
+          {
+            "from": "0x10003966c",
+            "function": "sub_100038908"
+          },
+          {
+            "from": "0x1000c3acc",
+            "function": "sub_1000c396c"
+          },
+          {
+            "from": "0x100350594",
+            "function": "sub_10034fb84"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--untracked-files=no"
+      },
+      {
+        "address": "0x10064b210",
+        "references": [
+          {
+            "from": "0x1000392a4",
+            "function": "sub_100038908"
+          },
+          {
+            "from": "0x100039664",
+            "function": "sub_100038908"
+          },
+          {
+            "from": "0x1000c3ac0",
+            "function": "sub_1000c396c"
+          },
+          {
+            "from": "0x1001b4588",
+            "function": "sub_1001b42b0"
+          },
+          {
+            "from": "0x10023fe10",
+            "function": "sub_10023fc48"
+          },
+          {
+            "from": "0x1003abc84",
+            "function": "sub_1003ab2d8"
+          },
+          {
+            "from": "0x1003ad0b0",
+            "function": "sub_1003ac770"
+          },
+          {
+            "from": "0x100437490",
+            "function": "sub_100437300"
+          },
+          {
+            "from": "0x10048bae8",
+            "function": "sub_10048b8d8"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--untracked-files=all"
+      },
+      {
+        "address": "0x10064cf90",
+        "references": [
+          {
+            "from": "0x100052b58",
+            "function": "sub_100052698"
+          },
+          {
+            "from": "0x1003ed268",
+            "function": "sub_1003ec834"
+          },
+          {
+            "from": "0x1003ed5d8",
+            "function": "sub_1003ec834"
+          },
+          {
+            "from": "0x1003ee3fc",
+            "function": "sub_1003ec834"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--unified=100000"
+      },
+      {
+        "address": "0x10065d9e0",
+        "references": [
+          {
+            "from": "0x10016de50",
+            "function": "sub_10016dd54"
+          },
+          {
+            "from": "0x10016e448",
+            "function": "sub_10016e1ec"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--force-with-lease"
+      },
+      {
+        "address": "0x100660180",
+        "references": [
+          {
+            "from": "0x1001b4524",
+            "function": "sub_1001b42b0"
+          },
+          {
+            "from": "0x1003abc20",
+            "function": "sub_1003ab2d8"
+          },
+          {
+            "from": "0x1003ad04c",
+            "function": "sub_1003ac770"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--no-optional-locks"
+      },
+      {
+        "address": "0x10066bb80",
+        "references": [
+          {
+            "from": "0x100292ce8",
+            "function": "sub_100292c4c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "--recurse-submodules"
+      },
+      {
+        "address": "0x1007e6910",
+        "references": [],
+        "section": "__data",
+        "text": "--stdin"
+      },
+      {
+        "address": "0x1007e6d98",
+        "references": [],
+        "section": "__data",
+        "text": "--porcelain"
+      },
+      {
+        "address": "0x1007e70f8",
+        "references": [],
+        "section": "__data",
+        "text": "--name-status"
+      },
+      {
+        "address": "0x1007e7170",
+        "references": [],
+        "section": "__data",
+        "text": "--cached"
+      },
+      {
+        "address": "0x1007e7a30",
+        "references": [],
+        "section": "__data",
+        "text": "--porcelain"
+      },
+      {
+        "address": "0x1007e7b70",
+        "references": [],
+        "section": "__data",
+        "text": "--cached"
+      },
+      {
+        "address": "0x1007e7be8",
+        "references": [],
+        "section": "__data",
+        "text": "--cached"
+      },
+      {
+        "address": "0x1007e7c18",
+        "references": [],
+        "section": "__data",
+        "text": "--reverse"
+      },
+      {
+        "address": "0x1007e8278",
+        "references": [],
+        "section": "__data",
+        "text": "--stdin"
+      }
+    ],
+    "total": 15
+  },
+  "summary": "15 strings match \"^--(recurse-submodules|progress|include-untracked|set-upstream|force-with-lease|porcelain.*|untracked-files.*|name-status|topo-order|date-order|max-count.*|no-edit|prune|tags|ignore-submodules.*|find-renames.*|no-color|no-optional-locks|first-parent|cached|amend|allow-empty|cleanup.*|no-verify|quiet|ff-only|no-ff|rebase|autostash|keep-index|message|staged|track|no-track|decorate.*|boundary|parents|reverse|exclude.*|branches|remotes|stdin|null|raw|numstat|patch|unified.*|diff-filter.*|no-renames|no-commit-id|root|ignore-space.*|word-diff.*|-z)$\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 15,
+    "total": 15
+  },
+  "locations": [],
+  "links": []
+}

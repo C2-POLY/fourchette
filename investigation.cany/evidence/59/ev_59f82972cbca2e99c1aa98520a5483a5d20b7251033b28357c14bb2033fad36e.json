@@ -1,0 +1,103 @@
+{
+  "id": "ev_59f82972cbca2e99c1aa98520a5483a5d20b7251033b28357c14bb2033fad36e",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x10045e7d4"
+  },
+  "result": {
+    "calls": [
+      "_$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub",
+      "_$sSS6appendyySSF@stub",
+      "___chkstk_darwin",
+      "_objc_msgSend@stub",
+      "_objc_opt_self@stub",
+      "_objc_release@stub",
+      "_objc_retainAutoreleasedReturnValue@stub",
+      "_swift_allocObject@stub",
+      "_swift_beginAccess@stub",
+      "_swift_bridgeObjectRelease@stub",
+      "_swift_bridgeObjectRetain@stub",
+      "_swift_dynamicCastClass@stub",
+      "_swift_endAccess@stub",
+      "_swift_release@stub",
+      "_swift_retain@stub",
+      "_swift_unknownObjectWeakInit@stub",
+      "_swift_unknownObjectWeakLoadStrong@stub",
+      "sub_100002bbc",
+      "sub_100006280",
+      "sub_1000062ec",
+      "sub_100006338",
+      "sub_10001f6e8",
+      "sub_10001fb0c",
+      "sub_100035884",
+      "sub_1000c6590",
+      "sub_1001bd110",
+      "sub_10039e3ac",
+      "sub_100413ea0",
+      "sub_1004b8848",
+      "x8"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x10045e7d4",
+    "function": "sub_10045e7d4",
+    "gotos": 3,
+    "inline_asm": 3,
+    "pseudo_code": "int64_t sub_10045e7d4()\n{\n    stack_60[0] = x28; stack_60[1] = x27;\n    stack_10[0] = x26; stack_10[1] = x25;\n    stack_20[0] = x24; stack_20[1] = x23;\n    stack_30[0] = x22; stack_30[1] = x21;\n    stack_40[0] = x20; stack_40[1] = x19;\n    x0 = sub_100413ea0(0);\n    x8 = *(void*)(x0 - 8);\n    x8 = *(void*)(x8 + 0x40);\n    x9 = xzr;\n    ___chkstk_darwin();\n    x9 = sp;\n    x8 += 15;\n    x8 &= -16;\n    x8 = x9 - x8;\n    var_78 = x8;\n    x0 = sub_1000c6590(0);\n    x8 = *(void*)(x0 - 8);\n    var_80 = x8;\n    x26 = *(void*)(x8 + 0x40);\n    x9 = xzr;\n    ___chkstk_darwin();\n    x8 = sp;\n    x9 = x26 + 15;\n    x12 = x9 & -16;\n    x25 = x8 - x12;\n    x9 = xzr;\n    ___chkstk_darwin();\n    x8 = sp;\n    x8 -= x12;\n    var_70 = x8;\n    x0 = sub_1001bd110(0);\n    x27 = xzr;\n    x22 = *(void*)(x0 - 8);\n    x8 = *(void*)(x22 + 0x40);\n    x9 = xzr;\n    ___chkstk_darwin();\n    x9 = sp;\n    x10 = x8 + 15;\n    x12 = x10 & -16;\n    x23 = x9 - x12;\n    x9 = xzr;\n    ___chkstk_darwin();\n    x8 = sp;\n    x21 = x8 - x12;\n    x8 = *(uint64_t*)0x100802028;\n    x24 = *(void*)(x20 + x8);\n    x8 = *(uint64_t*)0x100802010;\n    x0 = _swift_unknownObjectWeakLoadStrong@stub(x20 + x8);\n    if (x0 == 0) {\n        __debugbreak();\n    } else {\n        x19 = xzr;\n        _swift_bridgeObjectRetain@stub(xzr);\n        x0 = _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b4250);\n        x28 = xzr;\n        _objc_release@stub(xzr);\n        if (((x28 >> 63) & 1) != 0) {\nlabel_10045e9f4:\n            x20 = stack_40[0]; x19 = stack_40[1];\n            x22 = stack_30[0]; x21 = stack_30[1];\n            x24 = stack_20[0]; x23 = stack_20[1];\n            x26 = stack_10[0]; x25 = stack_10[1];\n            x28 = stack_0[0]; x27 = stack_0[1];\n            return _swift_bridgeObjectRelease@stub(xzr); /* tail call */\n        } else {\n            x8 = *(void*)(x24 + 16);\n            if (x28 >= x8 /* unsigned */) {\n                goto label_10045e9f4;\n            } else {\n                w8 = *(void*)(x22 + 0x50);\n                x9 = x8 + 0x20;\n                __asm(\"bic x8, x9, x8\");\n                x8 = x24 + x8;\n                x9 = *(void*)(x22 + 0x48);\n                x19 += 0x110;\n                sub_100035884(x9 * x28, xzr, xzr);\n                _swift_bridgeObjectRelease@stub(xzr);\n                sub_1000062ec(xzr, xzr, xzr);\n                x8 = *(uint64_t*)0x100802030;\n                x0 = _swift_unknownObjectWeakLoadStrong@stub(x20 + x8);\n                if (x0 == 0) {\nlabel_10045ee38:\n                    x1 += 0x110;\n                    sub_100006338(xzr);\nlabel_10045ee48:\n                    x20 = stack_40[0]; x19 = stack_40[1];\n                    x22 = stack_30[0]; x21 = stack_30[1];\n                    x24 = stack_20[0]; x23 = stack_20[1];\n                    x26 = stack_10[0]; x25 = stack_10[1];\n                    x28 = stack_0[0]; x27 = stack_0[1];\n                    return x0;\n                } else {\n                    x23 = xzr;\n                    x8 += 0xf78;\n                    x8 = *(uint64_t*)0x1007faf78;\n                    x19 = *(void*)(x0 + x8);\n                    if (x19 == 0) {\n                        x1 += 0x110;\n                        sub_100006338(xzr);\n                        _objc_release@stub(xzr);\n                        goto label_10045ee48;\n                    } else {\n                        x24 = *(uint64_t*)0x100802020;\n                        x0 = _swift_unknownObjectWeakLoadStrong@stub(x20 + x24);\n                        if (x0 == 0) {\n                            __debugbreak();\n                        } else {\n                            x28 = xzr;\n                            var_88 = x19;\n                            _swift_retain@stub(xzr);\n                            x0 = _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3b88);\n                            x19 = xzr;\n                            _objc_release@stub(xzr);\n                            if (x19 != 1) {\n                                x2 += 0x110;\n                                x19 = var_70;\n                                sub_100035884(xzr, xzr);\n                                w1 = 0;\n                            } else {\n                                w1 = 1;\n                                x19 = var_70;\n                            }\n                            x8 = *(void*)(x22 + 0x38);\n                            (*x8)(xzr, x1, 2, xzr);\n                            x0 = _objc_opt_self@stub(*(uint64_t*)0x1007b9a18);\n                            x27 = xzr;\n                            _objc_msgSend@stub(x0, *(uint64_t*)0x1007b39b8);\n                            x0 = _objc_retainAutoreleasedReturnValue@stub();\n                            x28 = xzr;\n                            x0 = _swift_unknownObjectWeakLoadStrong@stub(x20 + x24);\n                            if (x0 == 0) {\n                                __debugbreak();\n                            } else {\n                                x19 = xzr;\n                                x0 = _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3b88);\n                                x24 = xzr;\n                                _objc_release@stub(xzr);\n                                __asm(\"cset w19, eq\");\n                                x8 = \"fetchSheetFetchAllRemotes\";\n                                x8 -= 0x20;\n                                x0 = 0x19;\n                                x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(-0x3000000000000000, x8 | -0x8000000000000000);\n                                x24 = xzr;\n                                _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3ba8, xzr, xzr);\n                                _objc_release@stub(xzr);\n                                _objc_release@stub(xzr);\n                                _objc_msgSend@stub(xzr, *(void*)(x22 + 0x9b8));\n                                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                x19 = xzr;\n                                x0 = 0x6566;\n                                x0 = 0x63740000;\n                                x0 = 0x416800000000;\n                                x1 = 0x6154;\n                                x1 = 0x73670000;\n                                x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(0x6c6c000000000000, -0x1400000000000000);\n                                x24 = xzr;\n                                x0 = _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b39c8, xzr);\n                                x22 = xzr;\n                                _objc_release@stub(xzr);\n                                _objc_release@stub(xzr);\n                                _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3bb8);\n                                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                x19 = xzr;\n                                _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3968);\n                                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                x27 = xzr;\n                                _objc_release@stub(xzr);\n                                if (x27 != 0) {\n                                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3bc0);\n                                    x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                    x28 = xzr;\n                                    _objc_release@stub(xzr);\n                                    if (x28 != 0) {\n                                        x0 = sub_1004b8848(0);\n                                        x0 = _swift_dynamicCastClass@stub(xzr, xzr);\n                                        if (x0 == 0) {\n                                            _objc_release@stub(xzr);\n                                        } else {\n                                            x8 += 0x9f0;\n                                            x8 = *(uint64_t*)0x1008049f0;\n                                            x0 = *(void*)(x0 + x8);\n                                            _swift_retain@stub(x0);\n                                            _objc_release@stub(xzr);\n                                            x8 = 0x6546;\n                                            x8 = 0x63740000;\n                                            x8 = 0x206800000000;\n                                            x8 = 0x27000000000000;\n                                            x9 = -0x1900000000000000;\n                                            var_68[0] = x8; var_68[1] = x9;\n                                            x0 = *(void*)(x21)[0]; x1 = *(void*)(x21)[1];\n                                            var_90 = x20;\n                                            x20 = x29 - 0x68;\n                                            _$sSS6appendyySSF@stub();\n                                            _$sSS6appendyySSF@stub(0x27, -0x1f00000000000000);\n                                            x9 = var_68[0]; x8 = var_68[1];\n                                            var_a8[0] = x8; var_a8[1] = x9;\n                                            x0 += 0xe20;\n                                            x0 = _swift_allocObject@stub(x0, 0x18, 7);\n                                            x28 = xzr;\n                                            x0 += 16;\n                                            _swift_unknownObjectWeakInit@stub(x0, xzr);\n                                            x2 += 0x590;\n                                            sub_100035884(var_70, xzr);\n                                            x8 = var_80;\n                                            w8 = *(void*)(x8 + 0x50);\n                                            x9 = x8 + 0x18;\n                                            __asm(\"bic x27, x9, x8\");\n                                            x26 = x27 + x26;\n                                            x19 = xzr;\n                                            x22 = x26 & -8;\n                                            x0 += 0xe48;\n                                            x0 = _swift_allocObject@stub(x0, x22 + 16, x8 | 7);\n                                            x24 = xzr;\n                                            x20 = var_88;\n                                            *(void*)(x0 + 16) = x20;\n                                            x2 += 0x590;\n                                            sub_1000062ec(xzr, x0 + x27);\n                                            *(void*)(x24 + x26) = w19;\n                                            x8 = x24 + x22;\n                                            *(void*)(x8 + 8) = x28;\n                                            x0 = sub_10001f6e8(0);\n                                            x0 = _swift_allocObject@stub(x0, *(void*)(x0 + 0x30), *(void*)(x0 + 0x34));\n                                            x19 = xzr;\n                                            _swift_retain@stub(xzr);\n                                            _swift_retain@stub(xzr);\n                                            x3 += 0x2b8;\n                                            x1 = var_a8[0]; x0 = var_a8[1];\n                                            x20 = xzr;\n                                            x0 = sub_10001fb0c(x0, x1, 7, x3, xzr);\n                                            x19 = xzr;\n                                            x22 = var_98;\n                                            x20 = xzr;\n                                            sub_10039e3ac();\n                                            x20 = var_90;\n                                            _swift_release@stub(xzr);\n                                            _swift_release@stub(xzr);\n                                            _swift_release@stub(xzr);\n                                            _swift_release@stub(xzr);\n                                        }\n                                    }\n                                }\n                                x0 += 0xb38;\n                                x1 += 0xb70;\n                                x0 = sub_100002bbc();\n                                x8 = *(void*)(x0 - 8);\n                                x8 = *(void*)(x8 + 0x38);\n                                x22 = var_78;\n                                (*x8)(xzr, 1, 2, xzr);\n                                x8 += 0xe30;\n                                x19 = *(uint64_t*)0x100808e30;\n                                _swift_beginAccess@stub(x20 + x19, x29 - 0x68, 0x21, 0);\n                                sub_100006280(xzr, x20 + x19);\n                                _swift_endAccess@stub(x29 - 0x68);\n                                _objc_msgSend@stub(xzr, *(void*)(x24 + 0x968));\n                                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                x19 = xzr;\n                                _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3988);\n                                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                                x20 = xzr;\n                                _objc_msgSend@stub(x0, *(uint64_t*)0x1007b3990, xzr);\n                                _objc_release@stub(xzr);\n                                _swift_release@stub(var_88);\n                                _objc_release@stub(xzr);\n                                _objc_release@stub(xzr);\n                                x1 += 0x590;\n                                sub_100006338(var_70);\n                                goto label_10045ee38;\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n",
+    "signature": "int64_t sub_10045e7d4()",
+    "strings": [
+      "fetchSheetFetchAllRemotes"
+    ],
+    "structured": false
+  },
+  "summary": "Pseudo-C for sub_10045e7d4 (277 lines, partly unstructured).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "unstructured_flow",
+      "message": "3 gotos remain where the control flow isn't a simple if/loop"
+    },
+    {
+      "code": "inline_asm",
+      "message": "3 instructions have no C rule and are shown as __asm(...)"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x10045e7d4"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

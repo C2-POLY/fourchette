@@ -1,0 +1,130 @@
+{
+  "id": "ev_ce11436f71157b00ec5d15acd2cf23b30c0fa67e398e42bd5e3601c11f35c2ae",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x10031b7cc"
+  },
+  "result": {
+    "calls": [
+      "_$sSD10FoundationE19_bridgeToObjectiveCSo12NSDictionaryCyF@stub",
+      "_objc_msgSend@stub",
+      "_objc_release@stub",
+      "_swift_allocObject@stub",
+      "_swift_arrayDestroy@stub",
+      "_swift_bridgeObjectRelease@stub",
+      "_swift_deallocClassInstance@stub",
+      "_swift_setDeallocating@stub",
+      "sub_100002bbc",
+      "sub_100334cf0"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x10031b7cc",
+    "function": "sub_10031b7cc",
+    "gotos": 0,
+    "inline_asm": 0,
+    "pseudo_code": "int64_t sub_10031b7cc()\n{\n    stack_30[0] = x22; stack_30[1] = x21;\n    stack_10[0] = x20; stack_10[1] = x19;\n    x0 += 0x8d0;\n    x1 += 0xc90;\n    sub_100002bbc();\n    x0 = _swift_allocObject@stub(x0, 0xd40, 7);\n    x19 = xzr;\n    0 = *(uint64_t*)0x10060e4d0;\n    *(void*)(x0 + 16) = 0;\n    x10 = 0x15;\n    x10 = -0x3000000000000000;\n    x21 = xzr;\n    *(void*)(x21 + 0x20) = x10;\n    x8 = \"enabledTabsOnFirstRun\";\n    x8 -= 0x20;\n    x8 |= -0x8000000000000000;\n    *(void*)(x0 + 0x28) = x8;\n    *(void*)(x0 + 0x30) = wzr;\n    x9 = \"useTopologicalCommitOrder\";\n    x9 -= 0x20;\n    x9 |= -0x8000000000000000;\n    x17 = x10 + 4;\n    *(void*)(x0 + 0x48)[0] = x8; *(void*)(x0 + 0x48)[1] = x17;\n    *(void*)(x0 + 0x58) = x9;\n    w9 = 1;\n    *(void*)(x0 + 0x60) = w9;\n    x11 = \"fetchRemotesAutomatically\";\n    x11 -= 0x20;\n    x11 |= -0x8000000000000000;\n    *(void*)(x0 + 0x78)[0] = x8; *(void*)(x0 + 0x78)[1] = x17;\n    *(void*)(x0 + 0x88) = x11;\n    *(void*)(x0 + 0x90) = w9;\n    x11 = \"revisionDiffLayoutMode\";\n    x11 -= 0x20;\n    x12 = x11 | -0x8000000000000000;\n    x0 = x10 + 1;\n    *(void*)(x19 + 0xa8)[0] = x8; *(void*)(x19 + 0xa8)[1] = x0;\n    x13 = \"separateRevisionDiffLayoutMode\";\n    *(void*)(x19 + 0xb8)[0] = x12; *(void*)(x19 + 0xb8)[1] = xzr;\n    x12 = x13 - 0x20;\n    x12 |= -0x8000000000000000;\n    x16 = x10 + 9;\n    *(void*)(x19 + 0xd8)[0] = x11; *(void*)(x19 + 0xd8)[1] = x16;\n    *(void*)(x19 + 0xe8)[0] = x12; *(void*)(x19 + 0xe8)[1] = x9;\n    x12 = \"popupDiffLayoutMode\";\n    x12 -= 0x20;\n    x12 |= -0x8000000000000000;\n    x15 = x10 - 2;\n    *(void*)(x19 + 0x108)[0] = x11; *(void*)(x19 + 0x108)[1] = x15;\n    x13 = \"commitDiffLayoutMode\";\n    *(void*)(x19 + 0x118)[0] = x12; *(void*)(x19 + 0x118)[1] = x9;\n    x12 = x13 - 0x20;\n    x13 = x12 | -0x8000000000000000;\n    x12 = x10 - 1;\n    *(void*)(x19 + 0x138)[0] = x11; *(void*)(x19 + 0x138)[1] = x12;\n    *(void*)(x19 + 0x148)[0] = x13; *(void*)(x19 + 0x148)[1] = xzr;\n    x13 = \"historyDiffLayoutMode\";\n    x13 -= 0x20;\n    x13 |= -0x8000000000000000;\n    *(void*)(x19 + 0x168)[0] = x11; *(void*)(x19 + 0x168)[1] = x10;\n    *(void*)(x19 + 0x178)[0] = x13; *(void*)(x19 + 0x178)[1] = xzr;\n    x13 = \"enableCommitSpellChecking\";\n    x13 -= 0x20;\n    x13 |= -0x8000000000000000;\n    *(void*)(x19 + 0x198)[0] = x11; *(void*)(x19 + 0x198)[1] = x17;\n    *(void*)(x19 + 0x1a8) = x13;\n    *(void*)(x19 + 0x1b0) = w9;\n    x13 = \"pushSheetPushAllTags\";\n    x13 -= 0x20;\n    x13 |= -0x8000000000000000;\n    *(void*)(x19 + 0x1c8)[0] = x8; *(void*)(x19 + 0x1c8)[1] = x12;\n    *(void*)(x19 + 0x1d8) = x13;\n    *(void*)(x19 + 0x1e0) = wzr;\n    x13 = 0x7570;\n    x13 = 0x6c6c0000;\n    x13 = 0x685300000000;\n    x13 = 0x6565000000000000;\n    *(void*)(x19 + 0x1f8)[0] = x8; *(void*)(x19 + 0x1f8)[1] = x13;\n    x13 = 0x5274;\n    x13 = 0x62650000;\n    x13 = 0x736100000000;\n    x13 = -0x109b000000000000;\n    *(void*)(x19 + 0x208) = x13;\n    *(void*)(x19 + 0x228) = x8;\n    *(void*)(x19 + 0x210) = wzr;\n    x13 = \"pullSheetStashAndReapply\";\n    x13 -= 0x20;\n    x14 = x13 | -0x8000000000000000;\n    x13 = x10 + 3;\n    *(void*)(x19 + 0x230) = x13;\n    *(void*)(x19 + 0x238) = x14;\n    *(void*)(x19 + 0x258) = x8;\n    *(void*)(x19 + 0x240) = wzr;\n    x14 = \"fetchSheetFetchAllTags\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0x260) = x0;\n    *(void*)(x19 + 0x268) = x14;\n    *(void*)(x19 + 0x288) = x8;\n    *(void*)(x19 + 0x270) = wzr;\n    x14 = \"fetchSheetFetchAllRemotes\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0x290) = x17;\n    *(void*)(x19 + 0x298) = x14;\n    *(void*)(x19 + 0x2b8) = x8;\n    *(void*)(x19 + 0x2a0) = wzr;\n    x14 = \"createBranchSheetCheckout\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0x2c0) = x17;\n    *(void*)(x19 + 0x2c8) = x14;\n    *(void*)(x19 + 0x2e8) = x8;\n    *(void*)(x19 + 0x2d0) = w9;\n    x14 = \"createBranchSheetCheckoutDontRemember\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    x1 = x10 + 16;\n    *(void*)(x19 + 0x2f0) = x1;\n    *(void*)(x19 + 0x2f8) = x14;\n    *(void*)(x19 + 0x318) = x8;\n    *(void*)(x19 + 0x300) = wzr;\n    x14 = \"saveStashSheetStageNewFiles\";\n    x14 -= 0x20;\n    x1 = x14 | -0x8000000000000000;\n    x14 = x10 + 6;\n    *(void*)(x19 + 0x320) = x14;\n    *(void*)(x19 + 0x328) = x1;\n    *(void*)(x19 + 0x348) = x8;\n    *(void*)(x19 + 0x330) = w9;\n    x1 = \"disableSyntaxHighlighting\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x350) = x17;\n    *(void*)(x19 + 0x358) = x1;\n    *(void*)(x19 + 0x378) = x8;\n    *(void*)(x19 + 0x360) = wzr;\n    x1 = \"pushAutomacicallyOnCommit\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x380) = x17;\n    *(void*)(x19 + 0x388) = x1;\n    *(void*)(x19 + 0x3a8) = x8;\n    *(void*)(x19 + 0x390) = wzr;\n    x17 = \"commitSubjectLimitLow\";\n    x17 -= 0x20;\n    x17 |= -0x8000000000000000;\n    *(void*)(x19 + 0x3b0) = x10;\n    *(void*)(x19 + 0x3b8) = x17;\n    *(void*)(x19 + 0x3d8) = x11;\n    w17 = 0x32;\n    *(void*)(x19 + 0x3c0) = x17;\n    x17 = \"commitSubjectLimitHigh\";\n    x17 -= 0x20;\n    x17 |= -0x8000000000000000;\n    *(void*)(x19 + 0x3e0) = x0;\n    *(void*)(x19 + 0x3e8) = x17;\n    *(void*)(x19 + 0x408) = x11;\n    w17 = 0x46;\n    *(void*)(x19 + 0x3f0) = x17;\n    x17 = \"createInteractiveRabaseBackup\";\n    x17 -= 0x20;\n    x17 |= -0x8000000000000000;\n    x0 = x10 | 8;\n    *(void*)(x19 + 0x410) = x0;\n    *(void*)(x19 + 0x418) = x17;\n    *(void*)(x19 + 0x438) = x8;\n    *(void*)(x19 + 0x420) = wzr;\n    x17 = 0x656d;\n    x17 = 0x67720000;\n    x17 = 0x546500000000;\n    x17 = 0x7079000000000000;\n    *(void*)(x19 + 0x440) = x17;\n    x17 = 0x65;\n    x17 = -0x1700000000000000;\n    *(void*)(x19 + 0x448) = x17;\n    *(void*)(x19 + 0x468) = x11;\n    *(void*)(x19 + 0x450) = xzr;\n    x1 = \"deleteStashAfterApply\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x470) = x10;\n    *(void*)(x19 + 0x478) = x1;\n    *(void*)(x19 + 0x498) = x8;\n    *(void*)(x19 + 0x480) = wzr;\n    x1 = 0x6966;\n    x1 = 0x656c0000;\n    x1 = 0x694c00000000;\n    x1 = 0x7473000000000000;\n    *(void*)(x19 + 0x4a0) = x1;\n    x1 = 0x6f4d;\n    x1 = 0x65640000;\n    x1 = -0x1400000000000000;\n    *(void*)(x19 + 0x4a8) = x1;\n    *(void*)(x19 + 0x4c8) = x11;\n    *(void*)(x19 + 0x4b0) = xzr;\n    x1 = \"localBranchSortOrder\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x4d0) = x12;\n    *(void*)(x19 + 0x4d8) = x1;\n    *(void*)(x19 + 0x4f8) = x11;\n    w2 = 2;\n    *(void*)(x19 + 0x4e0) = x2;\n    x1 = \"remoteBranchSortOrder\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x500) = x10;\n    *(void*)(x19 + 0x508) = x1;\n    *(void*)(x19 + 0x528) = x11;\n    *(void*)(x19 + 0x510) = x2;\n    x1 = 0x6174;\n    x1 = 0x53670000;\n    x1 = 0x726f00000000;\n    x1 = 0x4f74000000000000;\n    *(void*)(x19 + 0x530) = x1;\n    x1 = 0x6472;\n    x1 = 0x72650000;\n    x1 = -0x1400000000000000;\n    *(void*)(x19 + 0x538) = x1;\n    *(void*)(x19 + 0x558) = x11;\n    *(void*)(x19 + 0x540) = x9;\n    x1 = 0x7061;\n    x1 = 0x65700000;\n    x1 = 0x726100000000;\n    x1 = 0x6e61000000000000;\n    *(void*)(x19 + 0x560) = x1;\n    x1 = 0x6563;\n    x1 = -0x1600000000000000;\n    *(void*)(x19 + 0x568) = x1;\n    *(void*)(x19 + 0x588) = x11;\n    *(void*)(x19 + 0x570) = xzr;\n    x1 = 0x6574;\n    x1 = 0x6d720000;\n    x1 = 0x6e6900000000;\n    x1 = 0x6c61000000000000;\n    *(void*)(x19 + 0x590) = x1;\n    x1 = 0x6c43;\n    x1 = 0x65690000;\n    x1 = 0x746e00000000;\n    x1 = -0x1200000000000000;\n    *(void*)(x19 + 0x598) = x1;\n    *(void*)(x19 + 0x5b8) = x11;\n    *(void*)(x19 + 0x5a0) = xzr;\n    x1 = \"showBugtrackerHyperlinks\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x5c0) = x13;\n    *(void*)(x19 + 0x5c8) = x1;\n    *(void*)(x19 + 0x5e8) = x8;\n    *(void*)(x19 + 0x5d0) = w9;\n    x1 = \"automaticStatusUpdateInterval\";\n    x1 -= 0x20;\n    x1 |= -0x8000000000000000;\n    *(void*)(x19 + 0x5f0) = x0;\n    *(void*)(x19 + 0x5f8) = x1;\n    *(void*)(x19 + 0x618) = x11;\n    w0 = 0x3c;\n    *(void*)(x19 + 0x600) = x0;\n    x0 = \"disableAutomaticStatusUpdate\";\n    x0 -= 0x20;\n    x0 |= -0x8000000000000000;\n    x1 = x10 + 7;\n    *(void*)(x19 + 0x620) = x1;\n    *(void*)(x19 + 0x628) = x0;\n    *(void*)(x19 + 0x648) = x8;\n    *(void*)(x19 + 0x630) = wzr;\n    x0 = \"activityManagerViewMode\";\n    x0 -= 0x20;\n    x3 = x0 | -0x8000000000000000;\n    x0 = x10 | 2;\n    *(void*)(x19 + 0x650) = x0;\n    *(void*)(x19 + 0x658) = x3;\n    *(void*)(x19 + 0x678) = x11;\n    *(void*)(x19 + 0x660) = x2;\n    x3 = \"applicationUpdateChannel\";\n    x3 -= 0x20;\n    x3 |= -0x8000000000000000;\n    *(void*)(x19 + 0x680) = x13;\n    *(void*)(x19 + 0x688) = x3;\n    *(void*)(x19 + 0x6a8) = x11;\n    *(void*)(x19 + 0x690) = x2;\n    x2 = \"cherryPickSheetAppendOriginSha\";\n    x2 -= 0x20;\n    x2 |= -0x8000000000000000;\n    *(void*)(x19 + 0x6b0) = x16;\n    *(void*)(x19 + 0x6b8) = x2;\n    *(void*)(x19 + 0x6d8) = x8;\n    x16 = \"checkoutAndSyncSheetStashAndReapply\";\n    *(void*)(x19 + 0x6c0) = wzr;\n    x16 -= 0x20;\n    x16 |= -0x8000000000000000;\n    x2 = x10 + 14;\n    *(void*)(x19 + 0x6e0) = x2;\n    *(void*)(x19 + 0x6e8) = x16;\n    *(void*)(x19 + 0x708) = x8;\n    *(void*)(x19 + 0x6f0) = wzr;\n    x16 = \"checkoutStashAndReapply\";\n    x16 -= 0x20;\n    x16 |= -0x8000000000000000;\n    *(void*)(x19 + 0x710) = x0;\n    *(void*)(x19 + 0x718) = x16;\n    *(void*)(x19 + 0x738) = x8;\n    *(void*)(x19 + 0x720) = wzr;\n    x16 = \"compactBranchLabels\";\n    x16 -= 0x20;\n    x16 |= -0x8000000000000000;\n    *(void*)(x19 + 0x740) = x15;\n    *(void*)(x19 + 0x748) = x16;\n    *(void*)(x19 + 0x768) = x8;\n    *(void*)(x19 + 0x750) = w9;\n    x16 = \"createTagSheetPush\";\n    x16 -= 0x20;\n    x2 = x16 | -0x8000000000000000;\n    x16 = x10 - 3;\n    *(void*)(x19 + 0x770) = x16;\n    *(void*)(x19 + 0x778) = x2;\n    *(void*)(x19 + 0x798) = x8;\n    *(void*)(x19 + 0x780) = wzr;\n    x2 = \"diffShowChangeMarks\";\n    x2 -= 0x20;\n    x2 |= -0x8000000000000000;\n    *(void*)(x19 + 0x7a0) = x15;\n    *(void*)(x19 + 0x7a8) = x2;\n    *(void*)(x19 + 0x7c8) = x8;\n    *(void*)(x19 + 0x7b0) = wzr;\n    x15 = 0x6f63;\n    x15 = 0x746e0000;\n    x15 = 0x786500000000;\n    x15 = 0x5374000000000000;\n    *(void*)(x19 + 0x7d0) = x15;\n    x15 = 0x7a69;\n    x15 = 0x650000;\n    x15 = -0x1500000000000000;\n    *(void*)(x19 + 0x7d8) = x15;\n    *(void*)(x19 + 0x7f8) = x11;\n    w15 = 3;\n    *(void*)(x19 + 0x7e0) = x15;\n    x15 = \"diffIgnoreWhitespaces\";\n    x15 -= 0x20;\n    x15 |= -0x8000000000000000;\n    *(void*)(x19 + 0x800) = x10;\n    *(void*)(x19 + 0x808) = x15;\n    *(void*)(x19 + 0x828) = x8;\n    *(void*)(x19 + 0x810) = wzr;\n    x15 = \"diffShowEntireFile\";\n    x15 -= 0x20;\n    x15 |= -0x8000000000000000;\n    *(void*)(x19 + 0x830) = x16;\n    *(void*)(x19 + 0x838) = x15;\n    *(void*)(x19 + 0x858) = x8;\n    *(void*)(x19 + 0x840) = wzr;\n    x15 = \"diffShowHiddenSymbols\";\n    x15 -= 0x20;\n    x15 |= -0x8000000000000000;\n    *(void*)(x19 + 0x860) = x10;\n    *(void*)(x19 + 0x868) = x15;\n    *(void*)(x19 + 0x888) = x8;\n    *(void*)(x19 + 0x870) = wzr;\n    x15 = 0x6964;\n    x15 = 0x66660000;\n    x15 = 0x6f5700000000;\n    x15 = 0x6472000000000000;\n    *(void*)(x19 + 0x890) = x15;\n    x15 = 0x7257;\n    x15 = 0x70610000;\n    x15 = 0x654b00000000;\n    x15 = -0x1087000000000000;\n    *(void*)(x19 + 0x898) = x15;\n    *(void*)(x19 + 0x8b8) = x8;\n    *(void*)(x19 + 0x8a0) = wzr;\n    x15 = \"disableExternalAvatarService\";\n    x15 -= 0x20;\n    x15 |= -0x8000000000000000;\n    *(void*)(x19 + 0x8c0) = x1;\n    *(void*)(x19 + 0x8c8) = x15;\n    *(void*)(x19 + 0x8e8) = x8;\n    *(void*)(x19 + 0x8d0) = wzr;\n    x15 = 0x6e65;\n    x15 = 0x50760000;\n    x15 = 0x746100000000;\n    x15 = 0x4d68000000000000;\n    *(void*)(x19 + 0x8f0) = x15;\n    x15 = 0x646f;\n    x15 = 0x650000;\n    x15 = -0x1500000000000000;\n    *(void*)(x19 + 0x8f8) = x15;\n    *(void*)(x19 + 0x918) = x11;\n    *(void*)(x19 + 0x900) = x9;\n    x15 = \"externalDiffTool\";\n    x15 -= 0x20;\n    x1 = x15 | -0x8000000000000000;\n    x15 = x10 - 5;\n    *(void*)(x19 + 0x920) = x15;\n    *(void*)(x19 + 0x928) = x1;\n    *(void*)(x19 + 0x948) = x11;\n    *(void*)(x19 + 0x930) = xzr;\n    x1 = 0x656d;\n    x1 = 0x67720000;\n    x1 = 0x546500000000;\n    x1 = 0x6f6f000000000000;\n    *(void*)(x19 + 0x950) = x1;\n    x17 += 7;\n    *(void*)(x19 + 0x958) = x17;\n    *(void*)(x19 + 0x978) = x11;\n    *(void*)(x19 + 0x960) = xzr;\n    x17 = 0x6566;\n    x17 = 0x63740000;\n    x17 = 0x416800000000;\n    x17 = 0x6c6c000000000000;\n    *(void*)(x19 + 0x980) = x17;\n    x17 = 0x6154;\n    x17 = 0x73670000;\n    x17 = -0x1400000000000000;\n    *(void*)(x19 + 0x988) = x17;\n    *(void*)(x19 + 0x9a8) = x8;\n    x17 = \"gitFlowFinishFeatureDeleteBranches\";\n    *(void*)(x19 + 0x990) = wzr;\n    x17 -= 0x20;\n    x17 |= -0x8000000000000000;\n    x1 = x10 + 13;\n    *(void*)(x19 + 0x9b0) = x1;\n    *(void*)(x19 + 0x9b8) = x17;\n    *(void*)(x19 + 0x9d8) = x8;\n    *(void*)(x19 + 0x9c0) = w9;\n    x17 = \"gitFlowFinishFeatureRebase\";\n    x17 -= 0x20;\n    x2 = x17 | -0x8000000000000000;\n    x17 = x10 + 5;\n    *(void*)(x19 + 0x9e0) = x17;\n    *(void*)(x19 + 0x9e8) = x2;\n    *(void*)(x19 + 0xa08) = x8;\n    x2 = \"gitFlowFinishFeatureNoFastForward\";\n    *(void*)(x19 + 0x9f0) = wzr;\n    x2 -= 0x20;\n    x2 |= -0x8000000000000000;\n    x3 = x10 + 12;\n    *(void*)(x19 + 0xa18) = x2;\n    *(void*)(x19 + 0xa38) = x8;\n    *(void*)(x19 + 0xa20) = wzr;\n    x2 = \"imageDiffHighlightPixels\";\n    x2 -= 0x20;\n    x2 |= -0x8000000000000000;\n    *(void*)(x19 + 0xa40) = x13;\n    *(void*)(x19 + 0xa48) = x2;\n    *(void*)(x19 + 0xa68) = x8;\n    *(void*)(x19 + 0xa50) = wzr;\n    x2 = \"interactiveRebaseUpdateRefs\";\n    x2 -= 0x20;\n    x2 |= -0x8000000000000000;\n    *(void*)(x19 + 0xa70) = x14;\n    *(void*)(x19 + 0xa98) = x8;\n    *(void*)(x19 + 0xa80) = wzr;\n    x14 = 0x616d;\n    x14 = 0x43780000;\n    x14 = 0x6d6f00000000;\n    x14 = 0x696d000000000000;\n    *(void*)(x19 + 0xaa0) = x14;\n    x14 = 0x4374;\n    x14 = 0x756f0000;\n    x14 = 0x746e00000000;\n    x14 = -0x1200000000000000;\n    *(void*)(x19 + 0xaa8) = x14;\n    *(void*)(x19 + 0xac8) = x11;\n    w14 = 0x86a0;\n    w14 = 0x10000;\n    *(void*)(x19 + 0xab0) = x14;\n    x14 = \"mergerLayoutOrientation\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0xad0) = x0;\n    *(void*)(x19 + 0xad8) = x14;\n    *(void*)(x19 + 0xaf8) = x11;\n    *(void*)(x19 + 0xae0) = xzr;\n    x14 = \"migratedToFork2_15\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0xb00) = x16;\n    *(void*)(x19 + 0xb08) = x14;\n    *(void*)(x19 + 0xb28) = x8;\n    x14 = \"migratedToFork2_41\";\n    *(void*)(x19 + 0xb10) = wzr;\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0xb30) = x16;\n    *(void*)(x19 + 0xb38) = x14;\n    *(void*)(x19 + 0xb58) = x8;\n    *(void*)(x19 + 0xb40) = wzr;\n    x14 = \"migratedToMacOs111\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0xb60) = x16;\n    *(void*)(x19 + 0xb68) = x14;\n    *(void*)(x19 + 0xb88) = x8;\n    *(void*)(x19 + 0xb70) = wzr;\n    x14 = 0x706f;\n    x14 = 0x6e650000;\n    x14 = 0x694100000000;\n    x14 = 0x6f4c000000000000;\n    *(void*)(x19 + 0xb90) = x14;\n    x14 = 0x6767;\n    x14 = 0x64650000;\n    x14 = 0x6e4900000000;\n    x14 = -0x1200000000000000;\n    *(void*)(x19 + 0xb98) = x14;\n    *(void*)(x19 + 0xbb8) = x8;\n    *(void*)(x19 + 0xba0) = wzr;\n    x14 = \"revisionDetailsActiveTab\";\n    x14 -= 0x20;\n    x14 |= -0x8000000000000000;\n    *(void*)(x19 + 0xbc0) = x13;\n    *(void*)(x19 + 0xbc8) = x14;\n    *(void*)(x19 + 0xbe8) = x11;\n    x13 = \"repositoryManagerScanDepth\";\n    *(void*)(x19 + 0xbd0) = xzr;\n    x13 -= 0x20;\n    x13 |= -0x8000000000000000;\n    *(void*)(x19 + 0xbf0) = x17;\n    *(void*)(x19 + 0xbf8) = x13;\n    *(void*)(x19 + 0xc18) = x11;\n    w11 = 6;\n    *(void*)(x19 + 0xc00) = x11;\n    x11 = \"rebaseSheetAutostash\";\n    x11 -= 0x20;\n    x11 |= -0x8000000000000000;\n    *(void*)(x19 + 0xc20) = x12;\n    *(void*)(x19 + 0xc28) = x11;\n    *(void*)(x19 + 0xc48) = x8;\n    *(void*)(x19 + 0xc30) = wzr;\n    x11 = \"rebaseSheetUpdateRefs\";\n    x11 -= 0x20;\n    x11 |= -0x8000000000000000;\n    *(void*)(x19 + 0xc50) = x10;\n    *(void*)(x19 + 0xc58) = x11;\n    *(void*)(x19 + 0xc78) = x8;\n    *(void*)(x19 + 0xc60) = wzr;\n    x10 = \"separateRevisionDiffShowEntireFile\";\n    x10 -= 0x20;\n    x10 |= -0x8000000000000000;\n    *(void*)(x19 + 0xc88) = x10;\n    *(void*)(x19 + 0xca8) = x8;\n    *(void*)(x19 + 0xc90) = wzr;\n    x10 = 0x6873;\n    x10 = 0x776f0000;\n    x10 = 0x6f5700000000;\n    x10 = 0x6b72000000000000;\n    *(void*)(x19 + 0xcb0) = x10;\n    x10 = 0x7274;\n    x10 = 0x65650000;\n    x10 = 0x7300000000;\n    x10 = -0x1300000000000000;\n    *(void*)(x19 + 0xcb8) = x10;\n    *(void*)(x19 + 0xcd8) = x8;\n    *(void*)(x19 + 0xcc0) = wzr;\n    x10 = \"updateSubmodulesOnCheckout\";\n    x10 -= 0x20;\n    x10 |= -0x8000000000000000;\n    *(void*)(x19 + 0xce0) = x17;\n    *(void*)(x19 + 0xce8) = x10;\n    *(void*)(x19 + 0xd08) = x8;\n    *(void*)(x19 + 0xcf0) = w9;\n    x9 = \"verboseGitOutput\";\n    x9 -= 0x20;\n    x9 |= -0x8000000000000000;\n    *(void*)(x19 + 0xd10) = x15;\n    *(void*)(x19 + 0xd18) = x9;\n    *(void*)(x19 + 0xd38) = x8;\n    *(void*)(x19 + 0xd20) = wzr;\n    x0 = sub_100334cf0(xzr, x1, x2, x3);\n    x22 = xzr;\n    _swift_setDeallocating@stub(xzr);\n    x0 += 0x8d8;\n    x1 += 0x740;\n    x0 = sub_100002bbc();\n    _swift_arrayDestroy@stub(xzr, 0x46, xzr);\n    _swift_deallocClassInstance@stub(xzr, 0x20, 7);\n    x0 = _$sSD10FoundationE19_bridgeToObjectiveCSo12NSDictionaryCyF@stub(xzr, x1, x8 + 8);\n    x19 = xzr;\n    _swift_bridgeObjectRelease@stub(xzr);\n    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b4ed8, xzr);\n    x20 = stack_10[0]; x19 = stack_10[1];\n    x22 = stack_0[0]; x21 = stack_0[1];\n    return _objc_release@stub(xzr); /* tail call */\n}\n",
+    "signature": "int64_t sub_10031b7cc()",
+    "strings": [
+      "enabledTabsOnFirstRun",
+      "useTopologicalCommitOrder",
+      "fetchRemotesAutomatically",
+      "revisionDiffLayoutMode",
+      "separateRevisionDiffLayoutMode",
+      "popupDiffLayoutMode",
+      "commitDiffLayoutMode",
+      "historyDiffLayoutMode",
+      "enableCommitSpellChecking",
+      "pushSheetPushAllTags",
+      "pullSheetStashAndReapply",
+      "fetchSheetFetchAllTags",
+      "fetchSheetFetchAllRemotes",
+      "createBranchSheetCheckout",
+      "createBranchSheetCheckoutDontRemember",
+      "saveStashSheetStageNewFiles",
+      "disableSyntaxHighlighting",
+      "pushAutomacicallyOnCommit",
+      "commitSubjectLimitLow",
+      "commitSubjectLimitHigh",
+      "createInteractiveRabaseBackup",
+      "deleteStashAfterApply",
+      "localBranchSortOrder",
+      "remoteBranchSortOrder",
+      "showBugtrackerHyperlinks",
+      "automaticStatusUpdateInterval",
+      "disableAutomaticStatusUpdate",
+      "activityManagerViewMode",
+      "applicationUpdateChannel",
+      "cherryPickSheetAppendOriginSha",
+      "checkoutAndSyncSheetStashAndReapply",
+      "checkoutStashAndReapply",
+      "compactBranchLabels",
+      "createTagSheetPush",
+      "diffShowChangeMarks",
+      "diffIgnoreWhitespaces",
+      "diffShowEntireFile",
+      "diffShowHiddenSymbols",
+      "disableExternalAvatarService",
+      "externalDiffTool",
+      "gitFlowFinishFeatureDeleteBranches",
+      "gitFlowFinishFeatureRebase",
+      "gitFlowFinishFeatureNoFastForward",
+      "imageDiffHighlightPixels",
+      "interactiveRebaseUpdateRefs",
+      "mergerLayoutOrientation",
+      "migratedToFork2_15",
+      "migratedToFork2_41",
+      "migratedToMacOs111",
+      "revisionDetailsActiveTab",
+      "repositoryManagerScanDepth",
+      "rebaseSheetAutostash",
+      "rebaseSheetUpdateRefs",
+      "separateRevisionDiffShowEntireFile",
+      "updateSubmodulesOnCheckout",
+      "verboseGitOutput"
+    ],
+    "structured": true
+  },
+  "summary": "Pseudo-C for sub_10031b7cc (586 lines).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x10031b7cc"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

@@ -1,0 +1,82 @@
+{
+  "id": "ev_8419e4f05eff49d664a424716dcabfad99b9297e9a44219fda0927db1dcb912d",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_function_pseudocode",
+  "params": {
+    "function": "0x1003e513c"
+  },
+  "result": {
+    "calls": [
+      "_$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub",
+      "_$sSS10FoundationE36_unconditionallyBridgeFromObjectiveCySSSo8NSStringCSgFZ@stub",
+      "_$sSS9hasPrefixySbSSF@stub",
+      "_objc_allocWithZone@stub",
+      "_objc_msgSend@stub",
+      "_objc_opt_self@stub",
+      "_objc_release@stub",
+      "_objc_retainAutoreleasedReturnValue@stub",
+      "_swift_bridgeObjectRelease@stub",
+      "_swift_bridgeObjectRetain@stub",
+      "sub_100049484"
+    ],
+    "engine": "clean-room lifter",
+    "entry": "0x1003e513c",
+    "function": "sub_1003e513c",
+    "gotos": 7,
+    "inline_asm": 1,
+    "pseudo_code": "int64_t sub_1003e513c(int64_t x0)\n{\n    stack_10[0] = x28; stack_10[1] = x27;\n    stack_20[0] = x26; stack_20[1] = x25;\n    stack_30[0] = x24; stack_30[1] = x23;\n    stack_40[0] = x22; stack_40[1] = x21;\n    stack_50[0] = x20; stack_50[1] = x19;\n    x21 = *(void*)(x0 + 16);\n    if (x21 == 0) {\n        x22 = *(void*)(x19 + 16);\n        if (x22 == 0) {\nlabel_1003e533c:\n            _swift_bridgeObjectRelease@stub(xzr);\n            x21 = 0;\n            x20 = 0;\nlabel_1003e5358:\n            x0 = xzr;\n            x1 = xzr;\n            x20 = stack_50[0]; x19 = stack_50[1];\n            x22 = stack_40[0]; x21 = stack_40[1];\n            x24 = stack_30[0]; x23 = stack_30[1];\n            x26 = stack_20[0]; x25 = stack_20[1];\n            x28 = stack_10[0]; x27 = stack_10[1];\n            return x0;\n        } else {\nlabel_1003e529c:\n            x26 = 0;\n            x27 = x19 + 0x28;\n            while (true) {\n                x8 = *(void*)(x19 + 16);\n                if (x26 >= x8 /* unsigned */) {\n                    goto label_1003e5380;\n                } else {\n                    x21 = *(void*)(x27 - 8)[0]; x20 = *(void*)(x27 - 8)[1];\n                    x0 = _objc_opt_self@stub(*(uint64_t*)0x1007b99b0);\n                    x23 = xzr;\n                    _swift_bridgeObjectRetain@stub(xzr);\n                    _objc_msgSend@stub(xzr, *(uint64_t*)0x1007b3980);\n                    x0 = _objc_retainAutoreleasedReturnValue@stub();\n                    x23 = xzr;\n                    x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(xzr, xzr);\n                    x24 = xzr;\n                    x0 = _objc_msgSend@stub(xzr, *(void*)(x28 + 0xb68), xzr);\n                    x25 = xzr;\n                    _objc_release@stub(xzr);\n                    _objc_release@stub(xzr);\n                    if (((w25 >> 0) & 1) != 0) {\n                        goto label_1003e5350;\n                    } else {\n                        _swift_bridgeObjectRelease@stub(xzr);\n                        x26 += 1;\n                        x27 += 16;\n                        if (x22 == x26) break;\n                        continue;\n                    }\n                }\n            }\n            goto label_1003e533c;\n        }\n    } else {\n        x22 = xzr;\n        stack_8 = x8;\n        x20 = sp + 8;\n        sub_100049484(0, xzr, 0);\n        x19 = stack_8;\n        x25 = x22 + 0x28;\n        while (true) {\nlabel_1003e5198:\n            x24 = *(void*)(x25 - 8)[0]; x23 = *(void*)(x25 - 8)[1];\n            _swift_bridgeObjectRetain@stub(xzr);\n            x0 = _$sSS9hasPrefixySbSSF@stub(0x7e, -0x1f00000000000000, xzr, xzr);\n            if (((w0 >> 0) & 1) != 0) {\n                x0 = _objc_allocWithZone@stub(*(uint64_t*)0x1007b9b20);\n                x20 = xzr;\n                x0 = _$sSS10FoundationE19_bridgeToObjectiveCSo8NSStringCyF@stub(xzr, xzr);\n                x22 = xzr;\n                x0 = _objc_msgSend@stub(xzr, *(void*)(x27 + 0x1e8), xzr);\n                x20 = xzr;\n                _objc_release@stub(xzr);\n                _objc_msgSend@stub(xzr, *(void*)(x28 + 0x1f0));\n                x0 = _objc_retainAutoreleasedReturnValue@stub();\n                x22 = xzr;\n                _objc_release@stub(xzr);\n                x0 = _$sSS10FoundationE36_unconditionallyBridgeFromObjectiveCySSSo8NSStringCSgFZ@stub(xzr);\n                x24 = xzr;\n                x20 = xzr;\n                _objc_release@stub(xzr);\n                _swift_bridgeObjectRelease@stub(xzr);\n                x23 = xzr;\n            }\n        }\nlabel_1003e5268:\n        goto label_1003e529c;\n    }\n    stack_8 = x19;\n    x26 = *(void*)(x19 + 16)[0]; x8 = *(void*)(x19 + 16)[1];\n    x22 = x26 + 1;\n    if (x26 >= x8 /* unsigned */) {\n        __asm(\"cset w0, hi\");\n        x20 = sp + 8;\n        sub_100049484(x0, xzr, 1);\n        x19 = stack_8;\n    }\n    *(void*)(x19 + 16) = x22;\n    x8 = x19 + x26;\n    *(void*)(x8 + 0x20)[0] = x24; *(void*)(x8 + 0x20)[1] = x23;\n    x25 += 16;\n    x21 -= 1;\n    if (x21 != 0) {\n        goto label_1003e5198;\n    }\n    goto label_1003e5268;\nlabel_1003e5350:\n    _swift_bridgeObjectRelease@stub(xzr);\n    goto label_1003e5358;\nlabel_1003e5380:\n    __debugbreak();\n}\n",
+    "signature": "int64_t sub_1003e513c(int64_t x0)",
+    "strings": [],
+    "structured": false
+  },
+  "summary": "Pseudo-C for sub_1003e513c (118 lines, partly unstructured).",
+  "confidence": "inferred",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "register_level",
+      "message": "variables are machine registers and stack slots; types are not recovered"
+    },
+    {
+      "code": "calling_convention_assumed",
+      "message": "call arguments follow the usual arm64 convention and may be wrong for unusual functions"
+    },
+    {
+      "code": "conditions_from_flags",
+      "message": "branch conditions are rebuilt from the last compare and may be approximate"
+    },
+    {
+      "code": "unstructured_flow",
+      "message": "7 gotos remain where the control flow isn't a simple if/loop"
+    },
+    {
+      "code": "inline_asm",
+      "message": "1 instructions have no C rule and are shown as __asm(...)"
+    },
+    {
+      "code": "deep_engine_unavailable",
+      "message": "Ghidra couldn't decompile this function (the bridge rejected the request (bridge_error): the decompiler gave no result: ). So this came from the built-in decompiler, which is less exact."
+    }
+  ],
+  "coverage": {
+    "status": "unknown"
+  },
+  "locations": [
+    {
+      "kind": "address",
+      "value": "0x1003e513c"
+    }
+  ],
+  "links": [],
+  "carries_target_content": true
+}

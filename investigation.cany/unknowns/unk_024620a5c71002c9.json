@@ -1,0 +1,17 @@
+{
+  "id": "unk_024620a5c71002c9",
+  "revision": 1,
+  "question": "How often does Fork run its automatic background fetch, and which exact git command does Pull run?",
+  "severity": "low",
+  "domain": "git",
+  "status": "open",
+  "probes": [
+    "find the NSTimer created for AutomaticBackgroundFetchManager.updateTimerTick (defaultUpdateInterval property)",
+    "find the pull command builder (inline short strings 'pull', '--rebase')"
+  ],
+  "evidence_for": [
+    "ev_7c550d93542162aa4976cc0fdf36f037f109aa3bb3704f0a693fac0bafa7cd58",
+    "ev_ce11436f71157b00ec5d15acd2cf23b30c0fa67e398e42bd5e3601c11f35c2ae"
+  ],
+  "evidence_against": []
+}

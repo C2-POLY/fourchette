@@ -1,0 +1,271 @@
+{
+  "id": "ev_d8a3d07122784970cb37aa72ba58342d76a572d82badd9aea7550047aef4251f",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_functions_search",
+  "params": {
+    "case_sensitive": false,
+    "limit": 60,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "QuickLaunch|DefaultCommandProvider|ReferenceCommandProvider|WorkspaceCommandProvider"
+  },
+  "result": {
+    "functions": 33,
+    "imports": 0,
+    "matches": [
+      {
+        "address": "0x10011104c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork17QuickLaunchWindow canBecomeKeyWindow]",
+        "size": 8
+      },
+      {
+        "address": "0x100111054",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork17QuickLaunchWindow initWithContentRect:styleMask:backing:defer:]",
+        "size": 140
+      },
+      {
+        "address": "0x10011110c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController windowNibName]",
+        "size": 44
+      },
+      {
+        "address": "0x100111138",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController visualEffectsView]",
+        "size": 32
+      },
+      {
+        "address": "0x100111158",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController setVisualEffectsView:]",
+        "size": 20
+      },
+      {
+        "address": "0x10011116c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView]",
+        "size": 32
+      },
+      {
+        "address": "0x10011118c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController setTableView:]",
+        "size": 20
+      },
+      {
+        "address": "0x1001111a0",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController commandTextField]",
+        "size": 32
+      },
+      {
+        "address": "0x1001111c0",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController setCommandTextField:]",
+        "size": 20
+      },
+      {
+        "address": "0x1001112f0",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController initWithCoder:]",
+        "size": 40
+      },
+      {
+        "address": "0x10011138c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController dealloc]",
+        "size": 140
+      },
+      {
+        "address": "0x100111418",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController .cxx_destruct]",
+        "size": 168
+      },
+      {
+        "address": "0x100111a28",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController windowDidLoad]",
+        "size": 40
+      },
+      {
+        "address": "0x100113a3c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController initWithWindow:]",
+        "size": 44
+      },
+      {
+        "address": "0x100113e2c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController windowDidBecomeKey:]",
+        "size": 12
+      },
+      {
+        "address": "0x100113f80",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController windowDidResignKey:]",
+        "size": 12
+      },
+      {
+        "address": "0x100114508",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView:viewForTableColumn:row:]",
+        "size": 132
+      },
+      {
+        "address": "0x10011458c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView:isGroupRow:]",
+        "size": 96
+      },
+      {
+        "address": "0x1001145ec",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView:shouldSelectRow:]",
+        "size": 96
+      },
+      {
+        "address": "0x10011464c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView:heightOfRow:]",
+        "size": 104
+      },
+      {
+        "address": "0x1001146b4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController numberOfRowsInTableView:]",
+        "size": 168
+      },
+      {
+        "address": "0x10011485c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork27QuickLaunchWindowController tableView:objectValueForTableColumn:row:]",
+        "size": 276
+      },
+      {
+        "address": "0x100114970",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView titleTextField]",
+        "size": 32
+      },
+      {
+        "address": "0x100114990",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView setTitleTextField:]",
+        "size": 20
+      },
+      {
+        "address": "0x1001149a4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView secondaryTextField]",
+        "size": 32
+      },
+      {
+        "address": "0x1001149c4",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView setSecondaryTextField:]",
+        "size": 20
+      },
+      {
+        "address": "0x1001149d8",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView iconImageView]",
+        "size": 32
+      },
+      {
+        "address": "0x1001149f8",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView setIconImageView:]",
+        "size": 20
+      },
+      {
+        "address": "0x100114a0c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView initWithFrame:]",
+        "size": 168
+      },
+      {
+        "address": "0x100114b5c",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView initWithCoder:]",
+        "size": 40
+      },
+      {
+        "address": "0x100114b90",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork24QuickLaunchTableCellView .cxx_destruct]",
+        "size": 72
+      },
+      {
+        "address": "0x1001f37c0",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork20ForkWindowController showQuickLaunchCheckout:]",
+        "size": 148
+      },
+      {
+        "address": "0x1002f00e8",
+        "demangled": null,
+        "kind": "function",
+        "name": "-[_TtC4Fork20RepositoryStatusView showQuickLaunchCheckout:]",
+        "size": 104
+      }
+    ],
+    "total": 33
+  },
+  "summary": "33 functions and 0 imports match \"QuickLaunch|DefaultCommandProvider|ReferenceCommandProvider|WorkspaceCommandProvider\".",
+  "confidence": "derived",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [],
+  "coverage": {
+    "status": "complete",
+    "examined": 33,
+    "total": 33
+  },
+  "locations": [],
+  "links": []
+}

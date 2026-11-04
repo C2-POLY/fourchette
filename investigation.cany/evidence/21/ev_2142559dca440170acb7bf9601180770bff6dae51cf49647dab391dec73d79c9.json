@@ -1,0 +1,409 @@
+{
+  "id": "ev_2142559dca440170acb7bf9601180770bff6dae51cf49647dab391dec73d79c9",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": true,
+    "limit": 40,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "(Interval|interval|Minutes|minutes)"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x100615a08",
+        "references": [
+          {
+            "from": "0x100744510",
+            "function": null
+          },
+          {
+            "from": "0x10074fc90",
+            "function": null
+          },
+          {
+            "from": "0x100752258",
+            "function": null
+          },
+          {
+            "from": "0x100753e20",
+            "function": null
+          },
+          {
+            "from": "0x100755950",
+            "function": null
+          },
+          {
+            "from": "0x10075a188",
+            "function": null
+          },
+          {
+            "from": "0x10075f148",
+            "function": null
+          }
+        ],
+        "section": "__const",
+        "text": "abstractallocatecontainscontinuecriticaldeferredexternalfunctionimplicitnamelistoperatoroptionalvolatile!!binary\\caption\\section\\chapter\\newpage\\bibitem\\itshape\\iffalseALLOCATECASCADEDCONTINUEDESCRIBEDISTINCTEXTERNALFUNCTIONGROUPINGIDENTITYLANGUAGEMODIFIESMULTISETOVERLAPSRESIGNALROLLBACKSPECIFICSQLSTATETRAILINGWHENEVERcascadeddescribedistinctgroupingidentitylanguagemodifiesmultisetoverlapsresignalrollbackspecificsqlstatetrailingwheneverDATETIMEINTERVALNATIONALNVARCHARSMALLINTintervalnationalnvarcharsmallint#keyPath#warningindirectinternalmutatingoverrideprotocolProtocolrequiredrethrows@Binding@nonobjc@unknownHashableOptionalnewValueoldValuebasenamebuiltinscalendarcompresscompletedefaultsfiletesthashstathostnameiconutilpkgbuildpostopdfprintenvreadonlytextutiltiffutilunsetenvc_doublec_ushortas_bytesprintln!to_ownedwriteln!defined?$VERBOSE__FILE____LINE__nonlocal__bool____call____copy____exit____hash____iadd____iand____idiv____imod____imul____init____ipow____isub____iter____ixor____long____next____radd____rand____rcmp____rdiv____repr____rmod____rmul____rpow____rsub____rxor__callablecasefoldendswithexecfilefromkeysgetfloatissubsetiterkeyspropertyreadlinereversedswapcaseto_bytestruncateviewkeyschar16_tchar32_tunsigned__code____dict____file____func____main____name____path____self____spec__Ellipsisencodingfunc_docim_classnewlinesworkflowexitcodedelegate__DATA__AUTOLOADclosedirdbmcloseendgrentendpwentformlinegetgrentgetgrgidgetgrnamgetlogingetpwentgetpwnamgetpwuidreadlinkreadpipesetgrentsetpwentshmwriteshutdownsyswrite$WARNINGendwhiledocumentresourceexplicitnullableregisterrestricttypename#include@private@finally@dynamic@packageIBOutletIBAction__stronguint16_tuint32_tuint64_t_VERSIONlateinitnoinlineompanionreceiversetparamFunctionIntArraydebaggerisFiniteunescapeURIErrorDataViewIteratorInfinitystrictfpderivinginstanceFloatingOrderingRationalRealFracasTypeOfenumFromexponentfromEnuminteractmaxBoundminBoundputStrLnreadFilereadListshowCharshowListshowPrecsubtractzipWith3wctype_tCHAR_MAXCHAR_MINSHRT_MAXSHRT_MINLONG_MAXLONG_MINfor eachFor each#DECLARE@doc \"\"\"grid-gapgrid-rowime-modenav-downnav-leftoverflowpositionspeak-astab-size@charsetabsolutearmenianbaselineburywoodcollapsecornsilkdarkbluedarkcyandarkgraydarkgreydeeppinkdisablede-resizeease-outexpandedflex-endforwardshoneydewinfinitekeep-alllavendermoccasinmoderatemultiplyn-resizeoverlinepre-linepre-wrappreserveprogressrelativerepeat-xrepeat-ys-resizeseagreenseashellseparatesidewaysstep-endstylesettext-topturquiseverticalw-resizex-strongxx-largexx-smallconst_caconstexpdecltypenoexcepttemplateunexportencode '' to str"
+      },
+      {
+        "address": "0x10063d200",
+        "references": [
+          {
+            "from": "0x1004e3b20",
+            "function": "sub_1004e3894"
+          },
+          {
+            "from": "0x1004e3e38",
+            "function": "sub_1004e3bac"
+          },
+          {
+            "from": "0x1004e45a4",
+            "function": "sub_1004e44a8"
+          },
+          {
+            "from": "0x1004e46d0",
+            "function": "sub_1004e462c"
+          },
+          {
+            "from": "0x1004e4794",
+            "function": "sub_1004e462c"
+          },
+          {
+            "from": "0x1004e494c",
+            "function": "sub_1004e47cc"
+          },
+          {
+            "from": "0x1004e49c4",
+            "function": "sub_1004e499c"
+          },
+          {
+            "from": "0x1004e4a30",
+            "function": "sub_1004e499c"
+          },
+          {
+            "from": "0x1004e4b1c",
+            "function": "sub_1004e4a50"
+          },
+          {
+            "from": "0x1004e4c04",
+            "function": "sub_1004e4b3c"
+          },
+          {
+            "from": "0x1004e4dd8",
+            "function": "sub_1004e4c40"
+          },
+          {
+            "from": "0x1004e66c4",
+            "function": "sub_1004e65f8"
+          },
+          {
+            "from": "0x1004e67b0",
+            "function": "sub_1004e66e4"
+          },
+          {
+            "from": "0x1004e6864",
+            "function": "sub_1004e67d0"
+          },
+          {
+            "from": "0x1004e6960",
+            "function": "sub_1004e68c0"
+          },
+          {
+            "from": "0x1004e8164",
+            "function": "sub_1004e809c"
+          },
+          {
+            "from": "0x1004e824c",
+            "function": "sub_1004e8184"
+          },
+          {
+            "from": "0x1004e8334",
+            "function": "sub_1004e826c"
+          },
+          {
+            "from": "0x1004e841c",
+            "function": "sub_1004e8354"
+          },
+          {
+            "from": "0x1004e8504",
+            "function": "sub_1004e843c"
+          },
+          {
+            "from": "0x1004e85ec",
+            "function": "sub_1004e8524"
+          },
+          {
+            "from": "0x1004e86d4",
+            "function": "sub_1004e860c"
+          },
+          {
+            "from": "0x1004e87bc",
+            "function": "sub_1004e86f4"
+          },
+          {
+            "from": "0x1004e88a4",
+            "function": "sub_1004e87dc"
+          },
+          {
+            "from": "0x1004e89c0",
+            "function": "sub_1004e892c"
+          },
+          {
+            "from": "0x1004e8af0",
+            "function": "sub_1004e8a4c"
+          },
+          {
+            "from": "0x1004e98e8",
+            "function": "sub_1004e9844"
+          },
+          {
+            "from": "0x1004eae1c",
+            "function": "sub_1004ead88"
+          },
+          {
+            "from": "0x1004eb3fc",
+            "function": "sub_1004eb2b8"
+          },
+          {
+            "from": "0x1004eba08",
+            "function": "sub_1004eb608"
+          },
+          {
+            "from": "0x1004ebafc",
+            "function": "sub_1004eb608"
+          },
+          {
+            "from": "0x1004ebb78",
+            "function": "sub_1004eb608"
+          }
+        ],
+        "section": "__const",
+        "text": "\\u/rustc/f6e511eec7342f59a25f7c0534f1dbea00d01b14/library/alloc/src/collections/btree/navigate.rsrecursion limit/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml-0.9.5/src/de/parser/key.rs/rustc/f6e511eec7342f59a25f7c0534f1dbea00d01b14/library/alloc/src/collections/btree/map/entry.rs, unexpected keys in table: , available keys: duplicate key/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml-0.9.5/src/de/parser/document.rscannot extend value of type array with a dotted keystringintegerfloatbooleanarraycannot extend value of type  with a dotted keycannot extend value of type inline table with a dotted key/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml-0.9.5/src/de/parser/inline_table.rs/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_datetime-0.7.0/src/datetime.rsTZyear or hour`-` (YYYY-MM) or `:` (HH:MM)month`-` (MM-DD)dayday between 01 and 29day between 01 and 28day between 01 and 30day between 01 and 31month between 01 and 12a two-digit day (DD)a two-digit month (MM)a four-digit year (YYYY)date-time`T` between date and time`:` (HH:MM)minute`:` (MM:SS)secondnanosecondoffsetminutes between 00 and 59hours between 00 and 23a two-digit minute (MM)a two-digit hour (HH)`Z`, +OFFSET, -OFFSETnanoseconds overflowedsecond between 00 and 60minute between 00 and 59hour between 00 and 23a two-digit second (SS)invalid nanoseconds , expected invalid literal stringnon-single-quote visible characters/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_parser-1.0.2/src/decoder/string.rsinvalid multi-line literal stringnon-single-quote charactersinvalid basic stringnon-double-quote visible charactersmissing escaped valuebfnruUinvalid valueunicode hexadecimal valuetoo few unicode value digits\r\ninvalid multi-line basic string\rcharactersunquoted keys cannot be emptylettersnumbersinvalid unquoted key/rustc/f6e511eec7342f59a25f7c0534f1dbea00d01b14/library/core/src/str/pattern.rs/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_parser-1.0.2/src/decoder/scalar.rsfalseinfnanredundant numeric signinvalid floatintegers with a radix cannot be signedradix must be lowercase0x0o0bredundant integer number prefix-: _.digits0unexpected leading zerounexpected signinvalid integer numberinvalid hexadecimal numberinvalid octal numberinvalid binary numbercould not allocate for string`_` may only go between digitsinvalid booleaninvalid date-time'\"string values must be quotedmissing opening quote/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/winnow-0.7.13/src/stream/token.rsinvalid tableunclosed array table]unclosed table]]keykey with no value=missing value for keymissing valuevalueextra `=`missing array opening[missing inline table opening{/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_parser-1.0.2/src/parser/document.rsunclosed arrayunexpected `=` in arrayextra comma in arraymissing comma between array elements,unclosed inline table}extra assignment between key-value pairsextra comma in inline tablemissing assignment between key-value pairsmissing key for inline table elementinvalid inline table elementtrailing commas are not supported in inline tablescomments are unsupported in inline tablesnewlines are unsupported in inline tablesmissing comma between key-value pairsunexpected key or valueunexpected content between comment and newlineunexpected contentinvalid key-value pairmissing table openinternal error: entered unreachable codemissing comment start#invalid comment characterprintable characterscarriage return must be followed by newline\ntoken spans are valid/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_parser-1.0.2/src/parser/event.rscannot recurse further; max recursion depth met/rustc/f6e511eec7342f59a25f7c0534f1dbea00d01b14/library/core/src/str/mod.rs﻿'''\"\"\"/Users/dan/.cargo/registry/src/index.crates.io-6f17d22bba15001f/toml_parser-1.0.2/src/lexer/mod.rsinternal error: entered unreachable code: found ``\\keys cannot be multi-line literal stringsbasic stringliteral stringkeys cannot b"
+      },
+      {
+        "address": "0x10064da30",
+        "references": [
+          {
+            "from": "0x100785be8",
+            "function": null
+          },
+          {
+            "from": "0x1007ae6a0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "defaultUpdateInterval"
+      },
+      {
+        "address": "0x10066ebc0",
+        "references": [
+          {
+            "from": "0x10079fa50",
+            "function": null
+          },
+          {
+            "from": "0x10079fad0",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "updateIntervalPopUpButton"
+      },
+      {
+        "address": "0x10066ecb0",
+        "references": [
+          {
+            "from": "0x10079fad8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "T@\"NSPopUpButton\",N,W,VupdateIntervalPopUpButton"
+      },
+      {
+        "address": "0x1006701d0",
+        "references": [
+          {
+            "from": "0x10031bc4c",
+            "function": "sub_10031b7cc"
+          },
+          {
+            "from": "0x100485994",
+            "function": "sub_10048580c"
+          }
+        ],
+        "section": "__cstring",
+        "text": "automaticStatusUpdateInterval"
+      },
+      {
+        "address": "0x100681d50",
+        "references": [
+          {
+            "from": "0x1007b2228",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "targetMaxTimeInterval"
+      },
+      {
+        "address": "0x100681e20",
+        "references": [
+          {
+            "from": "0x1007b22e8",
+            "function": null
+          }
+        ],
+        "section": "__cstring",
+        "text": "currentLogStartTimeInterval"
+      },
+      {
+        "address": "0x1006a9680",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "defaultUpdateInterval"
+      },
+      {
+        "address": "0x1006b1800",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "updateIntervalPopUpButton"
+      },
+      {
+        "address": "0x1006b7150",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "defaultUpdateInterval"
+      },
+      {
+        "address": "0x1006b82b0",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "targetMaxTimeInterval"
+      },
+      {
+        "address": "0x1006b8380",
+        "references": [],
+        "section": "__swift5_reflstr",
+        "text": "currentLogStartTimeInterval"
+      },
+      {
+        "address": "0x1006d0f88",
+        "references": [
+          {
+            "from": "0x1007b4520",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "scheduledTimerWithTimeInterval:target:selector:userInfo:repeats:"
+      },
+      {
+        "address": "0x1006d2630",
+        "references": [
+          {
+            "from": "0x1007b3ae8",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setDefaultTabInterval:"
+      },
+      {
+        "address": "0x1006d5c6c",
+        "references": [
+          {
+            "from": "0x1007b51f8",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setUpdateCheckInterval:"
+      },
+      {
+        "address": "0x1006d5c84",
+        "references": [
+          {
+            "from": "0x1007b72a8",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "setUpdateIntervalPopUpButton:"
+      },
+      {
+        "address": "0x1006d683d",
+        "references": [
+          {
+            "from": "0x1007b4138",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "sleepForTimeInterval:"
+      },
+      {
+        "address": "0x1006d8755",
+        "references": [
+          {
+            "from": "0x1007b5228",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "updateCheckInterval"
+      },
+      {
+        "address": "0x1006d8778",
+        "references": [
+          {
+            "from": "0x1007b72d0",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "updateIntervalChanged:"
+      },
+      {
+        "address": "0x1006d878f",
+        "references": [
+          {
+            "from": "0x1007b72a0",
+            "function": null
+          }
+        ],
+        "section": "__objc_methname",
+        "text": "updateIntervalPopUpButton"
+      }
+    ],
+    "total": 21
+  },
+  "summary": "21 strings match \"(Interval|interval|Minutes|minutes)\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 21,
+    "total": 21
+  },
+  "locations": [],
+  "links": []
+}

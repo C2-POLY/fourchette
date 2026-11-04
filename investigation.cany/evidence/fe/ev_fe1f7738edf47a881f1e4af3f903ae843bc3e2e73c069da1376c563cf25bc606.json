@@ -1,0 +1,114 @@
+{
+  "id": "ev_fe1f7738edf47a881f1e4af3f903ae843bc3e2e73c069da1376c563cf25bc606",
+  "subject": {
+    "kind": "mach-o-fat",
+    "sha256": "a2b5ee90ff1111b9e413bd96f79e5528bee7c9dc2307fba271dadf9bb2bfca69",
+    "name": "Fork"
+  },
+  "operation": "native_strings_find",
+  "params": {
+    "case_sensitive": true,
+    "limit": 100,
+    "mode": "regex",
+    "offset": 0,
+    "pattern": "^(Branches|Remotes|Tags|Stashes|Submodules|Worktrees|Local Changes|All Commits|Changes|Unstaged|Staged|Unstaged Changes|Staged Changes|Commit|Fetch|Pull|Push|Stash|Branch|Merge|Rebase|Quick Launch|Commit Message|Description|Amend|Stage|Unstage|Stage All|Unstage All|Summary)$"
+  },
+  "result": {
+    "matches": [
+      {
+        "address": "0x1006055bc",
+        "references": [],
+        "section": "__const",
+        "text": "Amend"
+      },
+      {
+        "address": "0x100605905",
+        "references": [],
+        "section": "__const",
+        "text": "Rebase"
+      },
+      {
+        "address": "0x100606b2f",
+        "references": [],
+        "section": "__const",
+        "text": "Push"
+      },
+      {
+        "address": "0x10060a6f7",
+        "references": [],
+        "section": "__const",
+        "text": "Pull"
+      },
+      {
+        "address": "0x10060cd58",
+        "references": [],
+        "section": "__const",
+        "text": "Branch"
+      },
+      {
+        "address": "0x10060e2e7",
+        "references": [],
+        "section": "__const",
+        "text": "Fetch"
+      },
+      {
+        "address": "0x100610220",
+        "references": [
+          {
+            "from": "0x100392388",
+            "function": "sub_1003922e8"
+          }
+        ],
+        "section": "__const",
+        "text": "Commit Message"
+      },
+      {
+        "address": "0x100610cc8",
+        "references": [],
+        "section": "__const",
+        "text": "Branches"
+      },
+      {
+        "address": "0x100610cd8",
+        "references": [],
+        "section": "__const",
+        "text": "Remotes"
+      },
+      {
+        "address": "0x100610ce8",
+        "references": [],
+        "section": "__const",
+        "text": "Tags"
+      },
+      {
+        "address": "0x100610cf8",
+        "references": [],
+        "section": "__const",
+        "text": "Stashes"
+      }
+    ],
+    "total": 11
+  },
+  "summary": "11 strings match \"^(Branches|Remotes|Tags|Stashes|Submodules|Worktrees|Local Changes|All Commits|Changes|Unstaged|Staged|Unstaged Changes|Staged Changes|Commit|Fetch|Pull|Push|Stash|Branch|Merge|Rebase|Quick Launch|Commit Message|Description|Amend|Stage|Unstage|Stage All|Unstage All|Summary)$\".",
+  "confidence": "observed",
+  "authority": "original-files",
+  "environment": {
+    "clean_room": false,
+    "engine": "builtin",
+    "engine_version": "0.3.0",
+    "host": "macos-aarch64"
+  },
+  "limitations": [
+    {
+      "code": "data_sections_only",
+      "message": "only strings stored in the file are searched (absence is not proof)"
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "examined": 11,
+    "total": 11
+  },
+  "locations": [],
+  "links": []
+}
