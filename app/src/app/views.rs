@@ -26,7 +26,7 @@ fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
     (a, b)
 }
 
-impl App {
+impl Tab {
     // ---------------------------------------------------------------- toolbar
 
     fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
@@ -832,7 +832,8 @@ impl App {
 
     // ---------------------------------------------------------------- diff view
 
-    fn diff_view(&self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+    /// `settings_open`: Esc belongs to the Settings window while it is open.
+    fn diff_view(&self, ui: &mut Ui, cmds: &mut Vec<Cmd>, settings_open: bool) {
         let Some(d) = &self.diff else { return };
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -840,8 +841,7 @@ impl App {
             ui.label(RichText::new(&d.title).size(theme::FS_BODY).color(theme::c().strong));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
-                // Esc belongs to the Settings window while it is open.
-                if ui.button("Close").clicked() || (!self.settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
+                if ui.button("Close").clicked() || (!settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
                     cmds.push(Cmd::CloseDiff);
                 }
             });
@@ -1068,8 +1068,11 @@ impl App {
         }
     }
 
+}
+
+impl App {
     fn keyboard(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
-        if self.dialog.is_some() {
+        if self.tab().dialog.is_some() {
             return;
         }
         // ⌘, opens or closes Settings; while it is open, it takes the keyboard.
@@ -1106,10 +1109,11 @@ impl App {
         if self.switcher.is_some() || self.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
-        if self.board.open {
+        let t = self.tab_mut();
+        if t.board.open {
             // Esc closes the ticket's detail; the history's keys wait.
             if escape {
-                self.board_escape();
+                t.board_escape();
             }
             return;
         }
@@ -1127,23 +1131,23 @@ impl App {
         if undo {
             cmds.push(Cmd::Undo);
         }
-        let n = self.commits.len() as i64;
+        let n = t.commits.len() as i64;
         if n == 0 || !(up || down) {
             return;
         }
-        let cur: i64 = match self.sel {
+        let cur: i64 = match t.sel {
             Sel::Wip => -1,
             Sel::Commit(i) => i as i64,
             Sel::None => -1,
         };
         let next = if down { (cur + 1).min(n - 1) } else { cur - 1 };
         if next < 0 {
-            if !self.status.is_empty() {
+            if !t.status.is_empty() {
                 cmds.push(Cmd::Select(Sel::Wip));
             }
         } else {
             cmds.push(Cmd::Select(Sel::Commit(next as usize)));
-            self.scroll_to = Some(next as usize);
+            t.scroll_to = Some(next as usize);
         }
     }
 
@@ -1151,28 +1155,29 @@ impl App {
 
     /// What the macOS menu bar needs to grey out or tick its items.
     fn menu_state(&self, ctx: &egui::Context) -> menu::State {
+        let t = self.tab();
         menu::State {
-            repo: self.repo.is_some(),
-            busy: self.busy.is_some(),
-            modal: self.dialog.is_some(),
+            repo: t.repo.is_some(),
+            busy: t.busy.is_some(),
+            modal: t.dialog.is_some(),
             settings: self.settings_open,
             text_focus: ctx.wants_keyboard_input(),
-            can_undo: !self.undo.is_empty(),
-            changes: !self.status.is_empty(),
+            can_undo: !t.undo.is_empty(),
+            changes: !t.status.is_empty(),
             // The Commit button's rule.
-            can_commit: !self.summary.trim().is_empty() && (!self.status.staged.is_empty() || self.amend),
-            upstream: self.head_has_upstream(),
-            branch: self.branch.is_some(),
-            stashes: !self.stashes.is_empty(),
-            head_shown: self.index.contains_key(&self.head),
-            details: self.details_layout,
+            can_commit: !t.summary.trim().is_empty() && (!t.status.staged.is_empty() || t.amend),
+            upstream: t.head_has_upstream(),
+            branch: t.branch.is_some(),
+            stashes: !t.stashes.is_empty(),
+            head_shown: t.index.contains_key(&t.head),
+            details: t.details_layout,
         }
     }
 
     /// The action behind a menu item: the same `Cmd` its button or key pushes.
     fn menu_cmd(&self, id: menu::Id) -> Option<Cmd> {
         use menu::Id;
-        let root = || self.repo.as_ref().map(|r| r.root.clone());
+        let root = || self.tab().repo.as_ref().map(|r| r.root.clone());
         Some(match id {
             // About opens AppKit's panel itself; the other edit items only act in a text field.
             Id::About | Id::NoRecent | Id::Redo | Id::Cut | Id::Copy | Id::Paste | Id::SelectAll => return None,
@@ -1185,7 +1190,7 @@ impl App {
             Id::ToggleDetails => Cmd::ToggleDetails,
             Id::DetailsRight => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Right)),
             Id::DetailsBottom => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Bottom)),
-            Id::ShowHead => Cmd::SelectHash(self.head.clone()),
+            Id::ShowHead => Cmd::SelectHash(self.tab().head.clone()),
             Id::Refresh => Cmd::Reload,
             Id::Commit => Cmd::Commit,
             Id::Fetch => Cmd::Fetch { all: false, quiet: false },
@@ -1269,14 +1274,15 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
-        self.poll_busy();
-        self.ai_poll();
-        self.project_poll();
-        self.timers(ctx);
+        // Every tab's background work, not only the one on screen.
+        tab::poll_tabs(&mut self.tabs, ctx, self.library.settings, self.screenshot.is_none());
         let focused = ctx.input(|i| i.focused);
         if focused && !self.was_focused {
-            self.refresh_status();
+            for t in &mut self.tabs {
+                t.refresh_status();
+            }
         }
+        self.take_notices();
         self.was_focused = focused;
         let mut cmds = std::mem::take(&mut self.menu_cmds);
 
@@ -1284,28 +1290,29 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("toolbar")
             .exact_height(crate::titlebar::TOOLBAR_H)
             .frame(egui::Frame::new().fill(theme::c().sidebar))
-            .show(ctx, |ui| self.toolbar(ui, &mut cmds));
+            .show(ctx, |ui| self.tab_mut().toolbar(ui, &mut cmds));
 
         egui::TopBottomPanel::bottom("status")
             .exact_height(28.0)
             .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(12, 4)))
             .show(ctx, |ui| {
+                let t = &self.tabs[self.active];
                 ui.horizontal_centered(|ui| {
                     let (dot, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                    ui.painter().circle_filled(dot.center(), 4.0, self.ref_color(&self.head));
-                    ui.label(RichText::new(self.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::c().text));
-                    if let Some((a, b)) = self.ahead_behind {
+                    ui.painter().circle_filled(dot.center(), 4.0, t.ref_color(&t.head));
+                    ui.label(RichText::new(t.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::c().text));
+                    if let Some((a, b)) = t.ahead_behind {
                         ui.label(RichText::new(format!("{a} ahead, {b} behind")).color(theme::c().dim).size(theme::FS_SECONDARY));
                     }
                     ui.label(RichText::new("·").color(theme::c().faint));
-                    ui.label(RichText::new(format!("{} commits", self.commits.len())).color(theme::c().dim).size(theme::FS_SECONDARY));
+                    ui.label(RichText::new(format!("{} commits", t.commits.len())).color(theme::c().dim).size(theme::FS_SECONDARY));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let a = self.library.appearance;
                         let tip = format!("Appearance: {} — click for {}", a.label(), a.next().label());
                         if appearance_button(ui, a).on_hover_text(tip).clicked() {
                             cmds.push(Cmd::SetAppearance(a.next()));
                         }
-                        let d = self.details_layout;
+                        let d = t.details_layout;
                         let tip = if d.hidden { format!("Details panel: Hidden — ⌘J to show it ({})", d.place.label().to_lowercase()) } else { format!("Details panel: {} — ⌘J to hide", d.label()) };
                         let btn = details_button(ui, d).on_hover_text(tip);
                         egui::Popup::menu(&btn).align(egui::RectAlign::TOP_END).show(|ui| {
@@ -1321,24 +1328,24 @@ impl eframe::App for App {
                             }
                         });
                         ui.add_space(4.0);
-                        let where_ = self.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
+                        let where_ = t.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
                         ui.label(RichText::new(where_).color(theme::c().faint).size(theme::FS_SECONDARY));
                     });
                 });
             });
 
         // The Project view keeps the sidebar and the details panel; only the centre changes.
-        let board_open = self.board.open;
+        let board_open = self.tab().board.open;
         egui::SidePanel::left("sidebar")
         .resizable(true)
         .default_width(230.0)
         .width_range(190.0..=420.0)
         .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
-        .show(ctx, |ui| self.sidebar(ui, &mut cmds));
+        .show(ctx, |ui| self.tab_mut().sidebar(ui, &mut cmds));
 
         // Declared after the sidebar, so at the bottom it spans the history only.
         let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
-        match self.details_layout {
+        match self.tab().details_layout {
             DetailsLayout { hidden: true, .. } => {}
             DetailsLayout { place: DetailsPlace::Right, .. } => {
                 egui::SidePanel::right("details")
@@ -1346,7 +1353,7 @@ impl eframe::App for App {
                     .default_width(330.0)
                     .width_range(280.0..=600.0)
                     .frame(details_frame)
-                    .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+                    .show(ctx, |ui| self.tab_mut().details_panel(ui, &mut cmds));
             }
             DetailsLayout { place: DetailsPlace::Bottom, .. } => {
                 let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
@@ -1355,16 +1362,18 @@ impl eframe::App for App {
                     .default_height(300.0)
                     .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
                     .frame(details_frame)
-                    .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+                    .show(ctx, |ui| self.tab_mut().details_panel(ui, &mut cmds));
             }
         }
 
+        let settings_open = self.settings_open;
+        let t = &mut self.tabs[self.active];
         egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| {
             if board_open {
-                self.board_view(ui, &mut cmds);
+                t.board_view(ui, &mut cmds);
                 return;
             }
-            if self.is_demo() {
+            if t.is_demo() {
                 egui::Frame::new().fill(theme::c().accent_soft).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
@@ -1375,21 +1384,22 @@ impl eframe::App for App {
                     });
                 });
             }
-            if self.diff.is_some() {
-                self.diff_view(ui, &mut cmds);
-            } else if self.commits.is_empty() && self.status.is_empty() {
+            if t.diff.is_some() {
+                t.diff_view(ui, &mut cmds, settings_open);
+            } else if t.commits.is_empty() && t.status.is_empty() {
                 ui.add_space(80.0);
                 ui.vertical_centered(|ui| ui.label(RichText::new("This repository has no commits yet.").color(theme::c().dim)));
             } else {
-                self.commit_list(ui, &mut cmds);
+                t.commit_list(ui, &mut cmds);
             }
         });
 
-        self.dialogs(ctx, &mut cmds);
-        self.cleanup_window(ctx, &mut cmds);
+        let t = self.tab_mut();
+        t.dialogs(ctx, &mut cmds);
+        t.cleanup_window(ctx, &mut cmds);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
-        if self.dialog.is_none() {
+        if self.tab().dialog.is_none() {
             self.switcher_ui(ctx, &mut cmds);
             self.settings_ui(ctx, &mut cmds);
         }
@@ -1413,7 +1423,7 @@ impl eframe::App for App {
                 self.toast = None;
             }
         }
-        if self.busy.is_some() || self.ai.busy() || self.project.loading.is_some() {
+        if self.tabs.iter().any(|t| t.busy.is_some() || t.ai.busy() || t.project.loading.is_some()) {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
 

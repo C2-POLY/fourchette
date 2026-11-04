@@ -43,6 +43,7 @@ fn item(group: &'static str, title: impl Into<String>, hint: impl Into<String>, 
 
 impl App {
     fn palette_items(&self, query: &str, checkout_only: bool) -> Vec<Item> {
+        let t = self.tab();
         let mut v: Vec<Item> = Vec::new();
         if let Some(res) = settings_command(query) {
             v.push(match res {
@@ -51,10 +52,10 @@ impl App {
             });
             return v;
         }
-        let cur = self.branch.clone().unwrap_or_default();
+        let cur = t.branch.clone().unwrap_or_default();
         if !checkout_only {
             // DefaultCommandProvider
-            if let Some(l) = self.undo_label() {
+            if let Some(l) = t.undo_label() {
                 v.push(item("Commands", format!("Undo “{l}”"), "⌘Z", Cmd::Undo));
             }
             v.push(item("Commands", "Fetch", "get the latest from the remote", Cmd::Fetch { all: false, quiet: false }));
@@ -72,11 +73,11 @@ impl App {
             v.push(item("Commands", "Show local changes", "", Cmd::Select(Sel::Wip)));
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));
-            if !self.status.staged.is_empty() {
+            if !t.status.staged.is_empty() {
                 v.push(item("Assistant", "Suggest a commit message with Claude", "AI · from staged changes", Cmd::AiCommitMessage));
             }
-            if let Sel::Commit(i) = self.sel {
-                if let Some(c) = self.commits.get(i) {
+            if let Sel::Commit(i) = t.sel {
+                if let Some(c) = t.commits.get(i) {
                     v.push(item("Assistant", "Explain this commit with Claude", "AI · plain words", Cmd::AiExplain(c.hash.clone())));
                 }
             }
@@ -92,7 +93,7 @@ impl App {
                 };
                 v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
             }
-            let d = self.details_layout;
+            let d = t.details_layout;
             for place in crate::library::DetailsPlace::ALL {
                 let hint = if !d.hidden && d.place == place { "current" } else { "" };
                 v.push(item("View", format!("Details panel: {}", place.label()), hint, Cmd::SetDetails(crate::library::DetailsLayout::shown(place))));
@@ -107,7 +108,7 @@ impl App {
             }
         }
         // ReferenceCommandProvider
-        for r in &self.refs {
+        for r in &t.refs {
             match r.kind {
                 RefKind::Local if !r.is_head => {
                     v.push(item("Branches", format!("Check out {}", r.name), "branch", Cmd::Git { label: format!("Switched to {}", r.name), args: vec!["checkout".into(), r.name.clone()], network: false }));
@@ -115,7 +116,7 @@ impl App {
                         v.push(item("Branches", format!("Merge {} into {cur}", r.name), "branch", Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false }));
                     }
                 }
-                RefKind::Remote => v.push(item("Branches", format!("Check out {}", r.name), "remote branch", checkout_remote(r, &self.refs))),
+                RefKind::Remote => v.push(item("Branches", format!("Check out {}", r.name), "remote branch", checkout_remote(r, &t.refs))),
                 RefKind::Tag if !checkout_only => v.push(item("Tags", format!("Go to tag {}", r.name), "tag", Cmd::SelectHash(r.target.clone()))),
                 _ => {}
             }
@@ -132,7 +133,7 @@ impl App {
         }
         let mut out: Vec<Item> = v.into_iter().filter(|i| query.trim().is_empty() || matches(query, &format!("{} {}", i.title, i.hint))).collect();
         if !checkout_only && query.trim().len() >= 2 {
-            for c in self.commits.iter().filter(|c| matches(query, &format!("{} {} {}", c.subject, c.author, short(&c.hash)))).take(8) {
+            for c in t.commits.iter().filter(|c| matches(query, &format!("{} {} {}", c.subject, c.author, short(&c.hash)))).take(8) {
                 out.push(item("Commits", c.subject.clone(), format!("{} · {}", short(&c.hash), c.author), Cmd::SelectHash(c.hash.clone())));
             }
         }

@@ -34,7 +34,7 @@ impl AiState {
     }
 }
 
-impl App {
+impl Tab {
     fn ai_spawn(&mut self, job: AiJob, prompt: String, schema: Option<Value>, ctx: &egui::Context) {
         if self.ai.busy() {
             self.notify("Claude is still working on the last question.", true);
