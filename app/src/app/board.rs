@@ -1,8 +1,10 @@
-//! The GitHub project as a full-screen board (⌘B), read only: one column per status, cards
-//! with what the project knows about each ticket, and a detail drawer on the right.
+//! The GitHub project as a view next to the history (sidebar "Project", ⌘B), read only: a board
+//! with one column per status, or a list grouped by status; a ticket's detail shows in the
+//! details panel.
 use super::project::{named_color, status_color};
 use super::*;
 use crate::github::{self, Board, Item, Kind, Linked};
+use crate::ui::board_icon;
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
 use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, Ui};
 
@@ -10,7 +12,6 @@ use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin,
 const DONE_LIMIT: usize = 20;
 const COL_W: f32 = 284.0;
 const COL_GAP: f32 = 12.0;
-const DRAWER_W: f32 = 420.0;
 
 // Surfaces of the mode on screen: columns sit below the page, cards above it.
 fn column_fill() -> Color32 {
@@ -37,14 +38,17 @@ fn ink(c: Color32) -> Color32 {
 
 #[derive(Default)]
 pub struct BoardState {
+    /// Whether the Project view is the one on screen (rather than the history).
     pub open: bool,
+    /// The list rather than the board (kept in memory only).
+    pub list: bool,
     /// The whole project rather than the open repository's tickets.
     pub all: bool,
     pub mine: bool,
     pub search: String,
     /// Finished columns showing every card.
     pub done_all: HashSet<String>,
-    /// The project item shown in the drawer.
+    /// The project item shown in the details panel.
     pub detail: Option<String>,
     /// Whether a text field had the keyboard when the frame began, so Esc only leaves it.
     pub typing: bool,
@@ -557,15 +561,94 @@ fn toggle_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
     resp
 }
 
-/// The board symbol: a frame cut in three columns with a card or two in each.
-fn board_icon(p: &egui::Painter, c: Pos2, color: Color32) {
-    for (i, cards) in [2, 1, 3].iter().enumerate() {
-        let x = c.x - 9.0 + i as f32 * 6.5;
-        for k in 0..*cards {
-            let r = Rect::from_min_size(pos2(x, c.y - 7.0 + k as f32 * 5.0), vec2(5.0, 3.6));
-            p.rect_filled(r, CornerRadius::same(1), color);
+/// Whether a branch name carries the ticket number as a token of its own: `feat/51-groups`,
+/// `51-foo`, `fix_51`, but not `feat/510-x`.
+pub fn branch_has_number(branch: &str, n: u64) -> bool {
+    let n = n.to_string();
+    branch.split(|c: char| !c.is_alphanumeric()).any(|t| t == n)
+}
+
+/// The project as a list: a header per status (dot, name, count), then one row per ticket.
+/// Returns the ticket whose row was clicked.
+fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_repo: bool, selected: Option<&str>) -> Option<String> {
+    let mut clicked = None;
+    egui::ScrollArea::vertical().id_salt("board_list").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.set_width(ui.available_width());
+        for (status, items) in cols {
+            if items.is_empty() {
+                continue;
+            }
+            let color = status_color(board, status);
+            ui.add_space(10.0);
+            let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
+            let p = ui.painter();
+            p.circle_filled(pos2(hr.left() + 21.0, hr.center().y), 4.5, color);
+            let name = p.text(pos2(hr.left() + 33.0, hr.center().y), Align2::LEFT_CENTER, status, FontId::proportional(theme::FS_BODY), theme::c().strong);
+            let n = p.layout_no_wrap(items.len().to_string(), FontId::proportional(theme::FS_SMALL), ink(color));
+            let badge = Rect::from_min_size(pos2(name.right() + 8.0, hr.center().y - 9.0), vec2(n.size().x + 14.0, 18.0));
+            p.rect_filled(badge, CornerRadius::same(9), color.gamma_multiply(0.16));
+            p.galley(badge.center() - n.size() / 2.0, n, color);
+            for it in items {
+                if list_row(ui, it, show_repo, selected == Some(it.id.as_str())).clicked() {
+                    clicked = Some(it.id.clone());
+                }
+            }
         }
+        ui.add_space(16.0);
+    });
+    clicked
+}
+
+/// One ticket of the list: type, number, title, then labels, pull request, age and assignees.
+fn list_row(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
+    let inner = rect.shrink2(vec2(16.0, 0.0));
+    if selected {
+        ui.painter().rect_filled(rect.shrink2(vec2(8.0, 1.0)), CornerRadius::same(6), theme::c().select);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(rect.shrink2(vec2(8.0, 1.0)), CornerRadius::same(6), theme::c().hover);
     }
+    // Right side first, to know how much room the title has.
+    let mut right_edge = inner.right();
+    ui.scope_builder(egui::UiBuilder::new().max_rect(inner).layout(Layout::right_to_left(Align::Center)), |ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        if !it.assignees.is_empty() {
+            avatars(ui, &it.assignees, 9.0, theme::c().bg);
+        }
+        let t = it.updated.max(it.created);
+        ui.allocate_ui(vec2(30.0, 18.0), |ui| {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if t > 0 {
+                    ui.label(RichText::new(short_age(t)).size(theme::FS_SMALL).color(theme::c().faint));
+                }
+            });
+        });
+        if let Some(pr) = it.pull_requests.first() {
+            pr_chip(ui, pr);
+        }
+        // Labels only while they leave the title some room.
+        for l in it.labels.iter().take(2).rev() {
+            if ui.available_width() > 360.0 {
+                label_pill(ui, l);
+            }
+        }
+        right_edge = ui.min_rect().left();
+    });
+    let left = Rect::from_min_max(inner.min, pos2((right_edge - 10.0).max(inner.left() + 60.0), inner.max.y));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(left).layout(Layout::left_to_right(Align::Center)), |ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.set_clip_rect(left.intersect(ui.clip_rect()));
+        type_pill(ui, it);
+        if let Some(n) = it.number {
+            ui.label(RichText::new(format!("#{n}")).monospace().size(theme::FS_SMALL).color(theme::c().faint));
+        }
+        if show_repo && !it.repo.is_empty() {
+            ui.label(RichText::new(it.repo.rsplit('/').next().unwrap_or(&it.repo)).size(theme::FS_SMALL).color(theme::c().faint));
+        }
+        ui.add(egui::Label::new(RichText::new(&it.title).size(theme::FS_BODY).color(if it.is_closed() { theme::c().dim } else { theme::c().strong })).truncate().selectable(false));
+    });
+    resp
 }
 
 /// A centred message for an empty board; returns whether its button was clicked.
@@ -674,7 +757,7 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
 }
 
 impl App {
-    /// Opens or closes the board; opening reads the project again.
+    /// Shows the Project view or goes back to the history; opening reads the project again.
     pub(super) fn board_toggle(&mut self) {
         self.board.open = !self.board.open;
         self.board.detail = None;
@@ -683,26 +766,20 @@ impl App {
         }
     }
 
-    /// Esc closes the drawer, then the board. Returns whether it did something.
+    /// Esc closes the ticket's detail. Returns whether it did something.
     pub(super) fn board_escape(&mut self) -> bool {
         if !self.board.open || self.board.typing {
             return false;
         }
-        if self.board.detail.take().is_none() {
-            self.board.open = false;
-        }
-        true
+        self.board.detail.take().is_some()
     }
 
     pub(super) fn board_view(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
         self.board.typing = ui.ctx().memory(|m| m.focused().is_some());
-        let area = ui.max_rect();
         let loading = self.project.loading.is_some();
         let data = self.project.board.clone();
 
-        let bar = egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 12, bottom: 10 }).show(ui, |ui| self.board_bar(ui, data.as_deref(), loading, cmds));
-        // The drawer opens under the bar, so the search and refresh stay at hand.
-        let below_bar = bar.response.rect.bottom();
+        egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 12, bottom: 10 }).show(ui, |ui| self.board_bar(ui, data.as_deref(), loading, cmds));
 
         let Some(board) = data else {
             let what = if loading {
@@ -756,6 +833,11 @@ impl App {
         let mut goto: Option<Linked> = None;
         let mut flip: Option<String> = None;
         let h = ui.available_height() - 12.0;
+        if st.list {
+            if let Some(id) = list_view(ui, &board, &cols, show_repo, detail.as_deref()) {
+                clicked = Some(id);
+            }
+        } else {
         egui::ScrollArea::horizontal().id_salt("board_columns").auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal_top(|ui| {
                 ui.add_space(16.0);
@@ -813,6 +895,7 @@ impl App {
                 ui.add_space(16.0);
             });
         });
+        }
         if let Some(s) = flip {
             if !self.board.done_all.remove(&s) {
                 self.board.done_all.insert(s);
@@ -821,14 +904,7 @@ impl App {
         if let Some(id) = clicked {
             self.board.detail = if self.board.detail.as_deref() == Some(id.as_str()) { None } else { Some(id) };
         }
-        let shown = self.board.detail.as_ref().and_then(|id| board.items.iter().find(|i| &i.id == id));
-        if let Some(it) = shown {
-            let rect = Rect::from_min_max(pos2(area.right() - DRAWER_W, below_bar), area.max);
-            if self.drawer(ui.ctx(), rect, &board, it, &mut goto, cmds) {
-                self.board.detail = None;
-            }
-        }
-        // A parent opens in the drawer when its card is on the board as shown, else on GitHub.
+        // A parent opens in the details panel when it is on the board as shown, else on GitHub.
         if let Some(p) = goto {
             match cols.iter().flat_map(|c| c.1.iter()).find(|i| !p.url.is_empty() && i.url == p.url) {
                 Some(it) => self.board.detail = Some(it.id.clone()),
@@ -866,6 +942,9 @@ impl App {
             if let Some(i) = segmented(ui, &["This repo", "All"], self.board.all as usize) {
                 self.board.all = i == 1;
             }
+            if let Some(i) = segmented(ui, &["Board", "List"], self.board.list as usize) {
+                self.board.list = i == 1;
+            }
             let me = board.map(|b| b.me.clone()).unwrap_or_default();
             if !me.is_empty() && toggle_chip(ui, "Mine", self.board.mine).on_hover_text(format!("Only tickets assigned to {me}")).clicked() {
                 self.board.mine = !self.board.mine;
@@ -887,137 +966,155 @@ impl App {
         });
     }
 
-    /// The ticket's detail over the right of the board; a click on its parent lands in `goto`.
+    /// The details panel while the Project view is on screen: the chosen ticket's detail.
+    pub(super) fn board_detail_panel(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        let board = self.project.board.clone();
+        let item = board.as_ref().zip(self.board.detail.as_ref()).and_then(|(b, id)| b.items.iter().find(|i| &i.id == id));
+        let (Some(board), Some(it)) = (board.as_deref(), item) else {
+            ui.add_space(40.0);
+            ui.vertical_centered(|ui| ui.label(RichText::new("Select a ticket to see its details").color(theme::c().dim)));
+            return;
+        };
+        let mut goto: Option<Linked> = None;
+        if self.ticket_detail(ui, board, it, &mut goto, cmds) {
+            self.board.detail = None;
+        }
+        if let Some(p) = goto {
+            match board.items.iter().find(|i| !p.url.is_empty() && i.url == p.url) {
+                Some(it) => self.board.detail = Some(it.id.clone()),
+                None if !p.url.is_empty() => cmds.push(Cmd::OpenUrl(p.url)),
+                None => {}
+            }
+        }
+    }
+
+    /// A ticket's detail, drawn in the details panel; a click on its parent lands in `goto`.
     /// Returns whether it asked to close.
-    fn drawer(&mut self, ctx: &egui::Context, rect: Rect, board: &Board, it: &Item, goto: &mut Option<Linked>, cmds: &mut Vec<Cmd>) -> bool {
+    fn ticket_detail(&mut self, ui: &mut Ui, board: &Board, it: &Item, goto: &mut Option<Linked>, cmds: &mut Vec<Cmd>) -> bool {
         let mut close = false;
-        egui::Area::new(egui::Id::new("board_drawer")).order(egui::Order::Middle).fixed_pos(rect.min).show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(theme::c().elevated)
-                .stroke(Stroke::new(1.0, theme::c().border))
-                .shadow(egui::Shadow { offset: [-6, 0], blur: 24, spread: 0, color: theme::shadow(1.0) })
-                .inner_margin(Margin { left: 20, right: 12, top: 14, bottom: 14 })
-                .show(ui, |ui| {
-                    ui.set_width(rect.width() - 33.0);
-                    ui.set_height(rect.height() - 29.0);
-                    ui.horizontal(|ui| {
-                        type_pill(ui, it);
-                        if let Some(n) = it.number {
-                            ui.label(RichText::new(format!("#{n}")).monospace().color(theme::c().dim));
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            type_pill(ui, it);
+            if let Some(n) = it.number {
+                ui.label(RichText::new(format!("#{n}")).monospace().color(theme::c().dim));
+            }
+            if !it.repo.is_empty() {
+                ui.label(RichText::new(&it.repo).size(theme::FS_SMALL).color(theme::c().faint));
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if close_button(ui).clicked() {
+                    close = true;
+                }
+            });
+        });
+        egui::ScrollArea::vertical().id_salt("ticket_detail_scroll").auto_shrink([false, false]).show(ui, |ui| {
+            ui.set_width(ui.available_width() - 8.0);
+            ui.add_space(6.0);
+            ui.add(egui::Label::new(RichText::new(&it.title).size(17.0).color(theme::c().strong)).wrap());
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let (state, color) = match (it.kind.clone(), it.state.as_str()) {
+                    (Kind::Draft, _) => ("Draft", theme::c().dim),
+                    (_, "MERGED") => ("Merged", theme::c().renamed),
+                    (_, "CLOSED") => ("Closed", theme::c().renamed),
+                    _ => ("Open", theme::c().added),
+                };
+                pill(ui, state, theme::c().on_accent, color, None);
+                let sc = status_color(board, &it.status);
+                pill(ui, &it.status, ink(sc), sc.gamma_multiply(0.16), Some(sc));
+                for f in &it.fields {
+                    field_chip(ui, f);
+                }
+            });
+            ui.add_space(10.0);
+            ui.horizontal_wrapped(|ui| {
+                if !it.url.is_empty() && ui.button(RichText::new("Open on GitHub").strong()).clicked() {
+                    cmds.push(Cmd::OpenUrl(it.url.clone()));
+                }
+                if let Some(n) = it.number {
+                    if let Some(r) = self.refs.iter().find(|r| r.kind == RefKind::Local && branch_has_number(&r.name, n)) {
+                        if ui.button("Show in history").on_hover_text(format!("Select the tip of {} in All Commits", r.name)).clicked() {
+                            cmds.push(Cmd::SelectHash(r.target.clone()));
                         }
-                        if !it.repo.is_empty() {
-                            ui.label(RichText::new(&it.repo).size(theme::FS_SMALL).color(theme::c().faint));
-                        }
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.add_space(6.0);
-                            if close_button(ui).clicked() {
-                                close = true;
-                            }
-                        });
-                    });
-                    egui::ScrollArea::vertical().id_salt("board_drawer_scroll").auto_shrink([false, false]).show(ui, |ui| {
-                        ui.set_width(ui.available_width() - 8.0);
-                        ui.add_space(6.0);
-                        ui.add(egui::Label::new(RichText::new(&it.title).size(19.0).color(theme::c().strong)).wrap());
-                        ui.add_space(8.0);
-                        ui.horizontal(|ui| {
-                            let (state, color) = match (it.kind.clone(), it.state.as_str()) {
-                                (Kind::Draft, _) => ("Draft", theme::c().dim),
-                                (_, "MERGED") => ("Merged", theme::c().renamed),
-                                (_, "CLOSED") => ("Closed", theme::c().renamed),
-                                _ => ("Open", theme::c().added),
-                            };
-                            pill(ui, state, theme::c().on_accent, color, None);
-                            let sc = status_color(board, &it.status);
-                            pill(ui, &it.status, ink(sc), sc.gamma_multiply(0.16), Some(sc));
-                            for f in &it.fields {
-                                field_chip(ui, f);
-                            }
-                        });
-                        ui.add_space(10.0);
-                        ui.horizontal(|ui| {
-                            if !it.url.is_empty() && ui.button(RichText::new("Open on GitHub").strong()).clicked() {
-                                cmds.push(Cmd::OpenUrl(it.url.clone()));
-                            }
-                            if it.kind != Kind::PullRequest && ui.button("Create a branch…").on_hover_text(format!("Branch “{}” at the current commit", github::branch_name(it))).clicked() {
-                                cmds.push(Cmd::Dialog(Dialog::NewRef { at: "HEAD".into(), label: "the current commit".into(), name: github::branch_name(it), checkout: true, tag: false }));
-                            }
-                        });
-                        ui.add_space(12.0);
+                    }
+                }
+                if it.kind != Kind::PullRequest && ui.button("Create a branch…").on_hover_text(format!("Branch “{}” at the current commit", github::branch_name(it))).clicked() {
+                    cmds.push(Cmd::Dialog(Dialog::NewRef { at: "HEAD".into(), label: "the current commit".into(), name: github::branch_name(it), checkout: true, tag: false }));
+                }
+            });
+            ui.add_space(12.0);
 
-                        let row = |ui: &mut Ui, caption: &str, add: &mut dyn FnMut(&mut Ui)| {
-                            ui.horizontal_top(|ui| {
-                                let (r, _) = ui.allocate_exact_size(vec2(82.0, 20.0), Sense::hover());
-                                ui.painter().text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(theme::FS_SMALL), theme::c().faint);
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
-                                    add(ui)
-                                });
-                            });
-                        };
-                        row(ui, "Assignees", &mut |ui| {
-                            if it.assignees.is_empty() {
-                                ui.label(RichText::new("No one").size(theme::FS_SECONDARY).color(theme::c().faint));
-                            }
-                            for a in &it.assignees {
-                                avatars(ui, std::slice::from_ref(a), 9.0, theme::c().elevated);
-                                ui.label(RichText::new(a).size(theme::FS_SECONDARY));
-                                ui.add_space(6.0);
-                            }
-                        });
-                        if !it.labels.is_empty() {
-                            row(ui, "Labels", &mut |ui| {
-                                for l in &it.labels {
-                                    label_pill(ui, l);
-                                }
-                            });
-                        }
-                        if let Some(parent) = &it.parent {
-                            row(ui, "Parent", &mut |ui| {
-                                let r = parent_line(ui, parent, 12.5);
-                                if ui.interact(r.rect, ui.id().with("drawer_parent"), Sense::click()).clicked() {
-                                    *goto = Some(parent.clone());
-                                }
-                            });
-                        }
-                        if it.created > 0 {
-                            row(ui, "Dates", &mut |ui| {
-                                ui.label(RichText::new(format!("Opened {} · updated {}", git::relative_time(it.created), git::relative_time(it.updated))).size(theme::FS_SECONDARY).color(theme::c().dim));
-                            });
-                        }
-
-                        if !it.sub_issues.is_empty() || it.sub_progress.1 > 0 {
-                            ui.add_space(14.0);
-                            ui.label(RichText::new("Sub-issues").size(theme::FS_BODY).color(theme::c().strong));
-                            progress_bar(ui, "Done", it.sub_progress);
-                            for s in &it.sub_issues {
-                                if self.linked_row(ui, s, false).clicked() && !s.url.is_empty() {
-                                    cmds.push(Cmd::OpenUrl(s.url.clone()));
-                                }
-                            }
-                        }
-                        if !it.pull_requests.is_empty() {
-                            ui.add_space(14.0);
-                            ui.label(RichText::new("Linked pull requests").size(theme::FS_BODY).color(theme::c().strong));
-                            for pr in &it.pull_requests {
-                                if self.linked_row(ui, pr, true).clicked() && !pr.url.is_empty() {
-                                    cmds.push(Cmd::OpenUrl(pr.url.clone()));
-                                }
-                            }
-                        }
-
-                        ui.add_space(14.0);
-                        let y = ui.cursor().top();
-                        ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
-                        ui.add_space(10.0);
-                        if it.body.trim().is_empty() {
-                            ui.label(RichText::new("No description.").italics().color(theme::c().faint));
-                        } else {
-                            markdown(ui, &it.body);
-                        }
-                        ui.add_space(20.0);
+            let row = |ui: &mut Ui, caption: &str, add: &mut dyn FnMut(&mut Ui)| {
+                ui.horizontal_top(|ui| {
+                    let (r, _) = ui.allocate_exact_size(vec2(82.0, 20.0), Sense::hover());
+                    ui.painter().text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(theme::FS_SMALL), theme::c().faint);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+                        add(ui)
                     });
                 });
+            };
+            row(ui, "Assignees", &mut |ui| {
+                if it.assignees.is_empty() {
+                    ui.label(RichText::new("No one").size(theme::FS_SECONDARY).color(theme::c().faint));
+                }
+                for a in &it.assignees {
+                    avatars(ui, std::slice::from_ref(a), 9.0, theme::c().elevated);
+                    ui.label(RichText::new(a).size(theme::FS_SECONDARY));
+                    ui.add_space(6.0);
+                }
+            });
+            if !it.labels.is_empty() {
+                row(ui, "Labels", &mut |ui| {
+                    for l in &it.labels {
+                        label_pill(ui, l);
+                    }
+                });
+            }
+            if let Some(parent) = &it.parent {
+                row(ui, "Parent", &mut |ui| {
+                    let r = parent_line(ui, parent, 12.5);
+                    if ui.interact(r.rect, ui.id().with("drawer_parent"), Sense::click()).clicked() {
+                        *goto = Some(parent.clone());
+                    }
+                });
+            }
+            if it.created > 0 {
+                row(ui, "Dates", &mut |ui| {
+                    ui.label(RichText::new(format!("Opened {} · updated {}", git::relative_time(it.created), git::relative_time(it.updated))).size(theme::FS_SECONDARY).color(theme::c().dim));
+                });
+            }
+
+            if !it.sub_issues.is_empty() || it.sub_progress.1 > 0 {
+                ui.add_space(14.0);
+                ui.label(RichText::new("Sub-issues").size(theme::FS_BODY).color(theme::c().strong));
+                progress_bar(ui, "Done", it.sub_progress);
+                for s in &it.sub_issues {
+                    if self.linked_row(ui, s, false).clicked() && !s.url.is_empty() {
+                        cmds.push(Cmd::OpenUrl(s.url.clone()));
+                    }
+                }
+            }
+            if !it.pull_requests.is_empty() {
+                ui.add_space(14.0);
+                ui.label(RichText::new("Linked pull requests").size(theme::FS_BODY).color(theme::c().strong));
+                for pr in &it.pull_requests {
+                    if self.linked_row(ui, pr, true).clicked() && !pr.url.is_empty() {
+                        cmds.push(Cmd::OpenUrl(pr.url.clone()));
+                    }
+                }
+            }
+
+            ui.add_space(14.0);
+            let y = ui.cursor().top();
+            ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
+            ui.add_space(10.0);
+            if it.body.trim().is_empty() {
+                ui.label(RichText::new("No description.").italics().color(theme::c().faint));
+            } else {
+                markdown(ui, &it.body);
+            }
+            ui.add_space(20.0);
         });
         close
     }
@@ -1101,6 +1198,17 @@ mod tests {
         assert_eq!(hex_color("zz"), None);
         assert_eq!(readable_on(Color32::from_rgb(0xed, 0xed, 0xed)), theme::LIGHT.strong);
         assert_eq!(readable_on(Color32::from_rgb(0x70, 0x57, 0xff)), theme::DARK.strong);
+    }
+
+    #[test]
+    fn finds_the_ticket_number_in_a_branch_name() {
+        assert!(branch_has_number("feat/51-repo-groups", 51));
+        assert!(branch_has_number("fix/51-crash", 51));
+        assert!(branch_has_number("51-foo", 51));
+        assert!(branch_has_number("topic_51", 51));
+        assert!(!branch_has_number("feat/510-x", 51));
+        assert!(!branch_has_number("feat/151-x", 51));
+        assert!(!branch_has_number("main", 51));
     }
 
     #[test]

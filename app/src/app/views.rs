@@ -90,10 +90,6 @@ impl App {
             }
 
             ui.add_space(10.0);
-            if tool_button(ui, "board", "Board", 0, self.board.open).on_hover_text("The GitHub project as a board (⌘B)").clicked() {
-                cmds.push(Cmd::Board);
-            }
-
             // AI assistant (Claude through the person's subscription).
             ui.add_space(4.0);
             let ai_btn = tool_button(ui, "ai", "Assistant", 0, self.ai.busy()).on_hover_text("Ask Claude (uses your Claude subscription)");
@@ -163,16 +159,18 @@ impl App {
 
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             let n_changes = self.status.staged.len() + self.status.unstaged.len();
-            if side_item(ui, "changes", "Local Changes", Some(n_changes), self.sel == Sel::Wip, None, false).clicked() {
+            let in_project = self.board.open;
+            if side_item(ui, "changes", "Local Changes", Some(n_changes), self.sel == Sel::Wip && !in_project, None, false).clicked() {
                 cmds.push(Cmd::Select(Sel::Wip));
             }
-            let in_history = matches!(self.sel, Sel::Commit(_));
+            let in_history = matches!(self.sel, Sel::Commit(_)) && !in_project;
             if side_item(ui, "history", "All Commits", Some(self.commits.len()), in_history, None, false).clicked() && !self.commits.is_empty() {
                 cmds.push(Cmd::SelectHash(self.head.clone()));
             }
+            if side_item(ui, "project", "Project", Some(self.project_open_count()), in_project, None, false).on_hover_text("The GitHub project of this repository (⌘B)").clicked() && !in_project {
+                cmds.push(Cmd::Board);
+            }
             ui.add_space(6.0);
-
-            self.project_section(ui, cmds);
 
             let locals: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Local && keep(&r.name)).cloned().collect();
             if self.section(ui, "Branches", locals.len()) {
@@ -536,6 +534,9 @@ impl App {
     // ---------------------------------------------------------------- details panel
 
     fn details_panel(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        if self.board.open {
+            return self.board_detail_panel(ui, cmds);
+        }
         // At the bottom the panel is wide and short: its content goes side by side in two columns.
         let wide = self.details_layout.place == DetailsPlace::Bottom && ui.available_width() >= WIDE_DETAILS_MIN_W;
         match self.sel.clone() {
@@ -1091,7 +1092,7 @@ impl App {
             cmds.push(Cmd::Switcher);
             return;
         }
-        // ⌘B opens or closes the project board.
+        // ⌘B goes to the Project view and back to the history.
         let (board_key, escape) = board::board_keys(ctx);
         if board_key {
             cmds.push(Cmd::Board);
@@ -1106,7 +1107,7 @@ impl App {
             return;
         }
         if self.board.open {
-            // Esc closes the card's drawer, then the board; the history's keys wait for it.
+            // Esc closes the ticket's detail; the history's keys wait.
             if escape {
                 self.board_escape();
             }
@@ -1326,37 +1327,35 @@ impl eframe::App for App {
                 });
             });
 
-        // The board takes the whole window under the toolbar.
+        // The Project view keeps the sidebar and the details panel; only the centre changes.
         let board_open = self.board.open;
-        if !board_open {
-            egui::SidePanel::left("sidebar")
-            .resizable(true)
-            .default_width(230.0)
-            .width_range(190.0..=420.0)
-            .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
-            .show(ctx, |ui| self.sidebar(ui, &mut cmds));
+        egui::SidePanel::left("sidebar")
+        .resizable(true)
+        .default_width(230.0)
+        .width_range(190.0..=420.0)
+        .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
+        .show(ctx, |ui| self.sidebar(ui, &mut cmds));
 
-            // Declared after the sidebar, so at the bottom it spans the history only.
-            let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
-            match self.details_layout {
-                DetailsLayout { hidden: true, .. } => {}
-                DetailsLayout { place: DetailsPlace::Right, .. } => {
-                    egui::SidePanel::right("details")
-                        .resizable(true)
-                        .default_width(330.0)
-                        .width_range(280.0..=600.0)
-                        .frame(details_frame)
-                        .show(ctx, |ui| self.details_panel(ui, &mut cmds));
-                }
-                DetailsLayout { place: DetailsPlace::Bottom, .. } => {
-                    let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
-                    egui::TopBottomPanel::bottom("details_bottom")
-                        .resizable(true)
-                        .default_height(300.0)
-                        .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
-                        .frame(details_frame)
-                        .show(ctx, |ui| self.details_panel(ui, &mut cmds));
-                }
+        // Declared after the sidebar, so at the bottom it spans the history only.
+        let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
+        match self.details_layout {
+            DetailsLayout { hidden: true, .. } => {}
+            DetailsLayout { place: DetailsPlace::Right, .. } => {
+                egui::SidePanel::right("details")
+                    .resizable(true)
+                    .default_width(330.0)
+                    .width_range(280.0..=600.0)
+                    .frame(details_frame)
+                    .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+            }
+            DetailsLayout { place: DetailsPlace::Bottom, .. } => {
+                let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
+                egui::TopBottomPanel::bottom("details_bottom")
+                    .resizable(true)
+                    .default_height(300.0)
+                    .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
+                    .frame(details_frame)
+                    .show(ctx, |ui| self.details_panel(ui, &mut cmds));
             }
         }
 
