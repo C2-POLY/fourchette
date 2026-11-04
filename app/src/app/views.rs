@@ -29,7 +29,7 @@ fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
 impl Tab {
     // ---------------------------------------------------------------- toolbar
 
-    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool) {
         // The toolbar is the window's top edge (no title bar): dragging its empty background moves
         // the window and a double-click zooms it. Added first, so the buttons on top keep their clicks.
         let bg = ui.interact(ui.max_rect(), ui.id().with("window_drag"), Sense::click_and_drag());
@@ -117,6 +117,13 @@ impl Tab {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
                 ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(220.0).margin(Margin::symmetric(10, 6)));
+                // A newer release on GitHub (issue #80).
+                if update {
+                    ui.add_space(10.0);
+                    if update_pill(ui, "Update available").on_hover_text("A new version of Fourchette is ready to install").clicked() {
+                        cmds.push(Cmd::UpdateDialog(true));
+                    }
+                }
                 if let Some(b) = &busy {
                     ui.add_space(8.0);
                     ui.label(RichText::new(format!("{b}…")).color(theme::c().dim));
@@ -1088,7 +1095,7 @@ impl Tab {
 
 impl App {
     fn keyboard(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
-        if self.tab().dialog.is_some() {
+        if self.modal() {
             return;
         }
         // ⌘, opens or closes Settings; while it is open, it takes the keyboard.
@@ -1176,7 +1183,7 @@ impl App {
             tabs: self.tabs.len(),
             repo: t.repo.is_some(),
             busy: t.busy.is_some(),
-            modal: t.dialog.is_some(),
+            modal: self.modal(),
             settings: self.settings_open,
             text_focus: ctx.wants_keyboard_input(),
             can_undo: !t.undo.is_empty(),
@@ -1285,7 +1292,7 @@ impl eframe::App for App {
         let text = ctx.wants_keyboard_input();
         // Tab keys, taken before egui sees them (⌃Tab would otherwise move the focus). A dialog
         // or the Settings window keeps the keyboard, as it greys out the menu items.
-        if self.tab().dialog.is_none() && !self.settings_open {
+        if !self.modal() && !self.settings_open {
             let active = self.active;
             let mut keys = Vec::new();
             raw.events.retain(|e| match e {
@@ -1323,6 +1330,7 @@ impl eframe::App for App {
             }
         }
         self.take_notices();
+        self.update_poll(ctx);
         self.was_focused = focused;
         let mut cmds = std::mem::take(&mut self.menu_cmds);
 
@@ -1332,7 +1340,8 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(theme::c().sidebar))
             .show(ctx, |ui| {
                 let key = self.tab().key;
-                ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds));
+                let update = self.update.available.is_some();
+                ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update));
             });
 
         // The tabs, from two on (issue #59): with one, the window looks as before tabs.
@@ -1461,7 +1470,8 @@ impl eframe::App for App {
         t.cleanup_window(ctx, &mut cmds);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
-        if self.tab().dialog.is_none() {
+        self.update_dialog(ctx, &mut cmds);
+        if !self.modal() {
             self.switcher_ui(ctx, &mut cmds);
             self.settings_ui(ctx, &mut cmds);
         }
