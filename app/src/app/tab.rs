@@ -321,19 +321,24 @@ impl Tab {
         });
     }
 
-    fn pull(&mut self, ctx: &egui::Context) {
-        // Defaults "pullSheetRebase" = false and "pullSheetStashAndReapply" = false (sub_10031b7cc):
-        // a plain merge pull of the upstream branch.
+    /// Pulls the upstream branch, merging or rebasing and putting uncommitted changes aside as
+    /// the Settings window says ("pullSheetRebase", "pullSheetStashAndReapply", both off by
+    /// default, sub_10031b7cc). The snapshot keeps the uncommitted changes too, so Undo can take
+    /// the pull back even once they were moved onto the pulled commits.
+    pub(super) fn pull(&mut self, ctx: &egui::Context, s: crate::settings::Settings) {
         let Some(up) = self.repo.as_ref().and_then(|r| r.upstream()) else {
             self.notify("The current branch has no upstream branch to pull from.", true);
             return;
         };
         if self.busy.is_none() {
-            self.pending_undo = self.repo.as_ref().map(|r| r.snapshot("Pull", false, false));
+            self.pending_undo = self.repo.as_ref().map(|r| Snapshot { dirty: r.stash_create(), ..r.snapshot("Pull", false, false) });
         }
+        let args = git::pull_args(&up.0, &up.1, s.pull_rebase, s.pull_autostash);
         self.spawn(&format!("Pull from '{}'", up.0), false, ctx, move |root| {
-            let (o, _) = git::exec(root, &["pull", "--no-edit", &up.0, &up.1])?;
-            Ok(if o.contains("Already up to date") { "Already up to date".into() } else { format!("Pulled {}/{}", up.0, up.1) })
+            let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let res = git::exec(root, &a).map(|(o, e)| format!("{o}{e}"));
+            let repo = Repo { root: root.to_path_buf() };
+            git::pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), &up.0, &up.1)
         });
     }
 
@@ -396,7 +401,6 @@ impl Tab {
             }
             Cmd::Git { label, args, network } => self.git(label, args, network, ctx),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
-            Cmd::Pull => self.pull(ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
                 let Some(r) = &self.repo else { return };
@@ -489,6 +493,8 @@ impl Tab {
             | Cmd::SetVariant(_)
             | Cmd::Settings
             | Cmd::SetSettings(_)
+            | Cmd::Pull
+            | Cmd::ApplyStash(_)
             | Cmd::SetCommitLimit(_)
             | Cmd::Switcher
             | Cmd::RepoFavorite(_)
@@ -537,7 +543,8 @@ impl Tab {
 
     /// Keep the snapshot only if the action really changed something.
     pub(super) fn record(&mut self, snap: Option<Snapshot>) {
-        let (Some(s), Some(r)) = (snap, &self.repo) else { return };
+        let (Some(mut s), Some(r)) = (snap, &self.repo) else { return };
+        r.after(&mut s);
         if r.state() != s.state {
             self.push_undo(s);
         }
@@ -663,8 +670,8 @@ mod tests {
     }
 
     fn snapshot(label: &str) -> Snapshot {
-        let state = crate::undo::State { head_branch: None, head_sha: String::new(), refs: vec![], stashes: vec![] };
-        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, worktrees: vec![] }
+        let state = crate::undo::State { head_branch: None, head_sha: String::new(), refs: vec![], stashes: vec![], operation: None };
+        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, worktrees: vec![], dirty: None, dirty_after: None, left: None }
     }
 
     fn notice(t: &Tab) -> Option<(&str, bool)> {
@@ -741,6 +748,15 @@ mod tests {
         t[0].load_demo();
         assert!(t[0].is_demo() && !t[0].commits.is_empty() && t[0].project.board.is_some());
         assert!(t[1].commits.is_empty() && t[1].project.board.is_none());
+    }
+
+    #[test]
+    fn stash_apply_deletes_it_only_when_asked() {
+        let Cmd::Git { label, args, network } = Cmd::apply_stash("stash@{2}", false) else { panic!() };
+        assert_eq!((label.as_str(), args, network), ("Stash applied", vec!["stash".to_string(), "apply".into(), "stash@{2}".into()], false));
+        let Cmd::Git { label, args, network } = Cmd::apply_stash("stash@{2}", true) else { panic!() };
+        // `pop` keeps the stash when applying it conflicts.
+        assert_eq!((label.as_str(), args, network), ("Stash applied and deleted", vec!["stash".to_string(), "pop".into(), "stash@{2}".into()], false));
     }
 
     /// A repository with a 20-line file whose line 10 is changed and not committed.

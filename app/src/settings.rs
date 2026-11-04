@@ -9,6 +9,12 @@ pub const DEFAULT_AUTO_FETCH: bool = true;
 pub const DEFAULT_FETCH_MINUTES: u32 = 10;
 /// The intervals the Settings window offers, in minutes.
 pub const FETCH_MINUTES: [u32; 4] = [5, 10, 30, 60];
+/// "pullSheetRebase" default false: Pull merges (sub_10031b7cc).
+pub const DEFAULT_PULL_REBASE: bool = false;
+/// "pullSheetStashAndReapply" default false (sub_10031b7cc).
+pub const DEFAULT_PULL_AUTOSTASH: bool = false;
+/// "deleteStashAfterApply" default false: Apply keeps the stash (sub_10031b7cc).
+pub const DEFAULT_DELETE_STASH_AFTER_APPLY: bool = false;
 
 /// "contextSize" default (sub_10031b7cc): the lines of context around a change in a diff.
 pub const DEFAULT_DIFF_CONTEXT: u32 = 3;
@@ -30,6 +36,12 @@ pub struct Settings {
     pub auto_fetch: bool,
     /// One of `FETCH_MINUTES`.
     pub fetch_minutes: u32,
+    /// Pull rebases the current branch onto its upstream instead of merging it.
+    pub pull_rebase: bool,
+    /// Pull puts uncommitted changes aside and back afterwards (`--autostash`).
+    pub pull_autostash: bool,
+    /// A stash's Apply also deletes it once applied without conflicts (`stash pop`).
+    pub delete_stash_after_apply: bool,
     /// Lines of context around a change in a diff (`--unified=`).
     pub diff_context: u32,
     /// The commit subject counter turns orange above this, and Claude's soft limit.
@@ -45,6 +57,9 @@ impl Default for Settings {
         Settings {
             auto_fetch: DEFAULT_AUTO_FETCH,
             fetch_minutes: DEFAULT_FETCH_MINUTES,
+            pull_rebase: DEFAULT_PULL_REBASE,
+            pull_autostash: DEFAULT_PULL_AUTOSTASH,
+            delete_stash_after_apply: DEFAULT_DELETE_STASH_AFTER_APPLY,
             diff_context: DEFAULT_DIFF_CONTEXT,
             subject_low: DEFAULT_SUBJECT_LOW,
             subject_high: DEFAULT_SUBJECT_HIGH,
@@ -66,6 +81,9 @@ impl Settings {
         Settings {
             auto_fetch: v["auto_fetch"].as_bool().unwrap_or(d.auto_fetch),
             fetch_minutes: v["fetch_minutes"].as_u64().map(|m| m as u32).filter(|m| FETCH_MINUTES.contains(m)).unwrap_or(d.fetch_minutes),
+            pull_rebase: v["pull_rebase"].as_bool().unwrap_or(d.pull_rebase),
+            pull_autostash: v["pull_autostash"].as_bool().unwrap_or(d.pull_autostash),
+            delete_stash_after_apply: v["delete_stash_after_apply"].as_bool().unwrap_or(d.delete_stash_after_apply),
             diff_context: n("diff_context").filter(|c| *c <= 100).map(|c| c as u32).unwrap_or(d.diff_context),
             subject_low: limits.0,
             subject_high: limits.1,
@@ -77,6 +95,9 @@ impl Settings {
         json!({
             "auto_fetch": self.auto_fetch,
             "fetch_minutes": self.fetch_minutes,
+            "pull_rebase": self.pull_rebase,
+            "pull_autostash": self.pull_autostash,
+            "delete_stash_after_apply": self.delete_stash_after_apply,
             "diff_context": self.diff_context,
             "subject_low": self.subject_low,
             "subject_high": self.subject_high,
@@ -143,10 +164,32 @@ mod tests {
         // the valid key next to it is kept.
         for bad in [json!(7), json!(0), json!(-5), json!("10"), json!(10.5), json!(null)] {
             let s = Settings::from_json(&json!({"auto_fetch": false, "fetch_minutes": bad}));
-            assert_eq!(s, Settings { auto_fetch: false, ..Settings::default() }, "{bad}");
+            assert_eq!(s, Settings { auto_fetch: false, fetch_minutes: 10, ..Settings::default() }, "{bad}");
         }
         let s = Settings::from_json(&json!({"auto_fetch": "no", "fetch_minutes": 30}));
-        assert_eq!(s, Settings { fetch_minutes: 30, ..Settings::default() });
+        assert_eq!(s, Settings { auto_fetch: true, fetch_minutes: 30, ..Settings::default() });
+    }
+
+    #[test]
+    fn git_settings_default_off_like_the_original() {
+        let d = Settings::default();
+        assert!(!d.pull_rebase, "Pull merges by default");
+        assert!(!d.pull_autostash);
+        assert!(!d.delete_stash_after_apply, "Apply keeps the stash by default");
+    }
+
+    #[test]
+    fn git_settings_survive_a_round_trip_and_fall_back_one_by_one() {
+        for bits in 0..8u8 {
+            let s = Settings { pull_rebase: bits & 1 != 0, pull_autostash: bits & 2 != 0, delete_stash_after_apply: bits & 4 != 0, ..Settings::default() };
+            assert_eq!(Settings::from_json(&s.to_json()), s, "{bits}");
+        }
+        // A file saved before these settings existed keeps its fetch choices and gets the defaults.
+        let old = Settings::from_json(&json!({"auto_fetch": false, "fetch_minutes": 30}));
+        assert_eq!(old, Settings { auto_fetch: false, fetch_minutes: 30, ..Settings::default() });
+        // A value of the wrong type goes back to its default; the valid one next to it is kept.
+        let s = Settings::from_json(&json!({"pull_rebase": "yes", "pull_autostash": 1, "delete_stash_after_apply": true}));
+        assert_eq!(s, Settings { delete_stash_after_apply: true, ..Settings::default() });
     }
 
     #[test]

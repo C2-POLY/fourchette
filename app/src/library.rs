@@ -591,7 +591,22 @@ mod tests {
         // Saving writes the new layout only, and reading it back loses nothing.
         lib.save();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-        assert_eq!(v["settings"], json!({"appearance": "light", "variant": "neon", "auto_fetch": false, "fetch_minutes": 30, "diff_context": 3, "subject_low": 50, "subject_high": 70, "max_commits": 100_000}));
+        assert_eq!(
+            v["settings"],
+            json!({
+                "appearance": "light",
+                "variant": "neon",
+                "auto_fetch": false,
+                "fetch_minutes": 30,
+                "pull_rebase": false,
+                "pull_autostash": false,
+                "delete_stash_after_apply": false,
+                "diff_context": 3,
+                "subject_low": 50,
+                "subject_high": 70,
+                "max_commits": 100_000,
+            })
+        );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");
         assert_eq!(v["repos"].as_array().map(Vec::len), Some(2));
         check(&Library::read(&file));

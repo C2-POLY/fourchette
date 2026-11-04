@@ -64,7 +64,7 @@ impl Tab {
             ui.add_space(6.0);
             let tools: [(&str, &str, &str, usize); 6] = [
                 ("fetch", "Fetch", "Get the latest changes from all remotes", 0),
-                ("pull", "Pull", "Fetch and merge into the current branch", behind),
+                ("pull", "Pull", "Get the upstream branch's commits (merge or rebase: Settings › Git)", behind),
                 ("push", "Push", "Send your commits to the remote", ahead),
                 ("branch", "Branch", "Create a branch at the current commit", 0),
                 ("stash", "Stash", "Put your local changes aside", 0),
@@ -296,7 +296,7 @@ impl Tab {
                     let resp = side_item(ui, "stash", &s.message, None, false, None, false).on_hover_text(&s.name);
                     resp.context_menu(|ui| {
                         if ui.button("Apply").clicked() {
-                            cmds.push(Cmd::Git { label: "Stash applied".into(), args: vec!["stash".into(), "apply".into(), s.name.clone()], network: false });
+                            cmds.push(Cmd::ApplyStash(s.name.clone()));
                         }
                         if ui.button("Pop").clicked() {
                             cmds.push(Cmd::Git { label: "Stash popped".into(), args: vec!["stash".into(), "pop".into(), s.name.clone()], network: false });
@@ -348,7 +348,7 @@ impl Tab {
         {
             let p = ui.painter();
             p.rect_filled(hrect, CornerRadius::ZERO, theme::c().bg);
-            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0, theme::c().border));
+            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0_f32, theme::c().border));
             let y = hrect.center().y;
             let f = theme::small();
             p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "Branch", f.clone(), theme::c().faint);
