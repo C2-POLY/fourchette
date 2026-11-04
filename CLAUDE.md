@@ -41,7 +41,12 @@ scripts/release.sh
 
 # Create or update the GitHub pre-release v<version> (clean main only)
 scripts/release.sh --publish
+
+# Re-render the .dmg window background after changing assets/dmg/background.svg (needs Chrome)
+scripts/dmg-background.sh
 ```
+
+The .dmg is laid out by `dmgbuild` (installed by `release.sh` in `target/dmgbuild`), from `scripts/dmg-settings.py`: the background, the window size and where the two icons sit.
 
 Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window (`FOURCHETTE_SETTINGS=<section>` at that section: `appearance`, `fetch`), `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_VARIANT=classic|gold|neon|forest` a variant, `FOURCHETTE_FONTS=<ui>,<code>` (for example `sf,menlo`; keys `inter|sf|helvetica|avenir` and `jetbrains|sfmono|menlo|monaco`) the fonts, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open. `FOURCHETTE_TABS=<n>` shows the sample project in n tabs, so the tab strip shows. `FOURCHETTE_UPDATE=1` shows the toolbar's "Update available" pill with a sample release, `FOURCHETTE_UPDATE=dialog` also opens the update dialog (`=downloading`, `=installing`, `=error` at that step). The window is 1360x840 points (2720x1680 pixels on a Retina screen).
 

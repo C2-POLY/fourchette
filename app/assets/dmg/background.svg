@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="460" viewBox="0 0 660 460">
+<!-- The .dmg window background ("Aurore"). Halos in the colours of the fork's four tines; the four tines leave
+     the app as four branches and merge into Applications. Finder draws the two icons on top, the app centred at
+     (160, 215) and Applications at (500, 215), and writes their names in black over a picture, whatever the mode:
+     the names sit on the light foot of a glass tile, centred 80 points under each icon.
+     With motion allowed the branches draw in and commits flow along them (a preview in a browser); rendered
+     with reduced motion (scripts/dmg-background.sh) it is the still image the .dmg shows. The window shows the
+     top 660x420; the 40 points below only fill what a taller title bar would leave uncovered. -->
+<defs><radialGradient id="b0" cx="70" cy="40" r="300" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CB73E1" stop-opacity="0.55"/><stop offset="1" stop-color="#CB73E1" stop-opacity="0"/></radialGradient><radialGradient id="b1" cx="600" cy="30" r="280" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1CADF8" stop-opacity="0.4"/><stop offset="1" stop-color="#1CADF8" stop-opacity="0"/></radialGradient><radialGradient id="b2" cx="590" cy="470" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#64DA38" stop-opacity="0.22"/><stop offset="1" stop-color="#64DA38" stop-opacity="0"/></radialGradient><radialGradient id="b3" cx="60" cy="470" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF9502" stop-opacity="0.28"/><stop offset="1" stop-color="#FF9502" stop-opacity="0"/></radialGradient><path id="p0" d="M244 215 C 277 215 277 181 305 181 L 338 181 C 366 181 366 215 396 215"/><path id="p1" d="M244 215 C 277 215 277 204 305 204 L 338 204 C 366 204 366 215 396 215"/><path id="p2" d="M244 215 C 277 215 277 226 305 226 L 338 226 C 366 226 366 215 396 215"/><path id="p3" d="M244 215 C 277 215 277 249 305 249 L 338 249 C 366 249 366 215 396 215"/><filter id="glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="5"/></filter><pattern id="grain" width="3" height="3" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#fff" fill-opacity="0.025"/></pattern><linearGradient id="vig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/></linearGradient><style>
+  .lane { fill: none; stroke-linecap: round; }
+  .flow { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .lane { stroke-dasharray: 320; stroke-dashoffset: 320; animation: draw 1.2s cubic-bezier(.6,0,.2,1) forwards; }
+    .lane.l1 { animation-delay: .1s } .lane.l2 { animation-delay: .2s } .lane.l3 { animation-delay: .3s }
+    .commit { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: pop .4s cubic-bezier(.3,1.6,.5,1) forwards; }
+    .late { opacity: 0; animation: show .5s ease-out 1.3s forwards; }
+    .flow { display: inline; opacity: 0; animation: show .3s 1.7s forwards; }
+    .breathe { animation: breathe 5s ease-in-out infinite alternate; }
+  }
+  @keyframes draw { to { stroke-dashoffset: 0 } }
+  @keyframes pop { to { transform: scale(1) } }
+  @keyframes show { to { opacity: 1 } }
+  @keyframes breathe { from { opacity: .75 } to { opacity: 1 } }
+</style></defs>
+<rect width="660" height="460" fill="#080a12"/><rect class="breathe" width="660" height="460" fill="url(#b0)"/><rect class="breathe" width="660" height="460" fill="url(#b1)"/><rect class="breathe" width="660" height="460" fill="url(#b2)"/><rect class="breathe" width="660" height="460" fill="url(#b3)"/><rect width="660" height="460" fill="url(#grain)"/><rect width="660" height="460" fill="url(#vig)"/><text x="330" y="66" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="34" font-weight="800" letter-spacing="-1" fill="#ffffff">Fourchette</text><text x="330" y="94" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="13.5" fill="#c4c7d4" fill-opacity="0.8">Drag the app onto Applications to install it</text><clipPath id="t160"><rect x="76" y="131" width="168" height="182" rx="22"/></clipPath><rect x="76" y="131" width="168" height="182" rx="22" fill="#ffffff" fill-opacity="0.07"/><rect x="76" y="283" width="168" height="30" fill="#eef0f5" clip-path="url(#t160)"/><rect x="76.5" y="131.5" width="167" height="181" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.16"/><clipPath id="t500"><rect x="416" y="131" width="168" height="182" rx="22"/></clipPath><rect x="416" y="131" width="168" height="182" rx="22" fill="#ffffff" fill-opacity="0.07"/><rect x="416" y="283" width="168" height="30" fill="#eef0f5" clip-path="url(#t500)"/><rect x="416.5" y="131.5" width="167" height="181" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.16"/><g filter="url(#glow)" opacity="0.75"><use href="#p0" class="lane l0" stroke="#CB73E1" stroke-width="7.5"/><use href="#p1" class="lane l1" stroke="#1CADF8" stroke-width="7.5"/><use href="#p2" class="lane l2" stroke="#64DA38" stroke-width="7.5"/><use href="#p3" class="lane l3" stroke="#FF9502" stroke-width="7.5"/></g>
+<g><use href="#p0" class="lane l0" stroke="#CB73E1" stroke-width="3.5"/><use href="#p1" class="lane l1" stroke="#1CADF8" stroke-width="3.5"/><use href="#p2" class="lane l2" stroke="#64DA38" stroke-width="3.5"/><use href="#p3" class="lane l3" stroke="#FF9502" stroke-width="3.5"/></g>
+<g stroke="#0a0c14" stroke-width="2.5">
+<circle class="commit" style="animation-delay:0.50s" cx="312" cy="181" r="6.0" fill="#CB73E1"/>
+<circle class="commit" style="animation-delay:0.58s" cx="332" cy="181" r="6.0" fill="#CB73E1"/>
+<circle class="commit" style="animation-delay:0.66s" cx="323" cy="204" r="6.0" fill="#1CADF8"/>
+<circle class="commit" style="animation-delay:0.74s" cx="311" cy="226" r="6.0" fill="#64DA38"/>
+<circle class="commit" style="animation-delay:0.82s" cx="331" cy="226" r="6.0" fill="#64DA38"/>
+<circle class="commit" style="animation-delay:0.90s" cx="320" cy="249" r="6.0" fill="#FF9502"/>
+</g>
+<g class="flow"><circle r="3.0" fill="#fff"><animateMotion dur="2.4s" begin="0.0s" repeatCount="indefinite"><mpath href="#p0"/></animateMotion></circle><circle r="3.0" fill="#fff"><animateMotion dur="2.4s" begin="0.6s" repeatCount="indefinite"><mpath href="#p1"/></animateMotion></circle><circle r="3.0" fill="#fff"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle><circle r="3.0" fill="#fff"><animateMotion dur="2.4s" begin="1.8s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle></g>
+<g class="late"><path d="M396 215 H 408" stroke="#f7f8f8" stroke-width="3.5" stroke-linecap="round"/><circle cx="396" cy="215" r="8.5" fill="#f7f8f8" stroke="#0a0c14" stroke-width="3"/><path d="M402 205 L 414 215 L 402 225" fill="none" stroke="#f7f8f8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></g><text x="330" y="372" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="11.5" fill="#8b8fa0">First open: System Settings › Privacy &amp; Security › Open Anyway</text>
+</svg>

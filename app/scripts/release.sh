@@ -8,6 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="C2-POLY/fourchette"
+DMGBUILD_VERSION="1.6.7"
 PUBLISH=0
 
 case "${1:-}" in
@@ -50,7 +51,6 @@ cargo build --release --target x86_64-apple-darwin
 
 OUT="$APP_DIR/target/release-bundle"
 BUNDLE="$OUT/Fourchette.app"
-STAGING="$OUT/dmg-staging"
 DMG="$OUT/Fourchette-$VERSION.dmg"
 
 rm -rf "$OUT"
@@ -71,12 +71,16 @@ plutil -replace CFBundleVersion -string "$VERSION" "$BUNDLE/Contents/Info.plist"
 codesign --force --sign - --timestamp=none "$BUNDLE"
 codesign --verify --strict "$BUNDLE"
 
-# The disk image: the app and a link to /Applications.
-mkdir -p "$STAGING"
-cp -R "$BUNDLE" "$STAGING/"
-ln -s /Applications "$STAGING/Applications"
-hdiutil create -format UDZO -ov -volname "Fourchette $VERSION" -srcfolder "$STAGING" "$DMG" >/dev/null
-rm -rf "$STAGING"
+# The disk image: the app and a link to /Applications, laid out on the background
+# of assets/dmg (see dmg-settings.py). dmgbuild lives in its own venv under target/.
+VENV="$APP_DIR/target/dmgbuild"
+if ! "$VENV/bin/python" -c "import importlib.metadata as m, sys; sys.exit(m.version('dmgbuild') != '$DMGBUILD_VERSION')" 2>/dev/null; then
+  python3 -m venv "$VENV"
+  "$VENV/bin/pip" install --quiet --disable-pip-version-check "dmgbuild==$DMGBUILD_VERSION"
+fi
+"$VENV/bin/dmgbuild" -s "$SCRIPT_DIR/dmg-settings.py" \
+  -D app="$BUNDLE" -D assets="$APP_DIR/assets" \
+  "Fourchette $VERSION" "$DMG" >/dev/null 2> >(grep -v 'is deprecated' >&2)
 
 echo "Built:"
 echo "  $BUNDLE"
