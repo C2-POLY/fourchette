@@ -95,7 +95,12 @@ pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
     }
     let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
     let bg = if resp.hovered() { theme::c().hover } else { theme::c().sidebar };
-    let c = rect.center();
+    appearance_icon(p, rect.center(), a, col, bg);
+    resp
+}
+
+/// The icon of an appearance, about 14 pt wide; `bg` is the colour behind it (the moon is cut from it).
+pub fn appearance_icon(p: &egui::Painter, c: Pos2, a: theme::Appearance, col: Color32, bg: Color32) {
     match a {
         // Half dark, half light: follows macOS.
         theme::Appearance::System => {
@@ -117,7 +122,6 @@ pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
             }
         }
     }
-    resp
 }
 
 /// The status bar button for the details panel: a window outline with its right or bottom

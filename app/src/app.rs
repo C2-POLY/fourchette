@@ -2,6 +2,7 @@ mod assistant;
 mod palette;
 mod project;
 mod repos;
+mod settings;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
@@ -18,10 +19,6 @@ use std::time::Instant;
 const COMMIT_LIMIT: usize = git::MAX_COMMIT_COUNT;
 /// "automaticStatusUpdateInterval" default 60 s; 60.0 is also the fallback (sub_10031b7cc, sub_10048580c).
 pub const STATUS_UPDATE_SECS: f32 = 60.0;
-/// "fetchRemotesAutomatically" default true (sub_10031b7cc).
-pub const AUTO_FETCH: bool = true;
-/// How often the automatic fetch runs. Not found in the code (estimated).
-pub const AUTO_FETCH_SECS: f32 = 600.0;
 /// "commitSubjectLimitLow" / "commitSubjectLimitHigh" defaults (sub_10031b7cc).
 pub const SUBJECT_LIMIT_LOW: usize = 50;
 pub const SUBJECT_LIMIT_HIGH: usize = 70;
@@ -87,7 +84,12 @@ pub enum Cmd {
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
     ToggleDetails,
+    /// The app's colours and icon, chosen in the palette.
     SetVariant(theme::Variant),
+    /// Open or close the Settings window (⌘,).
+    Settings,
+    /// Keep the settings chosen in the Settings window; they apply at once.
+    SetSettings(crate::settings::Settings),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
     AiCommitMessage,
@@ -156,6 +158,8 @@ pub struct App {
     scroll_to: Option<usize>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
+    /// The Settings window (⌘,) is open.
+    settings_open: bool,
     project: project::ProjectState,
     screenshot: Option<PathBuf>,
     frame: u64,
@@ -216,6 +220,7 @@ impl App {
             scroll_to: None,
             library,
             switcher: None,
+            settings_open: false,
             project: project::ProjectState::default(),
             screenshot,
             frame: 0,
@@ -285,6 +290,9 @@ impl App {
         }
         if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
             app.switcher = Some(repos::Switcher::default());
+        }
+        if std::env::var("FOURCHETTE_SETTINGS").is_ok() {
+            app.settings_open = true;
         }
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
@@ -376,7 +384,8 @@ impl App {
     }
 
     /// The original refreshes the working copy when more than the update interval has passed
-    /// (sub_10048580c), and fetches remotes automatically when that setting is on.
+    /// (sub_10048580c), and fetches remotes automatically when that setting is on (here the
+    /// person's choice in the Settings window, with its interval).
     fn timers(&mut self, ctx: &egui::Context) {
         if self.repo.is_none() || self.screenshot.is_some() {
             return;
@@ -384,7 +393,8 @@ impl App {
         if self.last_status.elapsed().as_secs_f32() > STATUS_UPDATE_SECS && self.busy.is_none() {
             self.refresh_status();
         }
-        if AUTO_FETCH && self.last_fetch.elapsed().as_secs_f32() > AUTO_FETCH_SECS && self.busy.is_none() {
+        let s = self.library.settings;
+        if s.auto_fetch && self.last_fetch.elapsed().as_secs_f32() > s.fetch_secs() && self.busy.is_none() {
             self.last_fetch = Instant::now();
             self.fetch(false, true, ctx);
         }
@@ -637,6 +647,17 @@ impl App {
                     self.library.appearance = a;
                     self.library.save();
                     theme::set_appearance(ctx, a);
+                }
+                Cmd::Settings => {
+                    self.settings_open = !self.settings_open;
+                    if self.settings_open {
+                        self.palette = None;
+                        self.switcher = None;
+                    }
+                }
+                Cmd::SetSettings(s) => {
+                    self.library.settings = s;
+                    self.library.save();
                 }
                 Cmd::SetDetails(l) => self.set_details(l),
                 Cmd::ToggleDetails => self.set_details(self.details_layout.toggled()),

@@ -1,5 +1,6 @@
 //! The person's repositories: where they are, how they're grouped, which are favourites.
 //! Kept in `~/Library/Application Support/Fourchette/repos.json`.
+use crate::settings::Settings;
 use crate::theme::{Appearance, Variant};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -128,6 +129,8 @@ pub struct Library {
     pub entries: Vec<Entry>,
     /// System, dark or light, chosen in the palette or the status bar.
     pub appearance: Appearance,
+    /// Everything else chosen in the Settings window.
+    pub settings: Settings,
     /// The app's colours and icon, chosen in the palette.
     pub variant: Variant,
     file: Option<PathBuf>,
@@ -177,8 +180,9 @@ impl Library {
             })
             .unwrap_or_default();
         let appearance = v["appearance"].as_str().and_then(Appearance::parse).unwrap_or_default();
+        let settings = Settings::from_json(&v["settings"]);
         let variant = v["variant"].as_str().and_then(Variant::parse).unwrap_or_default();
-        Library { entries, appearance, variant, file: Some(file.to_path_buf()) }
+        Library { entries, appearance, variant, settings, file: Some(file.to_path_buf()) }
     }
 
     pub fn save(&self) {
@@ -198,7 +202,7 @@ impl Library {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "variant": self.variant.key(), "repos": repos})).unwrap_or_default());
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "variant": self.variant.key(), "settings": self.settings.to_json(), "repos": repos})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -403,6 +407,49 @@ mod tests {
         assert_eq!(back.entries.len(), 1);
         std::fs::write(&file, r#"{"version": 1, "appearance": "sepia", "repos": []}"#).unwrap();
         assert_eq!(Library::read(&file).appearance, Appearance::System);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn settings_survive_a_save_next_to_repos_and_appearance() {
+        let d = tmp("settings");
+        let file = d.join("repos.json");
+        assert_eq!(Library::read(&file).settings, Settings::default());
+        let mut lib = Library::read(&file);
+        lib.add(&d.join("a"));
+        lib.appearance = Appearance::Dark;
+        lib.settings = Settings { auto_fetch: false, fetch_minutes: 30 };
+        lib.save();
+        let back = Library::read(&file);
+        assert_eq!(back.settings, Settings { auto_fetch: false, fetch_minutes: 30 });
+        assert_eq!(back.appearance, Appearance::Dark);
+        assert_eq!(back.entries.len(), 1);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_older_or_damaged_file_keeps_its_repos_and_gets_default_settings() {
+        let d = tmp("old-settings");
+        let file = d.join("repos.json");
+        // A file written before the Settings window: no "settings" key.
+        std::fs::write(&file, r#"{"version": 1, "appearance": "light", "repos": [{"path": "/code/work/api", "favorite": true, "last_opened": 5}]}"#).unwrap();
+        let lib = Library::read(&file);
+        assert_eq!(lib.settings, Settings::default());
+        assert_eq!(lib.appearance, Appearance::Light);
+        assert_eq!(lib.favorites().iter().map(|e| e.name()).collect::<Vec<_>>(), ["api"]);
+        // Saving it adds the settings and keeps the rest.
+        lib.save();
+        let back = Library::read(&file);
+        assert_eq!((back.entries.len(), back.appearance), (1, Appearance::Light));
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(v["settings"]["fetch_minutes"], 10);
+        // Settings of the wrong shape fall back without touching the repos.
+        for bad in [r#""fast""#, "[1, 2]", r#"{"auto_fetch": 1, "fetch_minutes": 42}"#] {
+            std::fs::write(&file, format!(r#"{{"version": 1, "appearance": "dark", "settings": {bad}, "repos": [{{"path": "/x/y"}}]}}"#)).unwrap();
+            let lib = Library::read(&file);
+            assert_eq!(lib.settings, Settings::default(), "{bad}");
+            assert_eq!((lib.entries.len(), lib.appearance), (1, Appearance::Dark), "{bad}");
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 

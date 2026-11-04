@@ -82,6 +82,7 @@ impl App {
             }
             v.push(item("Commands", "Open repository…", "", Cmd::OpenDialog));
             v.push(item("Commands", "Refresh", "⌘R", Cmd::Reload));
+            v.push(item("Commands", "Settings…", "⌘, · appearance, automatic fetch", Cmd::Settings));
             let now = self.library.appearance;
             for a in theme::Appearance::ALL {
                 let hint = match (a == now, a) {
