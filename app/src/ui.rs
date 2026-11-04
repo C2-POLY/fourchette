@@ -83,6 +83,30 @@ pub fn fit_galley(p: &egui::Painter, text: &str, font: FontId, color: Color32, m
 mod tests {
     use super::*;
 
+    fn gref(name: &str, kind: RefKind, is_head: bool) -> GitRef {
+        GitRef { name: name.into(), full: name.into(), kind, target: "abc".into(), is_head, upstream: String::new() }
+    }
+
+    fn args(c: Option<Cmd>) -> Option<Vec<String>> {
+        match c {
+            Some(Cmd::Git { args, .. }) => Some(args),
+            Some(_) => panic!("not a Git command"),
+            None => None,
+        }
+    }
+
+    #[test]
+    fn double_click_on_a_label_checks_out_only_what_can_be_checked_out() {
+        let refs = vec![gref("main", RefKind::Local, true), gref("dev", RefKind::Local, false), gref("origin/dev", RefKind::Remote, false), gref("origin/new", RefKind::Remote, false)];
+        assert_eq!(args(label_checkout(&refs[1], &refs)), Some(vec!["checkout".into(), "dev".into()]));
+        assert_eq!(args(label_checkout(&refs[0], &refs)), None);
+        assert_eq!(args(label_checkout(&gref("v1", RefKind::Tag, false), &refs)), None);
+        assert_eq!(args(label_checkout(&gref("HEAD", RefKind::Head, false), &refs)), None);
+        assert_eq!(args(label_checkout(&gref("stash@{0}", RefKind::Stash, false), &refs)), None);
+        assert_eq!(args(label_checkout(&refs[2], &refs)), Some(vec!["checkout".into(), "dev".into()]));
+        assert_eq!(args(label_checkout(&refs[3], &refs)), Some(vec!["checkout".into(), "--track".into(), "origin/new".into()]));
+    }
+
     #[test]
     fn long_label_is_cut_with_an_ellipsis_within_its_width() {
         let ctx = egui::Context::default();
@@ -528,6 +552,16 @@ pub fn checkout_remote(r: &GitRef, refs: &[GitRef]) -> Cmd {
         Cmd::Git { label: format!("Switched to {local}"), args: vec!["checkout".into(), local], network: false }
     } else {
         Cmd::Git { label: format!("Switched to {local}"), args: vec!["checkout".into(), "--track".into(), r.name.clone()], network: false }
+    }
+}
+
+/// What a double-click on a branch label of the history does: check out a local branch that is not
+/// the current one, or a remote branch like the sidebar does. Tags, HEAD, stashes: nothing.
+pub fn label_checkout(r: &GitRef, refs: &[GitRef]) -> Option<Cmd> {
+    match r.kind {
+        RefKind::Local if !r.is_head => Some(Cmd::Git { label: format!("Switched to {}", r.name), args: vec!["checkout".into(), r.name.clone()], network: false }),
+        RefKind::Remote => Some(checkout_remote(r, refs)),
+        _ => None,
     }
 }
 
