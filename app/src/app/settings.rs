@@ -103,7 +103,10 @@ impl Card<'_> {
     fn strip(&mut self, h: f32, sep: bool) -> Rect {
         let (r, _) = self.ui.allocate_exact_size(vec2(self.ui.available_width(), h), Sense::hover());
         if sep && self.rows > 0 {
-            self.ui.painter().hline(r.x_range(), r.top(), Stroke::new(1.0_f32, theme::c().border));
+            // In dark mode `border` almost matches the card's fill, so the stronger one shows.
+            let k = theme::c();
+            let line = if theme::is_light() { k.border } else { k.border_strong };
+            self.ui.painter().hline(r.x_range(), r.top(), Stroke::new(1.0_f32, line));
         }
         self.rows += 1;
         r
