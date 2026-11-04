@@ -95,16 +95,29 @@ mod tests {
         }
     }
 
+    /// The checkout a label's double-click asks for, as `checkout::plan` resolves it.
+    fn checkout_args(c: Option<Cmd>, refs: &[GitRef]) -> Option<Vec<String>> {
+        match c {
+            Some(Cmd::Checkout { name, remote }) => match crate::checkout::plan(&name, remote, refs, &[]) {
+                crate::checkout::Plan::Now { args, .. } => Some(args),
+                crate::checkout::Plan::Ask(_) => panic!("asks"),
+            },
+            Some(_) => panic!("not a checkout"),
+            None => None,
+        }
+    }
+
     #[test]
     fn double_click_on_a_label_checks_out_only_what_can_be_checked_out() {
         let refs = vec![gref("main", RefKind::Local, true), gref("dev", RefKind::Local, false), gref("origin/dev", RefKind::Remote, false), gref("origin/new", RefKind::Remote, false)];
-        assert_eq!(args(label_checkout(&refs[1], &refs)), Some(vec!["checkout".into(), "dev".into()]));
-        assert_eq!(args(label_checkout(&refs[0], &refs)), None);
-        assert_eq!(args(label_checkout(&gref("v1", RefKind::Tag, false), &refs)), None);
-        assert_eq!(args(label_checkout(&gref("HEAD", RefKind::Head, false), &refs)), None);
-        assert_eq!(args(label_checkout(&gref("stash@{0}", RefKind::Stash, false), &refs)), None);
-        assert_eq!(args(label_checkout(&refs[2], &refs)), Some(vec!["checkout".into(), "dev".into()]));
-        assert_eq!(args(label_checkout(&refs[3], &refs)), Some(vec!["checkout".into(), "--track".into(), "origin/new".into()]));
+        let args = |r: &GitRef| checkout_args(label_checkout(r), &refs);
+        assert_eq!(args(&refs[1]), Some(vec!["checkout".into(), "dev".into()]));
+        assert_eq!(args(&refs[0]), None);
+        assert_eq!(args(&gref("v1", RefKind::Tag, false)), None);
+        assert_eq!(args(&gref("HEAD", RefKind::Head, false)), None);
+        assert_eq!(args(&gref("stash@{0}", RefKind::Stash, false)), None);
+        assert_eq!(args(&refs[2]), Some(vec!["checkout".into(), "dev".into()]));
+        assert_eq!(args(&refs[3]), Some(vec!["checkout".into(), "--track".into(), "origin/new".into()]));
     }
 
     fn tracking(name: &str, up: &str, ahead: usize, behind: usize, is_head: bool) -> GitRef {
@@ -617,21 +630,18 @@ pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str
     (resp, clicked_btn)
 }
 
-pub fn checkout_remote(r: &GitRef, refs: &[GitRef]) -> Cmd {
-    let local = r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name).to_string();
-    if refs.iter().any(|x| x.kind == RefKind::Local && x.name == local) {
-        Cmd::Git { label: format!("Switched to {local}"), args: vec!["checkout".into(), local], network: false }
-    } else {
-        Cmd::Git { label: format!("Switched to {local}"), args: vec!["checkout".into(), "--track".into(), r.name.clone()], network: false }
-    }
+/// Checks out a remote branch: its local branch when there is one, else a new tracking branch
+/// (`checkout::plan` decides, against the tab's refs).
+pub fn checkout_remote(r: &GitRef) -> Cmd {
+    Cmd::Checkout { name: r.name.clone(), remote: true }
 }
 
 /// What a double-click on a branch label of the history does: check out a local branch that is not
 /// the current one, or a remote branch like the sidebar does. Tags, HEAD, stashes: nothing.
-pub fn label_checkout(r: &GitRef, refs: &[GitRef]) -> Option<Cmd> {
+pub fn label_checkout(r: &GitRef) -> Option<Cmd> {
     match r.kind {
-        RefKind::Local if !r.is_head => Some(Cmd::Git { label: format!("Switched to {}", r.name), args: vec!["checkout".into(), r.name.clone()], network: false }),
-        RefKind::Remote => Some(checkout_remote(r, refs)),
+        RefKind::Local if !r.is_head => Some(Cmd::Checkout { name: r.name.clone(), remote: false }),
+        RefKind::Remote => Some(checkout_remote(r)),
         _ => None,
     }
 }
@@ -665,7 +675,7 @@ pub fn fast_forward(b: &GitRef, refs: &[GitRef], worktrees: &[crate::worktree::W
 
 pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
     if !b.is_head && ui.button("Check out").clicked() {
-        cmds.push(Cmd::Git { label: format!("Switched to {}", b.name), args: vec!["checkout".into(), b.name.clone()], network: false });
+        cmds.push(Cmd::Checkout { name: b.name.clone(), remote: false });
     }
     if let Some(ff) = fast_forward(b, refs, worktrees) {
         let button = egui::Button::new(ff.text).shortcut_text(ff.count);

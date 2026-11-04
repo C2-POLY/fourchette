@@ -184,7 +184,7 @@ impl Tab {
                         cmds.push(Cmd::SelectHash(b.target.clone()));
                     }
                     if resp.double_clicked() {
-                        cmds.extend(label_checkout(b, &self.refs));
+                        cmds.extend(label_checkout(b));
                     }
                     resp.context_menu(|ui| branch_menu(ui, b, &cur, &self.refs, &self.worktrees, cmds));
                 }
@@ -220,11 +220,11 @@ impl Tab {
                             cmds.push(Cmd::SelectHash(r.target.clone()));
                         }
                         if resp.double_clicked() {
-                            cmds.push(checkout_remote(r, &self.refs));
+                            cmds.push(checkout_remote(r));
                         }
                         resp.context_menu(|ui| {
                             if ui.button("Check out").clicked() {
-                                cmds.push(checkout_remote(r, &self.refs));
+                                cmds.push(checkout_remote(r));
                             }
                             if ui.button(format!("Merge {} into current branch", r.name)).clicked() {
                                 cmds.push(Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false });
@@ -448,7 +448,7 @@ impl Tab {
                     if resp.double_clicked() {
                         if let Some(q) = ui.input(|i| i.pointer.interact_pos()) {
                             if let Some((_, r)) = pills.iter().find(|(pr, _)| pr.contains(q)) {
-                                cmds.extend(label_checkout(r, &self.refs));
+                                cmds.extend(label_checkout(r));
                             }
                         }
                     }
@@ -1077,6 +1077,60 @@ impl Tab {
                         let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::c().on_accent)).fill(theme::c().accent).stroke(Stroke::new(1.0_f32, theme::c().accent))).clicked();
                         if create || (ok && ui.input(|i| i.key_pressed(Key::Enter))) {
                             cmds.push(Cmd::RepoGroup(path.clone(), Some(name.trim().to_string())));
+                            close = true;
+                        }
+                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                            close = true;
+                        }
+                    });
+                });
+            }
+            Some(Dialog::CheckoutSync { sync, action, stash, dirty }) => {
+                // The original's CheckoutAndSyncController: "Checkout Branch", "Branch:", an
+                // "Action:" choice, "Stash and reapply local changes", "Checkout".
+                use crate::checkout::SyncAction;
+                egui::Modal::new(egui::Id::new("checkout_sync")).show(ctx, |ui| {
+                    ui.set_width(420.0);
+                    ui.label(RichText::new("Check Out Branch").size(theme::FS_TITLE).color(theme::c().strong));
+                    ui.label(RichText::new(sync.summary()).color(theme::c().dim));
+                    ui.add_space(10.0);
+                    egui::Grid::new("checkout_sync_refs").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+                        ui.label(RichText::new("Branch").color(theme::c().dim));
+                        ui.label(RichText::new(sync.branch.as_str()).monospace().color(theme::c().text));
+                        ui.end_row();
+                        ui.label(RichText::new("Upstream").color(theme::c().dim));
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(sync.upstream.as_str()).monospace().color(theme::c().text));
+                            ui.label(RichText::new(sync.counts()).small().color(theme::c().faint));
+                        });
+                        ui.end_row();
+                    });
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Action").color(theme::c().dim));
+                    ui.add_space(2.0);
+                    for a in sync.actions() {
+                        let reset = a == SyncAction::Reset;
+                        let col = if reset { theme::c().deleted } else { theme::c().text };
+                        ui.radio_value(action, a, RichText::new(sync.text(a)).color(col));
+                        if reset {
+                            ui.horizontal(|ui| {
+                                ui.add_space(24.0);
+                                ui.label(RichText::new(sync.reset_warning()).small().color(theme::tint(theme::c().deleted, theme::c().dim, 0.6)));
+                            });
+                        }
+                    }
+                    if *dirty {
+                        ui.add_space(8.0);
+                        ui.checkbox(stash, "Stash and reapply local changes");
+                    }
+                    ui.add_space(6.0);
+                    ui.label(RichText::new("Undo takes it all back in one step.").small().color(theme::c().faint));
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        let fill = if *action == SyncAction::Reset { theme::tint(theme::c().deleted, theme::c().elevated, 0.8) } else { theme::c().accent };
+                        let go = ui.add(egui::Button::new(RichText::new("Check out").color(theme::c().on_accent)).fill(fill).stroke(Stroke::new(1.0_f32, fill))).clicked();
+                        if go || ui.input(|i| i.key_pressed(Key::Enter)) {
+                            cmds.push(Cmd::CheckoutSync { sync: sync.clone(), action: *action, stash: *stash && *dirty });
                             close = true;
                         }
                         if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {

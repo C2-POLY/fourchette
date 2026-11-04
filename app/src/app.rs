@@ -59,10 +59,18 @@ pub enum Dialog {
     Confirm { title: String, message: String, label: String, args: Vec<String>, network: bool },
     /// Put a repository in a group the person names.
     NewGroup { path: PathBuf, name: String },
+    /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
+    /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
     Git { label: String, args: Vec<String>, network: bool },
+    /// Check out a local branch, or (`remote`) a remote one: at once, or through the Check out
+    /// dialog when it is behind its upstream (`checkout::plan`).
+    Checkout { name: String, remote: bool },
+    /// The Check out dialog's choice, run as one undo step.
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool },
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
@@ -320,6 +328,15 @@ impl App {
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
             t.details_layout = l;
+        }
+        // FOURCHETTE_CHECKOUT_SYNC=1 opens the Check out dialog on `main`, 3 commits behind
+        // origin/main; FOURCHETTE_CHECKOUT_SYNC=diverged with 2 commits of its own as well.
+        if let Ok(v) = std::env::var("FOURCHETTE_CHECKOUT_SYNC") {
+            if let Some(b) = t.refs.iter_mut().find(|r| r.name == "main" && r.kind == RefKind::Local) {
+                (b.upstream, b.behind, b.ahead) = ("origin/main".into(), 3, if v == "diverged" { 2 } else { 0 });
+            }
+            let now = t.checkout("main", false);
+            debug_assert!(now.is_none(), "main should ask");
         }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
