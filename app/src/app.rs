@@ -87,6 +87,7 @@ pub enum Cmd {
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
     ToggleDetails,
+    SetVariant(theme::Variant),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
     AiCommitMessage,
@@ -184,7 +185,8 @@ impl App {
         let library = crate::library::Library::load();
         // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
-        theme::apply(&cc.egui_ctx, appearance);
+        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
+        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
         let mut app = App {
             repo: None,
             commits: vec![],
@@ -638,6 +640,12 @@ impl App {
                 }
                 Cmd::SetDetails(l) => self.set_details(l),
                 Cmd::ToggleDetails => self.set_details(self.details_layout.toggled()),
+                Cmd::SetVariant(v) => {
+                    self.library.variant = v;
+                    self.library.save();
+                    theme::set_variant(ctx, v);
+                    crate::icon::show(ctx, v);
+                }
                 Cmd::Switcher => {
                     self.switcher = if self.switcher.is_some() { None } else { Some(repos::Switcher::default()) };
                 }
