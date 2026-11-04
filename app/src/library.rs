@@ -596,6 +596,8 @@ mod tests {
             json!({
                 "appearance": "light",
                 "variant": "neon",
+                "ui_font": "inter",
+                "code_font": "jetbrains",
                 "auto_fetch": false,
                 "fetch_minutes": 30,
                 "pull_rebase": false,
