@@ -78,6 +78,7 @@ pub fn build() -> Demo {
         r("v2.3.0", RefKind::Tag, 21, false),
         r("v2.2.1", RefKind::Tag, 12, false),
         r("feature/search", RefKind::Local, 19, false),
+        r("feature/remember-the-last-opened-repository-per-window", RefKind::Local, 17, false),
         r("upstream/main", RefKind::Remote, 18, false),
     ];
     let stashes = vec![Stash { name: "stash@{0}".into(), message: "WIP on develop: try a lighter toolbar".into() }];
