@@ -1,5 +1,6 @@
 mod ai;
 mod app;
+mod checkout;
 mod demo;
 mod git;
 mod github;
