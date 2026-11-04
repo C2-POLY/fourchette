@@ -61,8 +61,13 @@ impl App {
                 }
             }
 
-            // AI assistant (Claude through the person's subscription).
             ui.add_space(10.0);
+            if tool_button(ui, "board", "Board", 0, self.board.open).on_hover_text("The GitHub project as a board (⌘B)").clicked() {
+                cmds.push(Cmd::Board);
+            }
+
+            // AI assistant (Claude through the person's subscription).
+            ui.add_space(4.0);
             let ai_btn = tool_button(ui, "ai", "Assistant", 0, self.ai.busy()).on_hover_text("Ask Claude (uses your Claude subscription)");
             egui::Popup::menu(&ai_btn).show(|ui| {
                 ui.set_min_width(260.0);
@@ -963,8 +968,21 @@ impl App {
             cmds.push(Cmd::Switcher);
             return;
         }
+        // ⌘B opens or closes the project board.
+        let (board_key, escape) = board::board_keys(ctx);
+        if board_key {
+            cmds.push(Cmd::Board);
+            return;
+        }
         self.favorite_keys(ctx, cmds);
         if self.switcher.is_some() || self.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        if self.board.open {
+            // Esc closes the card's drawer, then the board; the history's keys wait for it.
+            if escape {
+                self.board_escape();
+            }
             return;
         }
         let (down, up, refresh, undo) = ctx.input(|i| {
@@ -1065,21 +1083,29 @@ impl eframe::App for App {
                 });
             });
 
-        egui::SidePanel::left("sidebar")
+        // The board takes the whole window under the toolbar.
+        let board_open = self.board.open;
+        if !board_open {
+            egui::SidePanel::left("sidebar")
             .resizable(true)
             .default_width(230.0)
             .width_range(190.0..=420.0)
             .frame(egui::Frame::new().fill(theme::SIDEBAR).inner_margin(Margin::symmetric(8, 0)).stroke(Stroke::new(1.0, theme::BORDER)))
             .show(ctx, |ui| self.sidebar(ui, &mut cmds));
 
-        egui::SidePanel::right("details")
+            egui::SidePanel::right("details")
             .resizable(true)
             .default_width(330.0)
             .width_range(280.0..=600.0)
             .frame(egui::Frame::new().fill(theme::PANEL).inner_margin(Margin::symmetric(14, 0)).stroke(Stroke::new(1.0, theme::BORDER)))
             .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+        }
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::BG)).show(ctx, |ui| {
+            if board_open {
+                self.board_view(ui, &mut cmds);
+                return;
+            }
             if self.is_demo() {
                 egui::Frame::new().fill(theme::ACCENT.gamma_multiply(0.14)).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
                     ui.horizontal(|ui| {

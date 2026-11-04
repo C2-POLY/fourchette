@@ -33,16 +33,16 @@ cargo clippy
 (cd /tmp && <app>/target/debug/fourchette --screenshot <out.png>)
 ```
 
-Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
+Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
 
 ## Architecture
 
 - `main.rs`: arguments (`<repo>`, `--screenshot <png>`).
 - `app.rs`: the state (`App`), the actions (`Cmd`, run once per frame by `App::run`) and the dialogs (`Dialog`). The views push `Cmd`s, never change the repository themselves.
-- `app/views.rs` (toolbar, sidebar, history, details, diff, dialogs, keys), `app/palette.rs` (Cmd+K), `app/repos.rs` (Cmd+O), `app/project.rs` (the Project section), `app/assistant.rs` (Claude).
+- `app/views.rs` (toolbar, sidebar, history, details, diff, dialogs, keys), `app/palette.rs` (Cmd+K), `app/repos.rs` (Cmd+O), `app/project.rs` (the Project section), `app/board.rs` (the full-screen project board, Cmd+B; Esc closes its drawer then the board), `app/assistant.rs` (Claude).
 - `git.rs`, `worktree.rs`, `undo.rs`: Git through its command line. Every local action takes a `Snapshot` first, so Cmd+Z takes it back.
 - `library.rs`: the repository list (`~/Library/Application Support/Fourchette/repos.json`): groups, favourites, last opened, the chosen GitHub project.
-- `github.rs`: the GitHub project board, read only, through `gh` in a background thread.
+- `github.rs`: the GitHub project, read only, through `gh` in a background thread: the projects of the repository, then the project's items through `gh api graphql` (types, labels, fields, sub-issues, linked pull requests), shared by the sidebar section and the board.
 - `ai.rs`: Claude Code through the person's subscription (`claude -p`, no tools, API keys hidden).
 - `graph.rs`, `ui.rs`, `theme.rs`: the graph layout, drawn widgets and colours.
 - Network and AI work never block the window: a thread and a channel polled each frame (`App::spawn`, `ai_poll`, `project_poll`).

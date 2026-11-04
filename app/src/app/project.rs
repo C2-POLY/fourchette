@@ -4,10 +4,12 @@ use crate::github::{self, Board, Item, Kind};
 use crate::ui::{section_header, side_item};
 use egui::{pos2, vec2, Align2, CornerRadius, FontId, Rect, RichText, Sense, Ui};
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct ProjectState {
-    pub board: Option<Board>,
+    /// Shared so the views can hold it while they change the rest of the app.
+    pub board: Option<Arc<Board>>,
     pub error: Option<String>,
     pub loading: Option<Receiver<Result<Board, String>>>,
     pub mine_only: bool,
@@ -15,7 +17,26 @@ pub struct ProjectState {
     pub flipped: HashSet<String>,
 }
 
-fn status_color(status: &str) -> Color32 {
+/// The colour of a GitHub colour name ("BLUE"), as used by project options and issue types.
+pub(super) fn named_color(name: &str) -> Option<Color32> {
+    Some(match name.to_ascii_uppercase().as_str() {
+        "GRAY" => theme::DIM,
+        "BLUE" => theme::ACCENT,
+        "GREEN" => theme::ADDED,
+        "YELLOW" => theme::MODIFIED,
+        "ORANGE" => Color32::from_rgb(0xff, 0x8a, 0x3d),
+        "RED" => theme::DELETED,
+        "PINK" => Color32::from_rgb(0xf7, 0x6f, 0xb4),
+        "PURPLE" => theme::RENAMED,
+        _ => return None,
+    })
+}
+
+/// A status column's colour: the one the project gives it, else one guessed from its name.
+pub(super) fn status_color(board: &Board, status: &str) -> Color32 {
+    if let Some(c) = board.status_color(status).and_then(named_color) {
+        return c;
+    }
     let s = status.to_lowercase();
     if github::is_done(status) {
         theme::ADDED
@@ -91,7 +112,7 @@ impl App {
         self.project.loading = None;
         match res {
             Ok(b) => {
-                self.project.board = Some(b);
+                self.project.board = Some(Arc::new(b));
                 self.project.error = None;
             }
             Err(e) => self.project.error = Some(e),
@@ -133,7 +154,8 @@ impl App {
         let mut toggle = mine_only;
         let mine = |it: &Item| !mine_only || it.assignees.iter().any(|a| a == &board.me);
         let keep = |it: &Item| f.is_empty() || it.title.to_lowercase().contains(&f) || it.number.map(|n| n.to_string().contains(&f)).unwrap_or(false);
-        let open_count: usize = board.columns.iter().filter(|c| !github::is_done(&c.0)).map(|c| c.1.iter().filter(|i| mine(i) && keep(i)).count()).sum();
+        let cols = github::columns(&board.order(), board.items.iter().filter(|i| board.in_repo(i)), false);
+        let open_count: usize = cols.iter().filter(|c| !github::is_done(&c.0)).map(|c| c.1.iter().filter(|i| mine(i) && keep(i)).count()).sum();
 
         let open = !self.collapsed.contains("Project");
         let header = section_header(ui, "Project", open_count, open);
@@ -188,19 +210,19 @@ impl App {
         if let Some(e) = &self.project.error {
             ui.label(RichText::new(e).small().color(theme::MODIFIED));
         }
-        if board.columns.is_empty() {
+        if cols.is_empty() {
             ui.label(RichText::new("  Nothing for this repository in the project yet.").small().color(theme::FAINT));
             return;
         }
 
-        for (status, items) in &board.columns {
-            let items: Vec<&Item> = items.iter().filter(|i| mine(i) && keep(i)).collect();
+        for (status, items) in &cols {
+            let items: Vec<&Item> = items.iter().copied().filter(|i| mine(i) && keep(i)).collect();
             if items.is_empty() {
                 continue;
             }
             let key = format!("gh:{status}");
             let col_open = github::is_done(status) == self.project.flipped.contains(&key);
-            let color = status_color(status);
+            let color = status_color(&board, status);
             let label = format!("{}  {status}", if col_open { "⏷" } else { "⏵" });
             if side_item(ui, "remote", &label, Some(items.len()), false, None, false).clicked() {
                 if !self.project.flipped.remove(&key) {

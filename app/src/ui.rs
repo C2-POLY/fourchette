@@ -225,6 +225,17 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
                 s,
             ));
         }
+        "board" => {
+            // three columns holding cards
+            for (i, cards) in [3, 2, 1].iter().enumerate() {
+                let x = c.x - 9.0 + i as f32 * 6.5;
+                let col = Rect::from_min_size(pos2(x - 0.5, c.y - 8.5), vec2(6.0, 17.0));
+                p.rect_stroke(col, CornerRadius::same(2), Stroke::new(1.0, s.color.gamma_multiply(0.45)), StrokeKind::Inside);
+                for k in 0..*cards {
+                    p.rect_filled(Rect::from_min_size(pos2(x + 0.7, c.y - 7.0 + k as f32 * 5.0), vec2(3.6, 3.6)), CornerRadius::same(1), s.color);
+                }
+            }
+        }
         "stash" | "pop" => {
             let r = Rect::from_center_size(c + vec2(0.0, 3.0), vec2(16.0, 10.0));
             p.rect_stroke(r, CornerRadius::same(2), s, StrokeKind::Middle);
