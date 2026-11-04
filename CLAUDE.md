@@ -33,6 +33,16 @@ cargo clippy
 (cd /tmp && <app>/target/debug/fourchette --screenshot <out.png>)
 ```
 
+Release (macOS), from `app/`:
+
+```bash
+# Build the universal .app and .dmg into target/release-bundle/
+scripts/release.sh
+
+# Create or update the GitHub pre-release v<version> (clean main only)
+scripts/release.sh --publish
+```
+
 Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window (`FOURCHETTE_SETTINGS=<section>` at that section: `appearance`, `fetch`), `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_VARIANT=classic|gold|neon|forest` a variant, `FOURCHETTE_FONTS=<ui>,<code>` (for example `sf,menlo`; keys `inter|sf|helvetica|avenir` and `jetbrains|sfmono|menlo|monaco`) the fonts, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open. `FOURCHETTE_TABS=<n>` shows the sample project in n tabs, so the tab strip shows. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
 
 ## Architecture
@@ -76,7 +86,7 @@ Project ids for `gh project item-edit`: project `PVT_kwDODd-WqM4BqKPF`, Status f
 - The version lives only in `app/Cargo.toml` (`version`), as `MAJOR.MINOR.PATCH`.
 - One working day is one minor version (0.x while the app is not distributed). Bump it in the first commit of the day that changes something visible in the app, inside that commit. A day that only fixes bugs bumps the patch instead. Commits that only touch docs or tooling do not bump it.
 - Never put the version number in a commit message.
-- After each merge into `main`, move the current version's tag to `main`. Tags only ever point at `main`:
+- After each merge into `main`, move the current version's tag to `main`, then re-run `scripts/release.sh --publish` to update its pre-release. Tags only ever point at `main`:
 
 ```bash
 git fetch --tags
