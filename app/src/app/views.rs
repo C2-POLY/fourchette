@@ -176,8 +176,8 @@ impl Tab {
                     if resp.clicked() {
                         cmds.push(Cmd::SelectHash(b.target.clone()));
                     }
-                    if resp.double_clicked() && !b.is_head {
-                        cmds.push(Cmd::Git { label: format!("Switched to {}", b.name), args: vec!["checkout".into(), b.name.clone()], network: false });
+                    if resp.double_clicked() {
+                        cmds.extend(label_checkout(b, &self.refs));
                     }
                     resp.context_menu(|ui| branch_menu(ui, b, &cur, cmds));
                 }
@@ -412,6 +412,7 @@ impl Tab {
                 if let Some(refs) = self.by_target.get(&c.hash) {
                     let mut x = rect.left() + 10.0;
                     let max_x = gx - 4.0;
+                    let mut pills: Vec<(Rect, &GitRef)> = Vec::new();
                     for (k, r) in refs.iter().enumerate() {
                         let (fill, stroke, text) = ref_colors(r, lane_col, bg);
                         let galley = p.layout_no_wrap(ref_label(r), theme::small(), text);
@@ -425,6 +426,7 @@ impl Tab {
                             break;
                         }
                         let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min(max_x - x), 18.0));
+                        pills.push((pr, r));
                         p.rect_filled(pr, CornerRadius::same(4), fill);
                         if let Some(s) = stroke {
                             p.rect_stroke(pr, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
@@ -435,6 +437,14 @@ impl Tab {
                         x = pr.right() + theme::REF_GAP;
                     }
                     p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
+                    // A double-click on a label checks its branch out.
+                    if resp.double_clicked() {
+                        if let Some(q) = ui.input(|i| i.pointer.interact_pos()) {
+                            if let Some((_, r)) = pills.iter().find(|(pr, _)| pr.contains(q)) {
+                                cmds.extend(label_checkout(r, &self.refs));
+                            }
+                        }
+                    }
                     // Hovering the labels lists every ref of the commit in full, the hidden ones included.
                     if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x < gx) {
                         resp.clone().on_hover_ui_at_pointer(|ui| {
