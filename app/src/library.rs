@@ -22,6 +22,85 @@ pub struct Entry {
     pub last_opened: i64,
     /// The GitHub project picked for this repository, as "owner#number".
     pub project: Option<String>,
+    /// Where the details panel sits for this repository; None until the person moves it.
+    pub details: Option<DetailsLayout>,
+}
+
+/// Where the commit details panel sits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailsPlace {
+    #[default]
+    Right,
+    Bottom,
+}
+
+impl DetailsPlace {
+    pub const ALL: [DetailsPlace; 2] = [DetailsPlace::Right, DetailsPlace::Bottom];
+
+    /// How it is written in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            DetailsPlace::Right => "right",
+            DetailsPlace::Bottom => "bottom",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<DetailsPlace> {
+        DetailsPlace::ALL.into_iter().find(|p| p.key() == s.trim().to_lowercase())
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DetailsPlace::Right => "Right",
+            DetailsPlace::Bottom => "Bottom",
+        }
+    }
+}
+
+/// The details panel's place, and whether it is hidden. A hidden panel keeps its place,
+/// so ⌘J brings it back where it was.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DetailsLayout {
+    pub place: DetailsPlace,
+    pub hidden: bool,
+}
+
+impl DetailsLayout {
+    pub fn shown(place: DetailsPlace) -> DetailsLayout {
+        DetailsLayout { place, hidden: false }
+    }
+
+    /// ⌘J: hide it, or show it again at its last place.
+    pub fn toggled(self) -> DetailsLayout {
+        DetailsLayout { hidden: !self.hidden, ..self }
+    }
+
+    pub fn hide(self) -> DetailsLayout {
+        DetailsLayout { hidden: true, ..self }
+    }
+
+    /// "right", "bottom" or "hidden" (hidden on the right), as FOURCHETTE_DETAILS takes it.
+    pub fn parse(s: &str) -> Option<DetailsLayout> {
+        match s.trim().to_lowercase().as_str() {
+            "hidden" => Some(DetailsLayout::default().hide()),
+            p => DetailsPlace::parse(p).map(DetailsLayout::shown),
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        if self.hidden {
+            "Hidden"
+        } else {
+            self.place.label()
+        }
+    }
+
+    /// Read from a repos.json entry: "details" is the place, "details_hidden" the flag.
+    /// A missing or unknown place means the right.
+    fn from_json(e: &Value) -> Option<DetailsLayout> {
+        let place = e["details"].as_str()?;
+        Some(DetailsLayout { place: DetailsPlace::parse(place).unwrap_or_default(), hidden: e["details_hidden"].as_bool().unwrap_or(false) })
+    }
 }
 
 impl Entry {
@@ -74,7 +153,7 @@ impl Library {
             if let Ok(s) = std::fs::read_to_string(dir.join("recent.txt")) {
                 let t = now();
                 for (k, l) in s.lines().filter(|l| !l.is_empty()).enumerate() {
-                    lib.entries.push(Entry { path: PathBuf::from(l), group: None, favorite: false, last_opened: t - k as i64, project: None });
+                    lib.entries.push(Entry { path: PathBuf::from(l), group: None, favorite: false, last_opened: t - k as i64, project: None, details: None });
                 }
             }
         }
@@ -94,6 +173,7 @@ impl Library {
                             favorite: e["favorite"].as_bool().unwrap_or(false),
                             last_opened: e["last_opened"].as_i64().unwrap_or(0),
                             project: e["project"].as_str().map(String::from),
+                            details: DetailsLayout::from_json(e),
                         })
                     })
                     .collect()
@@ -110,7 +190,14 @@ impl Library {
         let repos: Vec<Value> = self
             .entries
             .iter()
-            .map(|e| json!({"path": e.path.display().to_string(), "group": e.group, "favorite": e.favorite, "last_opened": e.last_opened, "project": e.project}))
+            .map(|e| {
+                let mut v = json!({"path": e.path.display().to_string(), "group": e.group, "favorite": e.favorite, "last_opened": e.last_opened, "project": e.project});
+                if let Some(d) = e.details {
+                    v["details"] = json!(d.place.key());
+                    v["details_hidden"] = json!(d.hidden);
+                }
+                v
+            })
             .collect();
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -131,7 +218,7 @@ impl Library {
         if self.get(path).is_some() {
             return false;
         }
-        self.entries.push(Entry { path: path.to_path_buf(), group: None, favorite: false, last_opened: 0, project: None });
+        self.entries.push(Entry { path: path.to_path_buf(), group: None, favorite: false, last_opened: 0, project: None, details: None });
         true
     }
 
@@ -157,6 +244,17 @@ impl Library {
     pub fn set_project(&mut self, path: &Path, project: Option<String>) {
         if let Some(e) = self.get_mut(path) {
             e.project = project;
+        }
+    }
+
+    /// The details panel layout of a repository: on the right until the person moves it.
+    pub fn details(&self, path: &Path) -> DetailsLayout {
+        self.get(path).and_then(|e| e.details).unwrap_or_default()
+    }
+
+    pub fn set_details(&mut self, path: &Path, details: DetailsLayout) {
+        if let Some(e) = self.get_mut(path) {
+            e.details = Some(details);
         }
     }
 
@@ -279,7 +377,7 @@ mod tests {
 
     #[test]
     fn generic_folders_are_skipped_for_the_group() {
-        let e = |p: &str| Entry { path: PathBuf::from(p), group: None, favorite: false, last_opened: 0, project: None };
+        let e = |p: &str| Entry { path: PathBuf::from(p), group: None, favorite: false, last_opened: 0, project: None, details: None };
         assert_eq!(e("/Users/me/Documents/c2-poly/repo/api").group_name(), "c2-poly");
         assert_eq!(e("/Users/me/code/src/web").group_name(), "me");
         assert_eq!(e("/repo/x").group_name(), "Other");
@@ -353,6 +451,58 @@ mod tests {
             assert_eq!((lib.entries.len(), lib.appearance), (1, Appearance::Dark), "{bad}");
         }
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn details_layout_is_kept_per_repository_and_defaults_to_the_right() {
+        let d = tmp("details");
+        let file = d.join("repos.json");
+        let (a, b, c) = (d.join("a"), d.join("b"), d.join("c"));
+        let mut lib = Library::read(&file);
+        for p in [&a, &b, &c] {
+            lib.add(p);
+        }
+        lib.set_details(&a, DetailsLayout::shown(DetailsPlace::Bottom));
+        lib.set_details(&b, DetailsLayout::shown(DetailsPlace::Bottom).hide());
+        lib.save();
+
+        let back = Library::read(&file);
+        assert_eq!(back.details(&a), DetailsLayout { place: DetailsPlace::Bottom, hidden: false });
+        assert_eq!(back.details(&b), DetailsLayout { place: DetailsPlace::Bottom, hidden: true });
+        assert_eq!(back.details(&c), DetailsLayout { place: DetailsPlace::Right, hidden: false }, "never set");
+        assert_eq!(back.get(&c).unwrap().details, None, "nothing written for a repository never changed");
+        assert_eq!(back.details(&d.join("unknown")), DetailsLayout::default());
+
+        // An older repos.json without the fields, and an unknown place, still read.
+        std::fs::write(
+            &file,
+            r#"{"version": 1, "repos": [{"path": "/x/old", "favorite": true}, {"path": "/x/odd", "details": "left", "details_hidden": "yes"}]}"#,
+        )
+        .unwrap();
+        let old = Library::read(&file);
+        assert_eq!(old.entries.len(), 2);
+        assert!(old.entries[0].favorite);
+        assert_eq!(old.details(Path::new("/x/old")), DetailsLayout::default());
+        assert_eq!(old.details(Path::new("/x/odd")), DetailsLayout::default());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn details_layout_keys_and_toggle() {
+        for p in DetailsPlace::ALL {
+            assert_eq!(DetailsPlace::parse(p.key()), Some(p));
+            assert_eq!(DetailsLayout::parse(p.key()), Some(DetailsLayout::shown(p)));
+        }
+        assert_eq!(DetailsPlace::parse(" Bottom "), Some(DetailsPlace::Bottom));
+        assert_eq!(DetailsPlace::parse("left"), None);
+        assert_eq!(DetailsLayout::parse("hidden"), Some(DetailsLayout { place: DetailsPlace::Right, hidden: true }));
+        assert_eq!(DetailsLayout::parse("sideways"), None);
+        // ⌘J hides the panel, then brings it back where it was.
+        let bottom = DetailsLayout::shown(DetailsPlace::Bottom);
+        assert!(bottom.toggled().hidden);
+        assert_eq!(bottom.toggled().toggled(), bottom);
+        assert_eq!(bottom.hide().label(), "Hidden");
+        assert_eq!(bottom.label(), "Bottom");
     }
 
     #[test]
