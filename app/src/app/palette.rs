@@ -65,10 +65,10 @@ impl App {
                 "Commands",
                 "New branch…",
                 "at the current commit",
-                Cmd::Dialog(Dialog::NewRef { at: "HEAD".into(), label: "the current commit".into(), name: String::new(), checkout: true, tag: false }),
+                Cmd::new_ref_at_head(false),
             ));
-            v.push(item("Commands", "Stash changes", "", Cmd::Git { label: "Changes stashed".into(), args: vec!["stash".into(), "push".into(), "-u".into()], network: false }));
-            v.push(item("Commands", "Pop stash", "", Cmd::Git { label: "Stash applied".into(), args: vec!["stash".into(), "pop".into()], network: false }));
+            v.push(item("Commands", "Stash changes", "", Cmd::stash()));
+            v.push(item("Commands", "Pop stash", "", Cmd::pop_stash()));
             v.push(item("Commands", "Show local changes", "", Cmd::Select(Sel::Wip)));
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));

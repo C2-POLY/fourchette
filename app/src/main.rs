@@ -6,8 +6,10 @@ mod github;
 mod graph;
 mod icon;
 mod library;
+mod menu;
 mod settings;
 mod theme;
+mod titlebar;
 mod ui;
 mod undo;
 mod worktree;
@@ -28,7 +30,12 @@ fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Fourchette")
         .with_inner_size([1360.0, 840.0])
-        .with_min_inner_size([900.0, 560.0]);
+        .with_min_inner_size([900.0, 560.0])
+        // Like the original: no title bar strip; the toolbar is the window's top edge, with the
+        // red, yellow and green buttons on it. The title stays for Mission Control and the Window menu.
+        .with_fullsize_content_view(true)
+        .with_titlebar_shown(false)
+        .with_title_shown(false);
     // The Dock icon of the saved variant (or of FOURCHETTE_VARIANT); `icon::show` swaps it later.
     let variant = theme::Variant::from_env_or(library::Library::load().variant);
     if let Some(icon) = icon::data(variant) {

@@ -2,6 +2,7 @@
 use super::*;
 use crate::git::FileChange;
 use crate::library::{DetailsLayout, DetailsPlace};
+use crate::menu;
 use crate::ui::*;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
 
@@ -29,8 +30,20 @@ impl App {
     // ---------------------------------------------------------------- toolbar
 
     fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        // The toolbar is the window's top edge (no title bar): dragging its empty background moves
+        // the window and a double-click zooms it. Added first, so the buttons on top keep their clicks.
+        let bg = ui.interact(ui.max_rect(), ui.id().with("window_drag"), Sense::click_and_drag());
+        if bg.drag_started_by(egui::PointerButton::Primary) {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+        }
+        if bg.double_clicked() {
+            let zoomed = ui.input(|i| i.viewport().maximized.unwrap_or(false));
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!zoomed));
+        }
+        let fullscreen = ui.input(|i| i.viewport().fullscreen.unwrap_or(false));
         ui.horizontal_centered(|ui| {
-            ui.add_space(6.0);
+            // Room for the red, yellow and green buttons, which sit on the toolbar.
+            ui.add_space(crate::titlebar::inset(fullscreen).max(6.0));
             let name = self.repo.as_ref().map(|r| r.name()).unwrap_or_else(|| "sample-project".into());
             if toolbar_pill(ui, "repository", &name).on_hover_text("Switch repository (⌘O)").clicked() {
                 cmds.push(Cmd::Switcher);
@@ -69,15 +82,9 @@ impl App {
                         "fetch" => cmds.push(Cmd::Fetch { all: ui.input(|i| i.modifiers.alt), quiet: false }),
                         "pull" => cmds.push(Cmd::Pull),
                         "push" => cmds.push(Cmd::Push),
-                        "branch" => cmds.push(Cmd::Dialog(Dialog::NewRef {
-                            at: "HEAD".into(),
-                            label: "the current commit".into(),
-                            name: String::new(),
-                            checkout: true,
-                            tag: false,
-                        })),
-                        "stash" => cmds.push(Cmd::Git { label: "Changes stashed".into(), args: vec!["stash".into(), "push".into(), "-u".into()], network: false }),
-                        _ => cmds.push(Cmd::Git { label: "Stash applied".into(), args: vec!["stash".into(), "pop".into()], network: false }),
+                        "branch" => cmds.push(Cmd::new_ref_at_head(false)),
+                        "stash" => cmds.push(Cmd::stash()),
+                        _ => cmds.push(Cmd::pop_stash()),
                     }
                 }
             }
@@ -1067,13 +1074,15 @@ impl App {
         if self.settings_open {
             return;
         }
-        // ⌘K opens the command palette from anywhere.
-        if ctx.input(|i| i.modifiers.command && (i.key_pressed(Key::K) || i.key_pressed(Key::P))) {
+        // ⌘K opens the command palette from anywhere. Plain ⌘ only: ⇧⌘P is Push and ⌃⌘O Show in
+        // Finder in the menu bar, which hands those keys on to egui while they are greyed out.
+        let plain = ctx.input(|i| i.modifiers.command && !i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt);
+        if plain && ctx.input(|i| i.key_pressed(Key::K) || i.key_pressed(Key::P)) {
             cmds.push(Cmd::Palette);
             return;
         }
         // ⌘O switches repository; ⌘1…⌘9 open the favourites.
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::O)) {
+        if plain && ctx.input(|i| i.key_pressed(Key::O)) {
             cmds.push(Cmd::Switcher);
             return;
         }
@@ -1119,6 +1128,70 @@ impl App {
         }
     }
 
+    // ---------------------------------------------------------------- menu bar
+
+    /// What the macOS menu bar needs to grey out or tick its items.
+    fn menu_state(&self, ctx: &egui::Context) -> menu::State {
+        menu::State {
+            repo: self.repo.is_some(),
+            busy: self.busy.is_some(),
+            modal: self.dialog.is_some(),
+            settings: self.settings_open,
+            text_focus: ctx.wants_keyboard_input(),
+            can_undo: !self.undo.is_empty(),
+            changes: !self.status.is_empty(),
+            // The Commit button's rule.
+            can_commit: !self.summary.trim().is_empty() && (!self.status.staged.is_empty() || self.amend),
+            upstream: self.head_has_upstream(),
+            branch: self.branch.is_some(),
+            stashes: !self.stashes.is_empty(),
+            head_shown: self.index.contains_key(&self.head),
+            details: self.details_layout,
+        }
+    }
+
+    /// The action behind a menu item: the same `Cmd` its button or key pushes.
+    fn menu_cmd(&self, id: menu::Id) -> Option<Cmd> {
+        use menu::Id;
+        let root = || self.repo.as_ref().map(|r| r.root.clone());
+        Some(match id {
+            // About opens AppKit's panel itself; the other edit items only act in a text field.
+            Id::About | Id::NoRecent | Id::Redo | Id::Cut | Id::Copy | Id::Paste | Id::SelectAll => return None,
+            Id::Settings => Cmd::Settings,
+            Id::OpenRepository => Cmd::OpenDialog,
+            Id::Switcher => Cmd::Switcher,
+            Id::Palette => Cmd::Palette,
+            Id::Undo => Cmd::Undo,
+            Id::ShowChanges => Cmd::Select(Sel::Wip),
+            Id::ToggleDetails => Cmd::ToggleDetails,
+            Id::DetailsRight => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Right)),
+            Id::DetailsBottom => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Bottom)),
+            Id::ShowHead => Cmd::SelectHash(self.head.clone()),
+            Id::Refresh => Cmd::Reload,
+            Id::Commit => Cmd::Commit,
+            Id::Fetch => Cmd::Fetch { all: false, quiet: false },
+            Id::FetchAll => Cmd::Fetch { all: true, quiet: false },
+            Id::Pull => Cmd::Pull,
+            Id::Push => Cmd::Push,
+            Id::Stash => Cmd::stash(),
+            Id::PopStash => Cmd::pop_stash(),
+            Id::CheckoutBranch => Cmd::PaletteCheckout,
+            Id::NewBranch => Cmd::new_ref_at_head(false),
+            Id::NewTag => Cmd::new_ref_at_head(true),
+            Id::ShowInFinder => Cmd::Reveal(root()?),
+            Id::OpenInTerminal => Cmd::OpenTerminal(root()?),
+            Id::Website => Cmd::OpenUrl(menu::REPO_URL.into()),
+            Id::Issues => Cmd::OpenUrl(menu::ISSUES_URL.into()),
+        })
+    }
+
+    /// Installs the menu bar on the first frame, then hands it this frame's state.
+    fn menu_sync(&self, ctx: &egui::Context) {
+        menu::install(ctx);
+        let recent: Vec<(String, String)> = self.library.recent().iter().map(|e| (e.name(), e.group_name())).collect();
+        menu::sync(&self.menu_state(ctx), &menu::recent_titles(&recent));
+    }
+
     fn screenshot_step(&mut self, ctx: &egui::Context) {
         let Some(path) = self.screenshot.clone() else { return };
         self.frame += 1;
@@ -1145,7 +1218,35 @@ impl App {
     }
 }
 
+/// An Edit menu item as the event egui's text field expects from the keyboard.
+fn edit_event(id: menu::Id) -> Option<egui::Event> {
+    let key = |key, shift| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers { mac_cmd: true, command: true, shift, ..Default::default() } };
+    Some(match id {
+        menu::Id::Undo => key(Key::Z, false),
+        menu::Id::Redo => key(Key::Z, true),
+        menu::Id::SelectAll => key(Key::A, false),
+        menu::Id::Cut => egui::Event::Cut,
+        menu::Id::Copy => egui::Event::Copy,
+        menu::Id::Paste => egui::Event::Paste(menu::pasteboard_text()?),
+        _ => return None,
+    })
+}
+
 impl eframe::App for App {
+    /// The menu bar's picks. When a menu key equivalent matches, AppKit takes the key and egui
+    /// never sees it, so each pick runs exactly once: Edit items as text-field events (Copy also
+    /// copies text selected in a label), the others as the `Cmd` of their button.
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        let text = ctx.wants_keyboard_input();
+        for pick in menu::take() {
+            match pick {
+                menu::Pick::Recent(n) => self.menu_cmds.extend(self.library.recent().get(n).map(|e| Cmd::Open(e.path.clone()))),
+                menu::Pick::Item(id) if id.is_edit() && (text || id == menu::Id::Copy) => raw.events.extend(edit_event(id)),
+                menu::Pick::Item(id) => self.menu_cmds.extend(self.menu_cmd(id)),
+            }
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
@@ -1158,10 +1259,11 @@ impl eframe::App for App {
             self.refresh_status();
         }
         self.was_focused = focused;
-        let mut cmds = Vec::new();
+        let mut cmds = std::mem::take(&mut self.menu_cmds);
 
+        crate::titlebar::place_buttons();
         egui::TopBottomPanel::top("toolbar")
-            .exact_height(60.0)
+            .exact_height(crate::titlebar::TOOLBAR_H)
             .frame(egui::Frame::new().fill(theme::c().sidebar))
             .show(ctx, |ui| self.toolbar(ui, &mut cmds));
 
@@ -1291,6 +1393,7 @@ impl eframe::App for App {
         }
 
         self.run(cmds, ctx);
+        self.menu_sync(ctx);
         self.screenshot_step(ctx);
     }
 }

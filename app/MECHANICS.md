@@ -102,6 +102,45 @@ or invalid key falls back to its default (on, 10 minutes) without touching the r
 * Commit details (RevisionSummaryTabController.nib): subject, description, **SHA, AUTHOR, COMMITTER, PARENTS, REFS**, changed files with a diff under each.
 * Commit view (CommitController.nib): unstaged / staged file lists, **Commit subject**, **Description**, **Commit** button, Amend.
 
+## Menu bar (MainMenu.nib) [ev_1c8c0440aa55e0e10632401c67ff8c7fca7774108d82fe97f19b59ff97807be9]
+
+Decoded from `Fork.app/Contents/Resources/Base.lproj/MainMenu.nib` (`investigation.cany/evidence/1c/`):
+menus **Fork, File, Edit, View, Repository, Window, Help**, 137 items. Fourchette keeps that order and
+those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what it doesn't have
+(New Window/Tab, Clone, Git Flow, Git LFS, Bisect, Apply Patch, Treemap, Statistics, Accounts, SSH keys…).
+
+| Original item (action) | Shortcut | Fourchette |
+|---|---|---|
+| Preferences… (`preferences:`) | ⌘, | Settings… → `Cmd::Settings` |
+| Hide / Hide Others / Show All / Quit | ⌘H, ⌥⌘H, —, ⌘Q | the same AppKit actions |
+| File > Open… (`openRepository:`) | ⌘O | Open Repository… (no key: ⌘O is Fourchette's switcher) |
+| File > Open Recent | — | Open Recent, from the repository list |
+| File > Quick Launch… (`showQuickOpenWindow:`) | ⌘P | Command Palette… ⌘P (⌘K also opens it) |
+| Window > Quick Launch… | ⇧⌘O | File > Switch Repository… ⌘O |
+| Edit > Undo / Redo / Cut / Copy / Paste / Select All | ⌘Z ⇧⌘Z ⌘X ⌘C ⌘V ⌘A | sent to the focused text field; Undo is `Cmd::Undo` otherwise |
+| View > Show Commit Details (⌥⌘1) | ⌥⌘1 | Show Details Panel ⌘J (Fourchette's key), Details on the Right / at the Bottom |
+| View > Show HEAD (`showHeadRevision:`) | ⌘0 | the same |
+| View > Refresh (`refresh:`) | ⌘R | the same |
+| View > Enter Full Screen | ⌃⌘F | the same (macOS also adds its own 🌐F item and hides ours) |
+| Repository > Commit (`showCommitView:`) | ⇧⌘C | commits, like the Commit button |
+| Fetch… / Quick Fetch | ⇧⌘F / ⌥⇧⌘F | Fetch / Fetch All Remotes |
+| Pull… / Push… | ⇧⌘L / ⇧⌘P | Pull / Push (no sheet in Fourchette) |
+| Save Stash… (`saveStash:`) | ⇧⌘H | Stash Changes; Pop Stash added (toolbar's Pop) |
+| Checkout Branch… (`showQuickLaunchCheckout:`) | ⌘B | the branch palette |
+| New Branch… / New Tag… | ⇧⌘B / ⇧⌘T | the new branch / tag dialog at HEAD |
+| Show in Finder / Open in Terminal | ⌃⌘O / ⌃⌘T | the same |
+| Window > Minimize / Zoom / Bring All to Front | ⌘M | the same AppKit actions |
+| Help > Issue Tracker, Website | — | Fourchette on GitHub, Report an Issue |
+
+## Window frame (no title bar, issue #53)
+
+Like the original's main window, there is no title bar strip: the content view fills the window
+(`fullsize_content_view`, transparent title bar, title hidden; the title "Fourchette" stays for Mission
+Control and the Window menu). The 60 pt toolbar is the top edge. The close, minimise and zoom buttons
+are moved onto its centre line (close at x = 20 pt, y centred in 60 pt, AppKit's own spacing), and the
+toolbar keeps 86 pt free on its left for them (none in full screen, where macOS hides them).
+Dragging the toolbar's empty background moves the window; a double-click zooms it.
+
 ## New features (not in the original — the person asked for a real edge)
 
 * **Universal Undo** (toolbar button, ⌘Z, palette). Before every local action (commit, amend,

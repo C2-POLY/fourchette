@@ -41,6 +41,8 @@ Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` open
 - `app.rs`: the state (`App`), the actions (`Cmd`, run once per frame by `App::run`) and the dialogs (`Dialog`). The views push `Cmd`s, never change the repository themselves.
 - `app/views.rs` (toolbar, sidebar, history, details, diff, dialogs, keys), `app/palette.rs` (Cmd+K), `app/repos.rs` (Cmd+O), `app/project.rs` (the Project section), `app/assistant.rs` (Claude).
 - `git.rs`, `worktree.rs`, `undo.rs`: Git through its command line. Every local action takes a `Snapshot` first, so Cmd+Z takes it back.
+- `menu.rs`: the macOS menu bar (Fourchette, File, Edit, View, Repository, Window, Help, laid out like the original's): a tested model of titles, shortcuts and greyed-out rules, and the AppKit menu. A pick is queued and turned into the `Cmd` of its button in `App::raw_input_hook` (Edit items go to the focused text field). `build.rs` links `assets/Info.plist` into the binary so the menu says "Fourchette" outside an .app bundle.
+- `titlebar.rs`: no title bar strip, like the original. The content fills the window, the toolbar is its top edge (dragging its empty background moves the window, a double-click zooms it), and on macOS the red, yellow and green buttons are moved onto the toolbar's centre line, with `INSET` left free for them. `--screenshot` shows the egui content only, without those buttons.
 - `library.rs`: the repository list (`~/Library/Application Support/Fourchette/repos.json`): groups, favourites, last opened, the chosen GitHub project.
 - `github.rs`: the GitHub project board, read only, through `gh` in a background thread.
 - `ai.rs`: Claude Code through the person's subscription (`claude -p`, no tools, API keys hidden).
