@@ -1,8 +1,8 @@
 //! The GitHub project linked to the repository, in the sidebar (read only).
 use super::*;
 use crate::github::{self, Board, Item, Kind};
-use crate::ui::{section_header, side_item};
-use egui::{pos2, vec2, Align2, CornerRadius, FontId, Rect, RichText, Sense, Ui};
+use crate::ui::{fit_text, group_row, section_header};
+use egui::{pos2, vec2, Align2, CornerRadius, FontId, RichText, Sense, Ui};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
@@ -17,17 +17,18 @@ pub struct ProjectState {
     pub flipped: HashSet<String>,
 }
 
-/// The colour of a GitHub colour name ("BLUE"), as used by project options and issue types.
+/// The colour of a GitHub colour name ("BLUE"), as used by project options and issue types,
+/// in the mode on screen.
 pub(super) fn named_color(name: &str) -> Option<Color32> {
     Some(match name.to_ascii_uppercase().as_str() {
-        "GRAY" => theme::DIM,
-        "BLUE" => theme::ACCENT,
-        "GREEN" => theme::ADDED,
-        "YELLOW" => theme::MODIFIED,
-        "ORANGE" => Color32::from_rgb(0xff, 0x8a, 0x3d),
-        "RED" => theme::DELETED,
-        "PINK" => Color32::from_rgb(0xf7, 0x6f, 0xb4),
-        "PURPLE" => theme::RENAMED,
+        "GRAY" => theme::c().dim,
+        "BLUE" => theme::lane_color(0),
+        "GREEN" => theme::c().added,
+        "YELLOW" => theme::c().modified,
+        "ORANGE" => theme::lane_color(3),
+        "RED" => theme::c().deleted,
+        "PINK" => theme::lane_color(4),
+        "PURPLE" => theme::c().renamed,
         _ => return None,
     })
 }
@@ -39,25 +40,25 @@ pub(super) fn status_color(board: &Board, status: &str) -> Color32 {
     }
     let s = status.to_lowercase();
     if github::is_done(status) {
-        theme::ADDED
+        theme::c().added
     } else if s.contains("review") {
-        theme::RENAMED
+        theme::c().renamed
     } else if s.contains("progress") || s.contains("doing") || s.contains("cours") {
-        theme::ACCENT
+        theme::c().accent_text
     } else if s.contains("ready") || s.contains("todo") || s.contains("to do") {
-        theme::MODIFIED
+        theme::c().modified
     } else if s.contains("block") {
-        theme::DELETED
+        theme::c().deleted
     } else {
-        theme::DIM
+        theme::c().dim
     }
 }
 
 fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
     let mut x = rect.left() + 24.0;
@@ -79,10 +80,10 @@ fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
     }
     x += 14.0;
     if let Some(n) = it.number {
-        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(11.0), theme::FAINT);
+        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(theme::FS_SMALL), theme::c().faint);
         x = r.right() + 6.0;
     }
-    p.with_clip_rect(Rect::from_min_max(rect.min, pos2(rect.right() - 6.0, rect.max.y))).text(pos2(x, y), Align2::LEFT_CENTER, &it.title, FontId::proportional(12.5), theme::TEXT);
+    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &it.title, theme::body(), theme::c().text, rect.right() - 8.0 - x);
     resp
 }
 
@@ -136,11 +137,11 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
                     ui.spinner();
-                    ui.label(RichText::new("Reading the GitHub project…").small().color(theme::DIM));
+                    ui.label(RichText::new("Reading the GitHub project…").small().color(theme::c().dim));
                 });
             } else if let Some(e) = self.project.error.clone() {
                 if self.section(ui, "Project", 0) {
-                    ui.label(RichText::new(e).small().color(theme::MODIFIED));
+                    ui.label(RichText::new(e).small().color(theme::c().modified));
                     if ui.small_button("Try again").clicked() {
                         cmds.push(Cmd::ProjectReload);
                     }
@@ -181,14 +182,14 @@ impl App {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             if board.projects.len() > 1 {
-                egui::ComboBox::from_id_salt("gh_project").selected_text(RichText::new(&proj.title).small()).width(ui.available_width() - 70.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("gh_project").selected_text(RichText::new(&proj.title).size(theme::FS_SECONDARY)).width(ui.available_width() - 70.0).show_ui(ui, |ui| {
                     for (i, p) in board.projects.iter().enumerate() {
                         if ui.selectable_label(i == board.chosen, &p.title).clicked() && i != board.chosen {
                             cmds.push(Cmd::ProjectPick(i));
                         }
                     }
                 });
-            } else if ui.link(RichText::new(&proj.title).small().color(theme::DIM)).on_hover_text("Open the project on GitHub").clicked() {
+            } else if ui.link(RichText::new(&proj.title).size(theme::FS_SECONDARY).color(theme::c().dim)).on_hover_text("Open the project on GitHub").clicked() {
                 cmds.push(Cmd::OpenUrl(proj.url.clone()));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -208,10 +209,10 @@ impl App {
             ui.ctx().request_repaint();
         }
         if let Some(e) = &self.project.error {
-            ui.label(RichText::new(e).small().color(theme::MODIFIED));
+            ui.label(RichText::new(e).small().color(theme::c().modified));
         }
         if cols.is_empty() {
-            ui.label(RichText::new("  Nothing for this repository in the project yet.").small().color(theme::FAINT));
+            ui.label(RichText::new("  Nothing for this repository in the project yet.").size(theme::FS_SECONDARY).color(theme::c().faint));
             return;
         }
 
@@ -223,8 +224,7 @@ impl App {
             let key = format!("gh:{status}");
             let col_open = github::is_done(status) == self.project.flipped.contains(&key);
             let color = status_color(&board, status);
-            let label = format!("{}  {status}", if col_open { "⏷" } else { "⏵" });
-            if side_item(ui, "remote", &label, Some(items.len()), false, None, false).clicked() {
+            if group_row(ui, status, items.len(), col_open).clicked() {
                 if !self.project.flipped.remove(&key) {
                     self.project.flipped.insert(key);
                 }

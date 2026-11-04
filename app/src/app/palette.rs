@@ -82,6 +82,15 @@ impl App {
             }
             v.push(item("Commands", "Open repository…", "", Cmd::OpenDialog));
             v.push(item("Commands", "Refresh", "⌘R", Cmd::Reload));
+            let now = self.library.appearance;
+            for a in theme::Appearance::ALL {
+                let hint = match (a == now, a) {
+                    (true, _) => "current",
+                    (_, theme::Appearance::System) => "follow macOS",
+                    _ => "",
+                };
+                v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
+            }
         }
         // ReferenceCommandProvider
         for r in &self.refs {
@@ -143,25 +152,25 @@ impl App {
 
         egui::Area::new(egui::Id::new("palette_backdrop")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
             let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, Color32::from_black_alpha(110));
+            ui.painter().rect_filled(r, CornerRadius::ZERO, theme::shadow(0.8));
             if resp.clicked() {
                 close = true;
             }
         });
         egui::Area::new(egui::Id::new("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
             egui::Frame::new()
-                .fill(theme::PANEL)
-                .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)))
-                .corner_radius(CornerRadius::same(12))
+                .fill(theme::c().elevated)
+                .stroke(Stroke::new(1.0_f32, theme::c().border_strong))
+                .corner_radius(CornerRadius::same(10))
                 .inner_margin(Margin::same(10))
-                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(140) })
+                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: theme::shadow(1.0) })
                 .show(ui, |ui| {
                     ui.set_width(PALETTE_W);
                     let hint = if checkout_only { "Check out a branch…" } else { "Type a command, a branch or a commit…" };
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut pal.query)
-                            .hint_text(hint)
-                            .font(FontId::proportional(16.0))
+                            .hint_text(crate::ui::faint_hint(hint))
+                            .font(FontId::proportional(theme::FS_TITLE))
                             .desired_width(f32::INFINITY)
                             .margin(Margin::symmetric(10, 8)),
                     );
@@ -178,32 +187,32 @@ impl App {
                             if it.group != last_group {
                                 last_group = it.group;
                                 let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), PALETTE_HEADER_H), Sense::hover());
-                                ui.painter().text(pos2(hr.left() + 10.0, hr.center().y), Align2::LEFT_CENTER, it.group.to_uppercase(), FontId::proportional(10.0), theme::FAINT);
+                                ui.painter().text(pos2(hr.left() + 10.0, hr.center().y), Align2::LEFT_CENTER, it.group, theme::small(), theme::c().faint);
                             }
                             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), PALETTE_ROW_H), Sense::click());
                             let selected = k == pal.sel;
                             if selected || resp.hovered() {
-                                ui.painter().rect_filled(rect, CornerRadius::same(6), if selected { theme::SELECT } else { theme::HOVER });
+                                ui.painter().rect_filled(rect, CornerRadius::same(6), if selected { theme::c().select } else { theme::c().hover });
                             }
                             if selected && (up || down) {
                                 ui.scroll_to_rect(rect, None);
                             }
                             let p = ui.painter().with_clip_rect(rect);
-                            let tc = if it.cmd.is_none() { theme::DELETED } else if selected { Color32::WHITE } else { theme::TEXT };
-                            let tr = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, &it.title, FontId::proportional(13.5), tc);
+                            let tc = if it.cmd.is_none() { theme::c().deleted } else if selected { theme::c().strong } else { theme::c().text };
+                            let tr = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, &it.title, theme::body(), tc);
                             // Secondary text, like the original's secondaryTextField.
-                            p.text(pos2((tr.right() + 12.0).max(rect.right() - 220.0), rect.center().y), Align2::LEFT_CENTER, &it.hint, FontId::proportional(11.5), theme::FAINT);
+                            p.text(pos2((tr.right() + 12.0).max(rect.right() - 220.0), rect.center().y), Align2::LEFT_CENTER, &it.hint, theme::secondary(), theme::c().faint);
                             if resp.clicked() {
                                 chosen = Some(k);
                             }
                         }
                         if items.is_empty() {
                             ui.add_space(6.0);
-                            ui.label(RichText::new("Nothing matches").color(theme::FAINT));
+                            ui.label(RichText::new("Nothing matches").color(theme::c().faint));
                         }
                     });
                     ui.add_space(4.0);
-                    ui.label(RichText::new("Up / Down to move · Enter to run · Esc to close").size(10.5).color(theme::FAINT));
+                    ui.label(RichText::new("Up / Down to move · Enter to run · Esc to close").size(theme::FS_SMALL).color(theme::c().faint));
                 });
         });
         if let Some(k) = chosen {

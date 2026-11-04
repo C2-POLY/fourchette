@@ -212,14 +212,20 @@ The original has an `UndoManager` class only for text fields and the interactive
 Rebuild: same question / verb / Cancel layout; the informative line says the action can be taken
 back with Undo (⌘Z), because here it can.
 
-## The new look (person's request: "closer to Kraken")
+## The new look (person's request: a modern, Linear-like style, issue #7)
 
-The person asked for a nicer, Kraken-like style, so the graph is drawn bigger on a dark theme.
-These are design choices, not values from the original:
+The person first asked for a Kraken-like style, then for a calm, modern look in the spirit of
+Linear. These are design choices, not values from the original:
 
-* Lane width 20 px (original 11), line width 2.5 px (original 1.5), commit node = 9 px radius
-  avatar circle with the author's initials (original 5 pt dot), merge commits = 4.5 px dot.
-* Row height 28 px — the original's row height was not found in code (*estimated*).
-* Colours: the original 9-colour palette is kept for branches; the window uses a dark navy theme.
+* Lane width 16 px (original 11), line width 2 px (original 1.5), commit node = 5 px radius dot
+  in the lane colour (original 5 pt dot), merge commits = 3.5 px hollow ring, a ring around the
+  checked-out commit. The author's initials moved from the graph to the Author column.
+* Row height 28 px — the original's row height was not found in code (*estimated*). Rows touch,
+  so lines run on from one row to the next.
+* Colours: the original 9-colour palette is kept for branches; the window uses near-black
+  surfaces, subtle borders and one indigo accent. Text uses a four-size scale (11, 12, 13, 15).
+* Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
+  palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
+  uses white surfaces and deepens the branch colours by 20% so they stay readable.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).

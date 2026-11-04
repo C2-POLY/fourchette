@@ -11,9 +11,29 @@ const DONE_LIMIT: usize = 20;
 const COL_W: f32 = 284.0;
 const COL_GAP: f32 = 12.0;
 const DRAWER_W: f32 = 420.0;
-const CARD: Color32 = Color32::from_rgb(0x22, 0x26, 0x33);
-const CARD_HOVER: Color32 = Color32::from_rgb(0x28, 0x2d, 0x3c);
-const CHIP: Color32 = Color32::from_rgb(0x2c, 0x31, 0x40);
+
+// Surfaces of the mode on screen: columns sit below the page, cards above it.
+fn column_fill() -> Color32 {
+    theme::c().sidebar
+}
+fn card_fill() -> Color32 {
+    theme::c().elevated
+}
+fn card_hover() -> Color32 {
+    theme::c().widget_hover
+}
+fn chip_fill() -> Color32 {
+    theme::c().select
+}
+
+/// A status or type colour as text: as it is on the dark mode, deeper on the light one.
+fn ink(c: Color32) -> Color32 {
+    if theme::is_light() {
+        theme::shade(c, 0.3)
+    } else {
+        c
+    }
+}
 
 #[derive(Default)]
 pub struct BoardState {
@@ -46,9 +66,9 @@ pub fn hex_color(s: &str) -> Option<Color32> {
 pub fn readable_on(c: Color32) -> Color32 {
     let l = 0.299 * c.r() as f32 + 0.587 * c.g() as f32 + 0.114 * c.b() as f32;
     if l > 150.0 {
-        Color32::from_rgb(0x15, 0x17, 0x1f)
+        theme::LIGHT.strong
     } else {
-        Color32::WHITE
+        theme::DARK.strong
     }
 }
 
@@ -96,9 +116,9 @@ pub fn matches(it: &Item, q: &str) -> bool {
 
 fn state_color(state: &str) -> Color32 {
     match state {
-        "MERGED" => theme::RENAMED,
-        "CLOSED" => theme::DELETED,
-        _ => theme::ADDED,
+        "MERGED" => theme::c().renamed,
+        "CLOSED" => theme::c().deleted,
+        _ => theme::c().added,
     }
 }
 
@@ -247,9 +267,9 @@ fn md_job(text: &str, size: f32, color: Color32, width: f32) -> LayoutJob {
     for s in md_spans(text) {
         match s {
             Span::Plain(t) => job.append(&t, 0.0, fmt(color)),
-            Span::Bold(t) => job.append(&t, 0.0, fmt(Color32::WHITE)),
-            Span::Link(t) => job.append(&t, 0.0, fmt(theme::ACCENT)),
-            Span::Code(t) => job.append(&t, 0.0, TextFormat { font_id: FontId::monospace(size - 1.0), color: theme::MODIFIED, background: CHIP, ..Default::default() }),
+            Span::Bold(t) => job.append(&t, 0.0, fmt(theme::c().strong)),
+            Span::Link(t) => job.append(&t, 0.0, fmt(theme::c().accent_text)),
+            Span::Code(t) => job.append(&t, 0.0, TextFormat { font_id: FontId::monospace(size - 1.0), color: theme::c().modified, background: chip_fill(), ..Default::default() }),
         }
     }
     job.wrap = TextWrapping { max_width: width, ..Default::default() };
@@ -259,12 +279,12 @@ fn md_job(text: &str, size: f32, color: Color32, width: f32) -> LayoutJob {
 fn checkbox_icon(p: &egui::Painter, c: Pos2, done: bool) {
     let r = Rect::from_center_size(c, vec2(12.0, 12.0));
     if done {
-        p.rect_filled(r, CornerRadius::same(3), theme::ACCENT);
-        let s = Stroke::new(1.6, Color32::WHITE);
+        p.rect_filled(r, CornerRadius::same(3), theme::c().accent);
+        let s = Stroke::new(1.6, theme::c().on_accent);
         p.line_segment([c + vec2(-3.0, 0.2), c + vec2(-0.8, 2.5)], s);
         p.line_segment([c + vec2(-0.8, 2.5), c + vec2(3.2, -2.5)], s);
     } else {
-        p.rect_stroke(r, CornerRadius::same(3), Stroke::new(1.2, theme::DIM), StrokeKind::Inside);
+        p.rect_stroke(r, CornerRadius::same(3), Stroke::new(1.2, theme::c().dim), StrokeKind::Inside);
     }
 }
 
@@ -279,48 +299,48 @@ fn markdown(ui: &mut Ui, body: &str) {
                     2 => 15.0,
                     _ => 13.5,
                 };
-                let g = ui.painter().layout_job(md_job(&t, size, Color32::WHITE, w));
+                let g = ui.painter().layout_job(md_job(&t, size, theme::c().strong, w));
                 ui.add(egui::Label::new(g).selectable(false));
                 if level <= 2 {
                     let y = ui.cursor().top();
-                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::BORDER));
+                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
                     ui.add_space(4.0);
                 }
             }
             Block::Para(t) => {
-                let g = ui.painter().layout_job(md_job(&t, 13.0, theme::TEXT, w));
+                let g = ui.painter().layout_job(md_job(&t, 13.0, theme::c().text, w));
                 ui.add(egui::Label::new(g).selectable(false));
                 ui.add_space(4.0);
             }
             Block::Item { indent, bullet, text } => {
                 let left = 4.0 + indent as f32 * 16.0;
                 let done = bullet == Bullet::Check(true);
-                let g = ui.painter().layout_job(md_job(&text, 13.0, if done { theme::DIM } else { theme::TEXT }, w - left - 20.0));
+                let g = ui.painter().layout_job(md_job(&text, 13.0, if done { theme::c().dim } else { theme::c().text }, w - left - 20.0));
                 let (rect, _) = ui.allocate_exact_size(vec2(w, g.size().y.max(18.0)), Sense::hover());
                 let p = ui.painter();
                 let c = pos2(rect.left() + left + 6.0, rect.top() + 9.0);
                 match &bullet {
                     Bullet::Dot => {
-                        p.circle_filled(c, 2.3, theme::DIM);
+                        p.circle_filled(c, 2.3, theme::c().dim);
                     }
                     Bullet::Number(n) => {
-                        p.text(c + vec2(4.0, 0.0), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(12.0), theme::DIM);
+                        p.text(c + vec2(4.0, 0.0), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(theme::FS_SECONDARY), theme::c().dim);
                     }
                     Bullet::Check(d) => checkbox_icon(p, c, *d),
                 }
-                p.galley(pos2(rect.left() + left + 18.0, rect.top() + 1.0), g, theme::TEXT);
+                p.galley(pos2(rect.left() + left + 18.0, rect.top() + 1.0), g, theme::c().text);
             }
             Block::Code(t) => {
-                egui::Frame::new().fill(theme::BG).corner_radius(6).inner_margin(Margin::same(8)).show(ui, |ui| {
+                egui::Frame::new().fill(theme::c().input).corner_radius(6).inner_margin(Margin::same(8)).show(ui, |ui| {
                     ui.set_width(w - 16.0);
-                    ui.label(RichText::new(t).monospace().size(11.5).color(theme::TEXT));
+                    ui.label(RichText::new(t).monospace().size(theme::FS_SMALL).color(theme::c().text));
                 });
                 ui.add_space(4.0);
             }
             Block::Rule => {
                 ui.add_space(4.0);
                 let y = ui.cursor().top();
-                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::BORDER));
+                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
                 ui.add_space(6.0);
             }
         }
@@ -331,7 +351,7 @@ fn markdown(ui: &mut Ui, body: &str) {
 
 /// A rounded pill; `dot` draws a coloured dot before the text.
 fn pill(ui: &mut Ui, text: &str, fg: Color32, bg: Color32, dot: Option<Color32>) -> Response {
-    let g = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(10.5), fg);
+    let g = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(theme::FS_SMALL), fg);
     let dot_w = if dot.is_some() { 10.0 } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 14.0 + dot_w, 18.0), Sense::hover());
     let p = ui.painter();
@@ -347,22 +367,26 @@ fn pill(ui: &mut Ui, text: &str, fg: Color32, bg: Color32, dot: Option<Color32>)
 
 fn type_pill(ui: &mut Ui, it: &Item) {
     let (name, color) = match (&it.issue_type, &it.kind) {
-        (Some((n, c)), _) => (n.clone(), named_color(c).unwrap_or(theme::DIM)),
+        (Some((n, c)), _) => (n.clone(), named_color(c).unwrap_or(theme::c().dim)),
         (None, Kind::PullRequest) => ("Pull request".into(), state_color(&it.state)),
-        (None, Kind::Draft) => ("Draft".into(), theme::DIM),
-        (None, Kind::Issue) => ("Issue".into(), theme::DIM),
+        (None, Kind::Draft) => ("Draft".into(), theme::c().dim),
+        (None, Kind::Issue) => ("Issue".into(), theme::c().dim),
     };
-    pill(ui, &name, color, color.gamma_multiply(0.16), Some(color));
+    pill(ui, &name, ink(color), color.gamma_multiply(0.16), Some(color));
 }
 
 fn label_pill(ui: &mut Ui, l: &github::Label) {
-    let c = hex_color(&l.color).unwrap_or(theme::DIM);
-    pill(ui, &l.name, readable_on(c), c, None);
+    let c = hex_color(&l.color).unwrap_or(theme::c().dim);
+    let r = pill(ui, &l.name, readable_on(c), c, None);
+    // Pale labels would melt into a white card.
+    if theme::is_light() {
+        ui.painter().rect_stroke(r.rect, CornerRadius::same(9), Stroke::new(1.0, theme::c().border_strong), StrokeKind::Inside);
+    }
 }
 
 fn field_chip(ui: &mut Ui, f: &github::Field) {
     let dot = f.color.as_deref().and_then(named_color);
-    pill(ui, &field_text(f), theme::DIM, CHIP, dot).on_hover_text(format!("{}: {}", f.name, f.value));
+    pill(ui, &field_text(f), theme::c().dim, chip_fill(), dot).on_hover_text(format!("{}: {}", f.name, f.value));
 }
 
 /// The pull request symbol: two dots joined by a line.
@@ -377,19 +401,19 @@ fn pr_icon(p: &egui::Painter, c: Pos2, color: Color32) {
 /// An issue's state symbol: a ring when open, a filled disc with a tick when closed.
 fn issue_icon(p: &egui::Painter, c: Pos2, closed: bool) {
     if closed {
-        p.circle_filled(c, 6.0, theme::RENAMED);
-        let s = Stroke::new(1.5, Color32::WHITE);
+        p.circle_filled(c, 6.0, theme::c().renamed);
+        let s = Stroke::new(1.5, theme::c().on_accent);
         p.line_segment([c + vec2(-2.8, 0.2), c + vec2(-0.8, 2.3)], s);
         p.line_segment([c + vec2(-0.8, 2.3), c + vec2(2.8, -2.0)], s);
     } else {
-        p.circle_stroke(c, 5.5, Stroke::new(1.5, theme::ADDED));
-        p.circle_filled(c, 1.7, theme::ADDED);
+        p.circle_stroke(c, 5.5, Stroke::new(1.5, theme::c().added));
+        p.circle_filled(c, 1.7, theme::c().added);
     }
 }
 
 fn pr_chip(ui: &mut Ui, pr: &Linked) -> Response {
     let color = state_color(&pr.state);
-    let g = ui.painter().layout_no_wrap(format!("#{}", pr.number), FontId::monospace(10.5), color);
+    let g = ui.painter().layout_no_wrap(format!("#{}", pr.number), FontId::monospace(theme::FS_SMALL), ink(color));
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 26.0, 18.0), Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, CornerRadius::same(9), color.gamma_multiply(0.14));
@@ -413,11 +437,11 @@ fn avatars(ui: &mut Ui, logins: &[String], r: f32, ring: Color32) -> Response {
         let c = pos2(rect.left() + r + i as f32 * step, rect.center().y);
         p.circle_filled(c, r + 1.5, ring);
         if i == 2 && logins.len() > 3 {
-            p.circle_filled(c, r, CHIP);
-            p.text(c, Align2::CENTER_CENTER, format!("+{}", logins.len() - 2), FontId::proportional(r * 0.85), theme::TEXT);
+            p.circle_filled(c, r, chip_fill());
+            p.text(c, Align2::CENTER_CENTER, format!("+{}", logins.len() - 2), FontId::proportional(r * 0.85), theme::c().text);
         } else {
             p.circle_filled(c, r, theme::author_color(login).gamma_multiply(0.85));
-            p.text(c, Align2::CENTER_CENTER, login_initials(login), FontId::proportional(r * 0.95), Color32::WHITE);
+            p.text(c, Align2::CENTER_CENTER, login_initials(login), FontId::proportional(r * 0.95), theme::c().on_accent);
         }
     }
     resp.on_hover_text(logins.join(", "))
@@ -428,12 +452,12 @@ fn progress_bar(ui: &mut Ui, caption: &str, (done, total): (u32, u32)) {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(w, 14.0), Sense::hover());
     let p = ui.painter();
-    let cap = p.text(pos2(rect.left(), rect.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(10.5), theme::FAINT);
-    let count = p.text(pos2(rect.right(), rect.center().y), Align2::RIGHT_CENTER, format!("{done}/{total}"), FontId::proportional(10.5), theme::DIM);
+    let cap = p.text(pos2(rect.left(), rect.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(theme::FS_SMALL), theme::c().faint);
+    let count = p.text(pos2(rect.right(), rect.center().y), Align2::RIGHT_CENTER, format!("{done}/{total}"), FontId::proportional(theme::FS_SMALL), theme::c().dim);
     let bar = Rect::from_min_max(pos2(cap.right() + 8.0, rect.center().y - 2.0), pos2(count.left() - 8.0, rect.center().y + 2.0));
-    p.rect_filled(bar, CornerRadius::same(2), CHIP);
+    p.rect_filled(bar, CornerRadius::same(2), chip_fill());
     let f = if total == 0 { 0.0 } else { done as f32 / total as f32 };
-    let color = if done >= total { theme::ADDED } else { theme::ACCENT };
+    let color = if done >= total { theme::c().added } else { theme::c().accent };
     p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * f, bar.height())), CornerRadius::same(2), color);
 }
 
@@ -441,9 +465,9 @@ fn close_button(ui: &mut Ui) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
-    let s = Stroke::new(1.6, if resp.hovered() { Color32::WHITE } else { theme::DIM });
+    let s = Stroke::new(1.6, if resp.hovered() { theme::c().strong } else { theme::c().dim });
     let c = rect.center();
     p.line_segment([c + vec2(-4.5, -4.5), c + vec2(4.5, 4.5)], s);
     p.line_segment([c + vec2(-4.5, 4.5), c + vec2(4.5, -4.5)], s);
@@ -454,9 +478,9 @@ fn refresh_button(ui: &mut Ui, loading: bool) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
-    let col = if resp.hovered() { Color32::WHITE } else { theme::DIM };
+    let col = if resp.hovered() { theme::c().strong } else { theme::c().dim };
     let c = rect.center();
     // Turns while the project is being read.
     let spin = if loading { ui.input(|i| i.time) as f32 * 5.0 } else { 0.0 };
@@ -470,11 +494,11 @@ fn refresh_button(ui: &mut Ui, loading: bool) -> Response {
 
 /// Two options side by side, the chosen one filled.
 fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
-    let font = FontId::proportional(12.0);
-    let widths: Vec<f32> = options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::TEXT).size().x + 22.0).collect();
+    let font = FontId::proportional(theme::FS_SECONDARY);
+    let widths: Vec<f32> = options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).collect();
     let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum::<f32>() + 4.0, 28.0), Sense::hover());
-    ui.painter().rect_filled(rect, CornerRadius::same(8), theme::BG);
-    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, theme::BORDER), StrokeKind::Inside);
+    ui.painter().rect_filled(rect, CornerRadius::same(8), theme::c().input);
+    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, theme::c().border), StrokeKind::Inside);
     let mut x = rect.left() + 2.0;
     let mut picked = None;
     for (i, (o, w)) in options.iter().zip(&widths).enumerate() {
@@ -482,11 +506,11 @@ fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
         let resp = ui.interact(r, ui.id().with(("seg", o)), Sense::click());
         let p = ui.painter();
         if i == chosen {
-            p.rect_filled(r, CornerRadius::same(6), theme::SELECT);
+            p.rect_filled(r, CornerRadius::same(6), theme::c().select);
         } else if resp.hovered() {
-            p.rect_filled(r, CornerRadius::same(6), theme::HOVER);
+            p.rect_filled(r, CornerRadius::same(6), theme::c().hover);
         }
-        p.text(r.center(), Align2::CENTER_CENTER, *o, font.clone(), if i == chosen { Color32::WHITE } else { theme::DIM });
+        p.text(r.center(), Align2::CENTER_CENTER, *o, font.clone(), if i == chosen { theme::c().strong } else { theme::c().dim });
         if resp.clicked() && i != chosen {
             picked = Some(i);
         }
@@ -499,7 +523,7 @@ fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
 fn parent_line(ui: &mut Ui, parent: &Linked, size: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), size + 6.0), Sense::hover());
     let hot = ui.rect_contains_pointer(rect);
-    let col = if hot { theme::ACCENT } else { theme::DIM };
+    let col = if hot { theme::c().accent } else { theme::c().dim };
     let p = ui.painter();
     let (x, y) = (rect.left() + 2.0, rect.center().y);
     let s = Stroke::new(1.3, col);
@@ -517,19 +541,19 @@ fn parent_line(ui: &mut Ui, parent: &Linked, size: f32) -> Response {
 
 /// An on/off filter, filled when on.
 fn toggle_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
-    let font = FontId::proportional(12.0);
-    let w = ui.painter().layout_no_wrap(text.to_string(), font.clone(), theme::TEXT).size().x + 30.0;
+    let font = FontId::proportional(theme::FS_SECONDARY);
+    let w = ui.painter().layout_no_wrap(text.to_string(), font.clone(), theme::c().text).size().x + 30.0;
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
     let p = ui.painter();
-    let fill = if on { theme::SELECT } else if resp.hovered() { theme::HOVER } else { theme::BG };
+    let fill = if on { theme::c().select } else if resp.hovered() { theme::c().hover } else { theme::c().input };
     p.rect_filled(rect, CornerRadius::same(8), fill);
-    p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, if on { theme::ACCENT } else { theme::BORDER }), StrokeKind::Inside);
+    p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, if on { theme::c().accent } else { theme::c().border }), StrokeKind::Inside);
     // A small person: head and shoulders.
     let c = pos2(rect.left() + 13.0, rect.center().y);
-    let col = if on { Color32::WHITE } else { theme::DIM };
+    let col = if on { theme::c().strong } else { theme::c().dim };
     p.circle_filled(c + vec2(0.0, -3.0), 2.6, col);
     p.add(egui::epaint::CubicBezierShape::from_points_stroke([c + vec2(-4.5, 5.0), c + vec2(-4.0, 0.5), c + vec2(4.0, 0.5), c + vec2(4.5, 5.0)], false, Color32::TRANSPARENT, Stroke::new(1.5, col)));
-    p.text(pos2(rect.left() + 22.0, rect.center().y), Align2::LEFT_CENTER, text, font, if on { Color32::WHITE } else { theme::DIM });
+    p.text(pos2(rect.left() + 22.0, rect.center().y), Align2::LEFT_CENTER, text, font, if on { theme::c().strong } else { theme::c().dim });
     resp
 }
 
@@ -551,13 +575,13 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
     ui.vertical_centered(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(64.0, 52.0), Sense::hover());
         let p = ui.painter();
-        p.rect_filled(rect, CornerRadius::same(10), theme::PANEL);
-        p.rect_stroke(rect, CornerRadius::same(10), Stroke::new(1.0, theme::BORDER), StrokeKind::Inside);
-        board_icon(p, rect.center() + vec2(1.0, 2.0), theme::FAINT);
+        p.rect_filled(rect, CornerRadius::same(10), theme::c().elevated);
+        p.rect_stroke(rect, CornerRadius::same(10), Stroke::new(1.0, theme::c().border), StrokeKind::Inside);
+        board_icon(p, rect.center() + vec2(1.0, 2.0), theme::c().faint);
         ui.add_space(14.0);
-        ui.label(RichText::new(title).size(16.0).color(Color32::WHITE));
+        ui.label(RichText::new(title).size(16.0).color(theme::c().strong));
         ui.add_space(4.0);
-        ui.add(egui::Label::new(RichText::new(detail).color(theme::DIM)).wrap());
+        ui.add(egui::Label::new(RichText::new(detail).color(theme::c().dim)).wrap());
         if let Some(a) = action {
             ui.add_space(12.0);
             clicked = ui.button(a).clicked();
@@ -571,7 +595,7 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
 /// covers the whole card, so the caller tells a click on the parent apart by where it landed.
 fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, Option<Rect>) {
     let mut parent_rect = None;
-    let mut prepared = egui::Frame::new().fill(CARD).stroke(Stroke::new(1.0, theme::BORDER)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
+    let mut prepared = egui::Frame::new().fill(card_fill()).stroke(Stroke::new(1.0, theme::c().border)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
     {
         let ui = &mut prepared.content_ui;
         ui.set_width(ui.available_width());
@@ -579,11 +603,11 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
         ui.horizontal(|ui| {
             type_pill(ui, it);
             if let Some(n) = it.number {
-                ui.label(RichText::new(format!("#{n}")).monospace().size(11.0).color(theme::FAINT));
+                ui.label(RichText::new(format!("#{n}")).monospace().size(theme::FS_SMALL).color(theme::c().faint));
             }
             if show_repo && !it.repo.is_empty() {
                 let name = it.repo.rsplit('/').next().unwrap_or(&it.repo);
-                ui.label(RichText::new(name).size(11.0).color(theme::FAINT)).on_hover_text(&it.repo);
+                ui.label(RichText::new(name).size(theme::FS_SMALL).color(theme::c().faint)).on_hover_text(&it.repo);
             }
             if it.is_closed() {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -596,7 +620,7 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
                 });
             }
         });
-        let mut job = LayoutJob::single_section(it.title.clone(), TextFormat { font_id: FontId::proportional(13.5), color: Color32::WHITE, ..Default::default() });
+        let mut job = LayoutJob::single_section(it.title.clone(), TextFormat { font_id: FontId::proportional(theme::FS_BODY), color: theme::c().strong, ..Default::default() });
         job.wrap = TextWrapping { max_width: ui.available_width(), max_rows: 2, break_anywhere: false, overflow_character: Some('…') };
         let g = ui.painter().layout_job(job);
         let title = ui.add(egui::Label::new(g).selectable(false));
@@ -627,11 +651,11 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if !it.assignees.is_empty() {
-                    avatars(ui, &it.assignees, 10.0, CARD);
+                    avatars(ui, &it.assignees, 10.0, card_fill());
                 }
                 let t = it.updated.max(it.created);
                 if t > 0 {
-                    ui.label(RichText::new(short_age(t)).size(11.0).color(theme::FAINT)).on_hover_text(format!("Updated {}", git::relative_time(t)));
+                    ui.label(RichText::new(short_age(t)).size(theme::FS_SMALL).color(theme::c().faint)).on_hover_text(format!("Updated {}", git::relative_time(t)));
                 }
             });
         });
@@ -639,11 +663,11 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
     let outer = prepared.content_ui.min_rect().expand(10.0);
     let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click());
     if selected {
-        prepared.frame.stroke = Stroke::new(1.5, theme::ACCENT);
-        prepared.frame.fill = CARD_HOVER;
+        prepared.frame.stroke = Stroke::new(1.5, theme::c().accent);
+        prepared.frame.fill = card_hover();
     } else if resp.contains_pointer() {
-        prepared.frame.fill = CARD_HOVER;
-        prepared.frame.stroke = Stroke::new(1.0, Color32::from_rgb(0x3d, 0x44, 0x58));
+        prepared.frame.fill = card_hover();
+        prepared.frame.stroke = Stroke::new(1.0, theme::c().widget_hover_border);
     }
     prepared.end(ui);
     (resp, parent_rect)
@@ -685,7 +709,7 @@ impl App {
                 ui.add_space(ui.available_height() * 0.3);
                 ui.vertical_centered(|ui| {
                     ui.spinner();
-                    ui.label(RichText::new("Reading the GitHub project…").color(theme::DIM));
+                    ui.label(RichText::new("Reading the GitHub project…").color(theme::c().dim));
                 });
                 None
             } else if let Some(e) = self.project.error.clone() {
@@ -741,7 +765,7 @@ impl App {
                     let done = github::is_done(status);
                     let limit = if done && !self.board.done_all.contains(status) { DONE_LIMIT } else { usize::MAX };
                     ui.allocate_ui_with_layout(vec2(COL_W, h), Layout::top_down(Align::Min), |ui| {
-                        let frame = egui::Frame::new().fill(theme::PANEL).stroke(Stroke::new(1.0, theme::BORDER)).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
+                        let frame = egui::Frame::new().fill(column_fill()).stroke(Stroke::new(1.0, theme::c().border)).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
                         frame.show(ui, |ui| {
                             ui.set_min_size(vec2(COL_W - 18.0, h - 10.0));
                             ui.set_max_width(COL_W - 18.0);
@@ -751,8 +775,8 @@ impl App {
                             let top = Rect::from_min_max(pos2(hr.left() - 8.0, hr.top()), pos2(hr.right() + 8.0, hr.top() + 3.0));
                             p.rect_filled(top, CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }, color);
                             p.circle_filled(pos2(hr.left() + 7.0, hr.center().y + 1.0), 4.5, color);
-                            let name = p.text(pos2(hr.left() + 18.0, hr.center().y + 1.0), Align2::LEFT_CENTER, status, FontId::proportional(13.5), Color32::WHITE);
-                            let n = p.layout_no_wrap(items.len().to_string(), FontId::proportional(11.0), color);
+                            let name = p.text(pos2(hr.left() + 18.0, hr.center().y + 1.0), Align2::LEFT_CENTER, status, FontId::proportional(theme::FS_BODY), theme::c().strong);
+                            let n = p.layout_no_wrap(items.len().to_string(), FontId::proportional(theme::FS_SMALL), ink(color));
                             let badge = Rect::from_min_size(pos2(name.right() + 8.0, hr.center().y + 1.0 - 9.0), vec2(n.size().x + 14.0, 18.0));
                             p.rect_filled(badge, CornerRadius::same(9), color.gamma_multiply(0.16));
                             p.galley(badge.center() - n.size() / 2.0, n, color);
@@ -761,7 +785,7 @@ impl App {
                                 ui.spacing_mut().item_spacing.y = 8.0;
                                 if items.is_empty() {
                                     ui.add_space(10.0);
-                                    ui.vertical_centered(|ui| ui.label(RichText::new("No cards").size(12.0).color(theme::FAINT)));
+                                    ui.vertical_centered(|ui| ui.label(RichText::new("No cards").size(theme::FS_SECONDARY).color(theme::c().faint)));
                                 }
                                 for it in items.iter().take(limit) {
                                     let (resp, parent_rect) = card(ui, it, show_repo, detail.as_deref() == Some(it.id.as_str()));
@@ -777,7 +801,7 @@ impl App {
                                 if done && items.len() > DONE_LIMIT {
                                     let label = if limit == usize::MAX { "Show the latest 20".to_string() } else { format!("Show all {}", items.len()) };
                                     ui.vertical_centered(|ui| {
-                                        if ui.button(RichText::new(label).size(12.0)).clicked() {
+                                        if ui.button(RichText::new(label).size(theme::FS_SECONDARY)).clicked() {
                                             flip = Some(status.clone());
                                         }
                                     });
@@ -817,11 +841,11 @@ impl App {
     fn board_bar(&mut self, ui: &mut Ui, board: Option<&Board>, loading: bool, cmds: &mut Vec<Cmd>) {
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 28.0), Sense::hover());
-            board_icon(ui.painter(), r.center() + vec2(2.0, 2.0), theme::ACCENT);
+            board_icon(ui.painter(), r.center() + vec2(2.0, 2.0), theme::c().accent_text);
             let title = board.and_then(|b| b.project()).map(|p| p.title.clone()).unwrap_or_else(|| "Project".into());
             match board {
                 Some(b) if b.projects.len() > 1 => {
-                    egui::ComboBox::from_id_salt("board_project").selected_text(RichText::new(title).size(15.0).color(Color32::WHITE)).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("board_project").selected_text(RichText::new(title).size(theme::FS_TITLE).color(theme::c().strong)).show_ui(ui, |ui| {
                         for (i, p) in b.projects.iter().enumerate() {
                             if ui.selectable_label(i == b.chosen, &p.title).clicked() && i != b.chosen {
                                 cmds.push(Cmd::ProjectPick(i));
@@ -830,11 +854,11 @@ impl App {
                     });
                 }
                 _ => {
-                    ui.label(RichText::new(title).size(15.0).color(Color32::WHITE));
+                    ui.label(RichText::new(title).size(theme::FS_TITLE).color(theme::c().strong));
                 }
             }
             if let Some(p) = board.and_then(|b| b.project()) {
-                if ui.link(RichText::new("Open on GitHub").size(11.5).color(theme::DIM)).clicked() {
+                if ui.link(RichText::new("Open on GitHub").size(theme::FS_SMALL).color(theme::c().dim)).clicked() {
                     cmds.push(Cmd::OpenUrl(p.url.clone()));
                 }
             }
@@ -856,7 +880,7 @@ impl App {
                 ui.add(egui::TextEdit::singleline(&mut self.board.search).hint_text("Search cards").desired_width(200.0).margin(Margin::symmetric(8, 5)));
                 if let Some(e) = &self.project.error {
                     if board.is_some() {
-                        ui.label(RichText::new(e).size(11.5).color(theme::MODIFIED));
+                        ui.label(RichText::new(e).size(theme::FS_SMALL).color(theme::c().modified));
                     }
                 }
             });
@@ -869,9 +893,9 @@ impl App {
         let mut close = false;
         egui::Area::new(egui::Id::new("board_drawer")).order(egui::Order::Middle).fixed_pos(rect.min).show(ctx, |ui| {
             egui::Frame::new()
-                .fill(theme::PANEL)
-                .stroke(Stroke::new(1.0, theme::BORDER))
-                .shadow(egui::Shadow { offset: [-6, 0], blur: 24, spread: 0, color: Color32::from_black_alpha(140) })
+                .fill(theme::c().elevated)
+                .stroke(Stroke::new(1.0, theme::c().border))
+                .shadow(egui::Shadow { offset: [-6, 0], blur: 24, spread: 0, color: theme::shadow(1.0) })
                 .inner_margin(Margin { left: 20, right: 12, top: 14, bottom: 14 })
                 .show(ui, |ui| {
                     ui.set_width(rect.width() - 33.0);
@@ -879,10 +903,10 @@ impl App {
                     ui.horizontal(|ui| {
                         type_pill(ui, it);
                         if let Some(n) = it.number {
-                            ui.label(RichText::new(format!("#{n}")).monospace().color(theme::DIM));
+                            ui.label(RichText::new(format!("#{n}")).monospace().color(theme::c().dim));
                         }
                         if !it.repo.is_empty() {
-                            ui.label(RichText::new(&it.repo).size(11.5).color(theme::FAINT));
+                            ui.label(RichText::new(&it.repo).size(theme::FS_SMALL).color(theme::c().faint));
                         }
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.add_space(6.0);
@@ -894,18 +918,18 @@ impl App {
                     egui::ScrollArea::vertical().id_salt("board_drawer_scroll").auto_shrink([false, false]).show(ui, |ui| {
                         ui.set_width(ui.available_width() - 8.0);
                         ui.add_space(6.0);
-                        ui.add(egui::Label::new(RichText::new(&it.title).size(19.0).color(Color32::WHITE)).wrap());
+                        ui.add(egui::Label::new(RichText::new(&it.title).size(19.0).color(theme::c().strong)).wrap());
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
                             let (state, color) = match (it.kind.clone(), it.state.as_str()) {
-                                (Kind::Draft, _) => ("Draft", theme::DIM),
-                                (_, "MERGED") => ("Merged", theme::RENAMED),
-                                (_, "CLOSED") => ("Closed", theme::RENAMED),
-                                _ => ("Open", theme::ADDED),
+                                (Kind::Draft, _) => ("Draft", theme::c().dim),
+                                (_, "MERGED") => ("Merged", theme::c().renamed),
+                                (_, "CLOSED") => ("Closed", theme::c().renamed),
+                                _ => ("Open", theme::c().added),
                             };
-                            pill(ui, state, Color32::WHITE, color.gamma_multiply(0.75), None);
+                            pill(ui, state, theme::c().on_accent, color, None);
                             let sc = status_color(board, &it.status);
-                            pill(ui, &it.status, sc, sc.gamma_multiply(0.16), Some(sc));
+                            pill(ui, &it.status, ink(sc), sc.gamma_multiply(0.16), Some(sc));
                             for f in &it.fields {
                                 field_chip(ui, f);
                             }
@@ -924,7 +948,7 @@ impl App {
                         let row = |ui: &mut Ui, caption: &str, add: &mut dyn FnMut(&mut Ui)| {
                             ui.horizontal_top(|ui| {
                                 let (r, _) = ui.allocate_exact_size(vec2(82.0, 20.0), Sense::hover());
-                                ui.painter().text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(11.5), theme::FAINT);
+                                ui.painter().text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, caption, FontId::proportional(theme::FS_SMALL), theme::c().faint);
                                 ui.horizontal_wrapped(|ui| {
                                     ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
                                     add(ui)
@@ -933,11 +957,11 @@ impl App {
                         };
                         row(ui, "Assignees", &mut |ui| {
                             if it.assignees.is_empty() {
-                                ui.label(RichText::new("No one").size(12.0).color(theme::FAINT));
+                                ui.label(RichText::new("No one").size(theme::FS_SECONDARY).color(theme::c().faint));
                             }
                             for a in &it.assignees {
-                                avatars(ui, std::slice::from_ref(a), 9.0, theme::PANEL);
-                                ui.label(RichText::new(a).size(12.0));
+                                avatars(ui, std::slice::from_ref(a), 9.0, theme::c().elevated);
+                                ui.label(RichText::new(a).size(theme::FS_SECONDARY));
                                 ui.add_space(6.0);
                             }
                         });
@@ -958,13 +982,13 @@ impl App {
                         }
                         if it.created > 0 {
                             row(ui, "Dates", &mut |ui| {
-                                ui.label(RichText::new(format!("Opened {} · updated {}", git::relative_time(it.created), git::relative_time(it.updated))).size(12.0).color(theme::DIM));
+                                ui.label(RichText::new(format!("Opened {} · updated {}", git::relative_time(it.created), git::relative_time(it.updated))).size(theme::FS_SECONDARY).color(theme::c().dim));
                             });
                         }
 
                         if !it.sub_issues.is_empty() || it.sub_progress.1 > 0 {
                             ui.add_space(14.0);
-                            ui.label(RichText::new("Sub-issues").size(13.5).color(Color32::WHITE));
+                            ui.label(RichText::new("Sub-issues").size(theme::FS_BODY).color(theme::c().strong));
                             progress_bar(ui, "Done", it.sub_progress);
                             for s in &it.sub_issues {
                                 if self.linked_row(ui, s, false).clicked() && !s.url.is_empty() {
@@ -974,7 +998,7 @@ impl App {
                         }
                         if !it.pull_requests.is_empty() {
                             ui.add_space(14.0);
-                            ui.label(RichText::new("Linked pull requests").size(13.5).color(Color32::WHITE));
+                            ui.label(RichText::new("Linked pull requests").size(theme::FS_BODY).color(theme::c().strong));
                             for pr in &it.pull_requests {
                                 if self.linked_row(ui, pr, true).clicked() && !pr.url.is_empty() {
                                     cmds.push(Cmd::OpenUrl(pr.url.clone()));
@@ -984,10 +1008,10 @@ impl App {
 
                         ui.add_space(14.0);
                         let y = ui.cursor().top();
-                        ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::BORDER));
+                        ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
                         ui.add_space(10.0);
                         if it.body.trim().is_empty() {
-                            ui.label(RichText::new("No description.").italics().color(theme::FAINT));
+                            ui.label(RichText::new("No description.").italics().color(theme::c().faint));
                         } else {
                             markdown(ui, &it.body);
                         }
@@ -1002,7 +1026,7 @@ impl App {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
         let p = ui.painter();
         if resp.hovered() {
-            p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+            p.rect_filled(rect, CornerRadius::same(5), theme::c().hover);
         }
         let c = pos2(rect.left() + 12.0, rect.center().y);
         if pr {
@@ -1010,7 +1034,7 @@ impl App {
         } else {
             issue_icon(p, c, l.state != "OPEN");
         }
-        let n = p.text(pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, format!("#{}", l.number), FontId::monospace(11.5), theme::DIM);
+        let n = p.text(pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, format!("#{}", l.number), FontId::monospace(theme::FS_SMALL), theme::c().dim);
         let text = if pr && l.title.is_empty() {
             match l.state.as_str() {
                 "MERGED" => "Merged".to_string(),
@@ -1020,8 +1044,8 @@ impl App {
         } else {
             l.title.clone()
         };
-        let color = if l.state == "OPEN" { theme::TEXT } else { theme::DIM };
-        p.with_clip_rect(Rect::from_min_max(rect.min, pos2(rect.right() - 6.0, rect.max.y))).text(pos2(n.right() + 8.0, rect.center().y), Align2::LEFT_CENTER, text, FontId::proportional(12.5), color);
+        let color = if l.state == "OPEN" { theme::c().text } else { theme::c().dim };
+        p.with_clip_rect(Rect::from_min_max(rect.min, pos2(rect.right() - 6.0, rect.max.y))).text(pos2(n.right() + 8.0, rect.center().y), Align2::LEFT_CENTER, text, FontId::proportional(theme::FS_SECONDARY), color);
         resp.on_hover_text(if pr { "Open the pull request on GitHub" } else { "Open the sub-issue on GitHub" })
     }
 }
@@ -1075,8 +1099,8 @@ mod tests {
         assert_eq!(hex_color("1cadf8"), Some(Color32::from_rgb(0x1c, 0xad, 0xf8)));
         assert_eq!(hex_color("#FFFFFF"), Some(Color32::WHITE));
         assert_eq!(hex_color("zz"), None);
-        assert_eq!(readable_on(Color32::from_rgb(0xed, 0xed, 0xed)), Color32::from_rgb(0x15, 0x17, 0x1f));
-        assert_eq!(readable_on(Color32::from_rgb(0x70, 0x57, 0xff)), Color32::WHITE);
+        assert_eq!(readable_on(Color32::from_rgb(0xed, 0xed, 0xed)), theme::LIGHT.strong);
+        assert_eq!(readable_on(Color32::from_rgb(0x70, 0x57, 0xff)), theme::DARK.strong);
     }
 
     #[test]
