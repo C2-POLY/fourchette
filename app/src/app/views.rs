@@ -429,10 +429,20 @@ impl Tab {
                         if let Some(s) = stroke {
                             p.rect_stroke(pr, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
                         }
+                        // A label wider than its pill ends with "…" inside it, never cut at the edge.
+                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0) } else { galley };
                         p.with_clip_rect(pr.shrink(1.0)).galley(pos2(pr.left() + 7.0, y - galley.size().y / 2.0), galley, text);
                         x = pr.right() + theme::REF_GAP;
                     }
                     p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
+                    // Hovering the labels lists every ref of the commit in full, the hidden ones included.
+                    if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x < gx) {
+                        resp.clone().on_hover_ui_at_pointer(|ui| {
+                            for r in refs {
+                                ui.label(ref_label(r));
+                            }
+                        });
+                    }
                 }
 
                 // Graph
