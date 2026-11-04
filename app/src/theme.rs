@@ -571,8 +571,26 @@ fn visuals(k: &Colors, dark: bool) -> Visuals {
     v
 }
 
+/// Inter for the interface and JetBrains Mono for code, both built into the app
+/// (licences beside them in `assets/fonts`). egui's own fonts stay behind them
+/// for the glyphs they lack.
+pub fn fonts() -> egui::FontDefinitions {
+    use egui::{FontData, FontFamily};
+    use std::sync::Arc;
+    let mut f = egui::FontDefinitions::default();
+    for (name, bytes, family) in [
+        ("Inter", &include_bytes!("../assets/fonts/Inter-Regular.ttf")[..], FontFamily::Proportional),
+        ("JetBrains Mono", &include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf")[..], FontFamily::Monospace),
+    ] {
+        f.font_data.insert(name.into(), Arc::new(FontData::from_static(bytes)));
+        f.families.entry(family).or_default().insert(0, name.into());
+    }
+    f
+}
+
 /// Sets up both modes once, then shows the variant and mode the person chose.
 pub fn apply(ctx: &egui::Context, appearance: Appearance, variant: Variant) {
+    ctx.set_fonts(fonts());
     set_variant(ctx, variant);
     ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(8.0, 4.0);
@@ -704,5 +722,18 @@ mod tests {
         assert_eq!(shade(c, 1.0), Color32::from_rgb(0, 0, 0));
         assert_eq!(lighten(c, 1.0), Color32::from_rgb(255, 255, 255));
         assert_eq!(shade(c, 0.0), c);
+    }
+
+    #[test]
+    fn fonts_put_ours_first_and_keep_egui_behind() {
+        use egui::FontFamily;
+        let f = fonts();
+        let default = egui::FontDefinitions::default();
+        for (family, ours) in [(FontFamily::Proportional, "Inter"), (FontFamily::Monospace, "JetBrains Mono")] {
+            let names = &f.families[&family];
+            assert_eq!(names[0], ours);
+            assert_eq!(&names[1..], &default.families[&family][..]);
+            assert!(f.font_data.contains_key(ours));
+        }
     }
 }
