@@ -271,24 +271,24 @@ pub fn toolbar_pill(ui: &mut Ui, caption: &str, value: &str) -> egui::Response {
     resp
 }
 
-/// Thin outline icons on a 24-unit grid (Tabler style), scaled to about 20 points.
+/// Thin outline icons on a 24-unit grid (Tabler style), scaled to `size` points (20 in the toolbar).
 /// egui strokes have flat caps, so open ends get a small dot to look round.
 struct Ink<'a> {
     p: &'a egui::Painter,
     c: Pos2,
     s: Stroke,
+    scale: f32,
 }
 
 impl Ink<'_> {
     const WIDTH: f32 = 1.5;
-    const SCALE: f32 = 20.0 / 24.0;
 
     /// A point of the 24-unit grid, relative to the icon centre.
     fn t(&self, x: f32, y: f32) -> Pos2 {
-        self.c + vec2(x - 12.0, y - 12.0) * Self::SCALE
+        self.c + vec2(x - 12.0, y - 12.0) * self.scale
     }
     fn dot(&self, at: Pos2) {
-        self.p.circle_filled(at, Self::WIDTH / 2.0, self.s.color);
+        self.p.circle_filled(at, self.s.width / 2.0, self.s.color);
     }
     /// Open polyline of grid points, round at both ends.
     fn line(&self, pts: &[(f32, f32)]) {
@@ -311,7 +311,7 @@ impl Ink<'_> {
             .collect()
     }
     fn ring(&self, x: f32, y: f32, r: f32) {
-        self.p.circle_stroke(self.t(x, y), r * Self::SCALE, self.s);
+        self.p.circle_stroke(self.t(x, y), r * self.scale, self.s);
     }
     /// Four-pointed star with concave sides.
     fn star(&self, x: f32, y: f32, r: f32) {
@@ -343,8 +343,22 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
         p.rect_filled(rect, CornerRadius::same(7), theme::c().hover);
     }
     let col = if resp.hovered() { theme::c().strong } else { theme::c().text };
-    let c = pos2(rect.center().x, rect.top() + 17.0);
-    let mut k = Ink { p, c, s: Stroke::new(Ink::WIDTH, col) };
+    let col = if icon == "ai" && active { theme::c().accent_text } else { col };
+    glyph(p, pos2(rect.center().x, rect.top() + 17.0), icon, 20.0, Ink::WIDTH, col);
+    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::c().strong } else { theme::c().dim });
+    if badge > 0 {
+        let s = badge.min(99).to_string();
+        let b = Rect::from_center_size(pos2(rect.center().x + 13.0, rect.top() + 7.0), vec2(10.0 + s.len() as f32 * 6.0, 16.0));
+        p.rect_filled(b, CornerRadius::same(8), theme::c().accent);
+        p.text(b.center(), Align2::CENTER_CENTER, s, theme::small(), theme::c().on_accent);
+    }
+    resp
+}
+
+/// One of the toolbar's outline icons ("fetch", "ai", "undo", "pull", "push", "branch", "board",
+/// "stash", "pop") centred on `c`, `size` points wide, drawn with lines `width` thick.
+pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col: Color32) {
+    let k = Ink { p, c, s: Stroke::new(width, col), scale: size / 24.0 };
     match icon {
         // two arcs with a chevron each
         "fetch" => {
@@ -354,9 +368,6 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
             k.line(&[(20.0, 19.0), (20.0, 14.7), (16.0, 14.7)]);
         }
         "ai" => {
-            if active {
-                k.s = Stroke::new(Ink::WIDTH, theme::c().accent_text);
-            }
             k.star(9.0, 14.5, 8.5);
             k.star(19.5, 5.0, 3.2);
         }
@@ -419,15 +430,6 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
         }
         _ => {}
     }
-    let p = k.p;
-    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::c().strong } else { theme::c().dim });
-    if badge > 0 {
-        let s = badge.min(99).to_string();
-        let b = Rect::from_center_size(pos2(rect.center().x + 13.0, rect.top() + 7.0), vec2(10.0 + s.len() as f32 * 6.0, 16.0));
-        p.rect_filled(b, CornerRadius::same(8), theme::c().accent);
-        p.text(b.center(), Align2::CENTER_CENTER, s, theme::small(), theme::c().on_accent);
-    }
-    resp
 }
 
 pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i64) {

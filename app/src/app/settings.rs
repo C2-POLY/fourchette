@@ -1,34 +1,143 @@
-//! Settings window (⌘,): the appearance and the automatic fetch. Every choice applies and is saved
-//! at once, so there is no OK button; Esc, the close button or a click outside closes it.
+//! Settings window (⌘,), laid out like macOS System Settings: the sections on the left, each with
+//! a drawn icon, and the chosen section's settings on the right, in rounded cards. Every choice
+//! applies and is saved at once, so there is no OK button; Esc, the close button or a click
+//! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
 use crate::settings::{minutes_label, Settings, FETCH_MINUTES};
+use crate::theme::{Appearance, Colors, Variant};
 use crate::ui::appearance_icon;
-use egui::{pos2, vec2, Align2, CornerRadius, Key, Margin, Painter, Rect, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
 
-const SETTINGS_W: f32 = 500.0;
-const HEADER_H: f32 = 30.0;
-const SECTION_H: f32 = 26.0;
-const ROW_H: f32 = 50.0;
+// Everything sits on an 8-point grid.
+const WIN_W: f32 = 720.0;
+const WIN_H: f32 = 480.0;
+const SIDEBAR_W: f32 = 176.0;
+/// The title row at the top of both panes.
+const HEADER_H: f32 = 56.0;
+const ITEM_H: f32 = 32.0;
+/// Space around the cards, and between them.
+const PAD: f32 = 24.0;
+const GAP: f32 = 16.0;
+const ROW_H: f32 = 56.0;
+const SEG_W: f32 = 264.0;
 const SEG_H: f32 = 28.0;
+const TILE_H: f32 = 64.0;
+const RADIUS: u8 = 12;
 
-/// A section title, with a hairline above it unless it is the first.
-fn section(ui: &mut Ui, title: &str, first: bool) {
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), SECTION_H), Sense::hover());
-    if !first {
-        ui.painter().hline(r.x_range(), r.top(), Stroke::new(1.0_f32, theme::c().border));
-    }
-    ui.painter().text(pos2(r.left(), r.bottom() - 4.0), Align2::LEFT_BOTTOM, title, theme::small(), theme::c().faint);
+/// What a section draws with: the choices on screen, and where changes go.
+pub(super) struct Pane<'a> {
+    appearance: Appearance,
+    variant: Variant,
+    settings: &'a mut Settings,
+    cmds: &'a mut Vec<Cmd>,
 }
 
-/// A setting's row: its name and a line of help on the left. Returns the rect of the control,
-/// `ctrl` wide, against the right edge.
-fn row(ui: &mut Ui, title: &str, help: &str, ctrl: Vec2, enabled: bool) -> Rect {
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
+/// One section of the window.
+pub(super) struct Section {
+    /// Its name in `FOURCHETTE_SETTINGS=<key>`.
+    pub key: &'static str,
+    pub label: &'static str,
+    /// The fill of its icon's rounded square; the icon is drawn in white on it.
+    tint: Color32,
+    /// Draws the icon centred on the point, in white.
+    icon: fn(&Painter, Pos2),
+    /// Draws the section's cards.
+    body: fn(&mut Ui, &mut Pane<'_>),
+}
+
+pub(super) const SECTIONS: [Section; 2] = [
+    Section { key: "appearance", label: "Appearance", tint: Color32::from_rgb(0x6e, 0x5b, 0xd6), icon: appearance_glyph, body: appearance },
+    Section { key: "fetch", label: "Fetch", tint: Color32::from_rgb(0x1c, 0x8c, 0xf0), icon: fetch_glyph, body: fetch },
+];
+
+/// The section a key names (any case), or the first one.
+pub(super) fn section_index(key: &str) -> usize {
+    let key = key.trim().to_lowercase();
+    SECTIONS.iter().position(|s| s.key == key).unwrap_or(0)
+}
+
+/// The section `delta` rows away (Up / Down), staying inside the list.
+fn step(i: usize, delta: i32) -> usize {
+    (i as i32 + delta).clamp(0, SECTIONS.len() as i32 - 1) as usize
+}
+
+fn appearance_glyph(p: &Painter, c: Pos2) {
+    appearance_icon(p, c, Appearance::System, Color32::WHITE, Color32::TRANSPARENT);
+}
+
+fn fetch_glyph(p: &Painter, c: Pos2) {
+    crate::ui::glyph(p, c, "fetch", 15.0, 1.4, Color32::WHITE);
+}
+
+/// A section's entry in the sidebar: its icon in a coloured square, then its name.
+fn sidebar_item(ui: &mut Ui, s: &Section, selected: bool) -> egui::Response {
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ITEM_H), Sense::click());
+    let k = theme::c();
     let p = ui.painter();
-    let (tc, hc) = if enabled { (theme::c().text, theme::c().dim) } else { (theme::c().faint, theme::c().faint) };
-    p.text(pos2(r.left(), r.center().y - 8.0), Align2::LEFT_CENTER, title, theme::body(), tc);
-    p.text(pos2(r.left(), r.center().y + 9.0), Align2::LEFT_CENTER, help, theme::secondary(), hc);
-    Rect::from_center_size(pos2(r.right() - ctrl.x * 0.5, r.center().y), ctrl)
+    if selected {
+        p.rect_filled(r, CornerRadius::same(6), k.select);
+    } else if resp.hovered() {
+        p.rect_filled(r, CornerRadius::same(6), k.hover);
+    }
+    let tile = Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(20.0, 20.0));
+    p.rect_filled(tile, CornerRadius::same(5), s.tint);
+    (s.icon)(p, tile.center());
+    p.text(pos2(tile.right() + 10.0, r.center().y), Align2::LEFT_CENTER, s.label, theme::body(), if selected { k.strong } else { k.text });
+    resp
+}
+
+/// The fill of a card: the window's colour with a touch of the text colour, like macOS's grouped
+/// boxes, so it reads in both modes and every variant.
+fn card_fill(k: &Colors) -> Color32 {
+    theme::tint(k.strong, k.elevated, if theme::is_light() { 0.03 } else { 0.035 })
+}
+
+/// A rounded card of rows, separated by hairlines.
+struct Card<'u> {
+    ui: &'u mut Ui,
+    rows: usize,
+}
+
+impl Card<'_> {
+    /// A full-width strip `h` high, with a hairline above it when `sep` and it is not the first.
+    fn strip(&mut self, h: f32, sep: bool) -> Rect {
+        let (r, _) = self.ui.allocate_exact_size(vec2(self.ui.available_width(), h), Sense::hover());
+        if sep && self.rows > 0 {
+            // In dark mode `border` almost matches the card's fill, so the stronger one shows.
+            let k = theme::c();
+            let line = if theme::is_light() { k.border } else { k.border_strong };
+            self.ui.painter().hline(r.x_range(), r.top(), Stroke::new(1.0_f32, line));
+        }
+        self.rows += 1;
+        r
+    }
+
+    /// A setting's row: its name and a line of help on the left. Returns the rect of the control,
+    /// `ctrl` wide, against the card's right edge so that every control lines up.
+    fn row(&mut self, title: &str, help: &str, ctrl: Vec2, enabled: bool) -> Rect {
+        let r = self.strip(ROW_H, true);
+        let k = theme::c();
+        let (tc, hc) = if enabled { (k.text, k.dim) } else { (k.faint, k.faint) };
+        let p = self.ui.painter();
+        p.text(pos2(r.left(), r.center().y - 9.0), Align2::LEFT_CENTER, title, theme::body(), tc);
+        p.text(pos2(r.left(), r.center().y + 9.0), Align2::LEFT_CENTER, help, theme::secondary(), hc);
+        Rect::from_center_size(pos2(r.right() - ctrl.x * 0.5, r.center().y), ctrl)
+    }
+}
+
+fn card(ui: &mut Ui, add: impl FnOnce(&mut Card)) {
+    let k = theme::c();
+    egui::Frame::new()
+        .fill(card_fill(k))
+        .stroke(Stroke::new(1.0_f32, k.border))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin::symmetric(16, 0))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            add(&mut Card { ui, rows: 0 });
+        });
+    ui.add_space(GAP);
 }
 
 /// A segmented control of `n` options in `rect`, the chosen one raised. `draw` paints option `i`
@@ -78,18 +187,141 @@ fn toggle(ui: &mut Ui, rect: Rect, id: &str, on: bool) -> bool {
     resp.clicked()
 }
 
+/// A tiny window in a variant's colours (those of the mode on screen): sidebar, history rows with
+/// their graph, a selected row and a button in the accent.
+fn variant_preview(p: &Painter, r: Rect, k: &Colors) {
+    let rad = 8u8;
+    p.rect_filled(r, CornerRadius::same(rad), k.bg);
+    let side = Rect::from_min_size(r.min, vec2((r.width() * 0.3).round(), r.height()));
+    p.rect_filled(side, CornerRadius { nw: rad, sw: rad, ne: 0, se: 0 }, k.sidebar);
+    p.vline(side.right(), r.y_range(), Stroke::new(1.0_f32, k.border));
+    // The window buttons, then three sidebar rows, the second one selected.
+    for (i, c) in [Color32::from_rgb(0xff, 0x5f, 0x57), Color32::from_rgb(0xfe, 0xbc, 0x2e), Color32::from_rgb(0x28, 0xc8, 0x40)].into_iter().enumerate() {
+        p.circle_filled(pos2(side.left() + 7.0 + i as f32 * 5.0, r.top() + 7.0), 1.6, c);
+    }
+    for i in 0..3 {
+        let y = r.top() + 22.0 + i as f32 * 11.0;
+        if i == 1 {
+            p.rect_filled(Rect::from_min_max(pos2(side.left() + 3.0, y - 4.5), pos2(side.right() - 3.0, y + 4.5)), CornerRadius::same(2), k.select);
+        }
+        let w = (side.width() - 12.0) * [0.7, 0.85, 0.55][i];
+        p.rect_filled(Rect::from_min_size(pos2(side.left() + 6.0, y - 1.25), vec2(w, 2.5)), CornerRadius::same(1), if i == 1 { k.text } else { k.faint });
+    }
+    // History: a branch joining the main lane, a line of text per commit, the second one selected.
+    let main = Rect::from_min_max(pos2(side.right() + 1.0, r.top()), r.max);
+    let lane = |i: usize| main.left() + 9.0 + i as f32 * 7.0;
+    let ys: [f32; 4] = std::array::from_fn(|i| r.top() + 11.0 + i as f32 * 11.0);
+    p.rect_filled(Rect::from_min_max(pos2(main.left(), ys[1] - 5.0), pos2(main.right(), ys[1] + 5.0)), CornerRadius::ZERO, k.select);
+    let (main_lane, branch) = (theme::lane_color(0), theme::lane_color(1));
+    p.line_segment([pos2(lane(0), ys[1]), pos2(lane(0), r.bottom())], Stroke::new(1.5_f32, main_lane));
+    p.line_segment([pos2(lane(1), ys[0]), pos2(lane(1), ys[1] + 4.0)], Stroke::new(1.5_f32, branch));
+    p.line_segment([pos2(lane(1), ys[1] + 4.0), pos2(lane(0), ys[2])], Stroke::new(1.5_f32, branch));
+    p.circle_filled(pos2(lane(1), ys[0]), 2.4, branch);
+    for y in &ys[1..] {
+        p.circle_filled(pos2(lane(0), *y), 2.4, main_lane);
+    }
+    let x0 = lane(2) + 2.0;
+    for (i, y) in ys.iter().enumerate() {
+        let w = (main.right() - x0 - 8.0) * [0.8, 0.62, 0.7, 0.45][i];
+        p.rect_filled(Rect::from_min_size(pos2(x0, y - 1.25), vec2(w, 2.5)), CornerRadius::same(1), if i == 1 { k.strong } else { k.dim });
+    }
+    // A primary button in the accent, bottom right.
+    let btn = Rect::from_min_size(pos2(main.right() - 26.0, r.bottom() - 12.0), vec2(20.0, 7.0));
+    p.rect_filled(btn, CornerRadius::same(3), k.accent);
+    p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+}
+
+/// The four variants as tiles: a preview and the name below, the one on screen ringed with the
+/// accent. Returns the tile clicked.
+fn variant_tiles(c: &mut Card, current: Variant) -> Option<Variant> {
+    let r = c.strip(8.0 + TILE_H + 32.0, false);
+    let k = theme::c();
+    let n = Variant::ALL.len() as f32;
+    let gap = 16.0;
+    let w = ((r.width() - gap * (n - 1.0)) / n).floor();
+    let mut picked = None;
+    for (i, v) in Variant::ALL.into_iter().enumerate() {
+        let tile = Rect::from_min_size(pos2(r.left() + i as f32 * (w + gap), r.top() + 8.0), vec2(w, TILE_H));
+        let hit = Rect::from_min_max(tile.min, pos2(tile.right(), tile.bottom() + 24.0));
+        let resp = c.ui.interact(hit, c.ui.id().with(("variant", i)), Sense::click()).on_hover_text(format!("{} · {}", v.label(), v.blurb()));
+        let p = c.ui.painter();
+        variant_preview(p, tile, v.colors(theme::is_light()));
+        let on = v == current;
+        if on {
+            p.rect_stroke(tile.expand(3.0), CornerRadius::same(11), Stroke::new(2.0_f32, k.accent), StrokeKind::Inside);
+        } else if resp.hovered() {
+            p.rect_stroke(tile.expand(3.0), CornerRadius::same(11), Stroke::new(2.0_f32, k.widget_hover_border), StrokeKind::Inside);
+        }
+        let col = if on { k.strong } else if resp.hovered() { k.text } else { k.dim };
+        p.text(pos2(tile.center().x, tile.bottom() + 16.0), Align2::CENTER_CENTER, v.label(), theme::body(), col);
+        if resp.clicked() {
+            picked = Some(v);
+        }
+    }
+    picked
+}
+
+fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
+    card(ui, |c| {
+        let ctrl = c.row("Mode", "System follows macOS", vec2(SEG_W, SEG_H), true);
+        let modes = Appearance::ALL;
+        let chosen = modes.iter().position(|a| *a == pane.appearance).unwrap_or(0);
+        let picked = segmented(c.ui, ctrl, modes.len(), chosen, true, "appearance", |p, r, i, fg, bg| {
+            let a = modes[i];
+            let w = 14.0 + 6.0 + p.layout_no_wrap(a.label().into(), theme::body(), fg).size().x;
+            let x0 = r.center().x - w * 0.5;
+            appearance_icon(p, pos2(x0 + 7.0, r.center().y), a, fg, bg);
+            p.text(pos2(x0 + 20.0, r.center().y), Align2::LEFT_CENTER, a.label(), theme::body(), fg);
+        });
+        if let Some(i) = picked {
+            if modes[i] != pane.appearance {
+                pane.cmds.push(Cmd::SetAppearance(modes[i]));
+            }
+        }
+    });
+    card(ui, |c| {
+        c.row("Variant", "The colours of the whole app, and its Dock icon", Vec2::ZERO, true);
+        if let Some(v) = variant_tiles(c, pane.variant) {
+            if v != pane.variant {
+                pane.cmds.push(Cmd::SetVariant(v));
+            }
+        }
+    });
+}
+
+fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
+    let s = &mut *pane.settings;
+    card(ui, |c| {
+        let ctrl = c.row("Fetch automatically", "Gets new commits from the remote in the background", vec2(36.0, 20.0), true);
+        if toggle(c.ui, ctrl, "auto_fetch", s.auto_fetch) {
+            s.auto_fetch = !s.auto_fetch;
+        }
+        let ctrl = c.row("Every", "While a repository is open", vec2(SEG_W, SEG_H), s.auto_fetch);
+        let chosen = FETCH_MINUTES.iter().position(|m| *m == s.fetch_minutes).unwrap_or(1);
+        let picked = segmented(c.ui, ctrl, FETCH_MINUTES.len(), chosen, s.auto_fetch, "fetch_minutes", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, minutes_label(FETCH_MINUTES[i]), theme::body(), fg);
+        });
+        if let Some(i) = picked {
+            s.fetch_minutes = FETCH_MINUTES[i];
+        }
+    });
+}
+
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
         if !self.settings_open {
             return;
         }
-        let mut close = ctx.input(|i| i.key_pressed(Key::Escape));
-        let appearance = self.library.appearance;
+        // The window takes the keyboard while it is open (see `keyboard`): Esc closes it,
+        // Up and Down move between sections.
+        let (esc, up, down) = ctx.input(|i| (i.key_pressed(Key::Escape), i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown)));
+        let mut close = esc;
+        let mut section = step(self.settings_section.min(SECTIONS.len() - 1), down as i32 - up as i32);
         let mut s: Settings = self.library.settings;
+        let k = theme::c();
 
         let screen = ctx.screen_rect();
-        let left = screen.center().x - SETTINGS_W * 0.5 - 16.0;
-        let top = (screen.top() + 70.0).max(screen.center().y - 240.0);
+        let min = pos2((screen.center().x - WIN_W * 0.5).round(), (screen.top() + 56.0).max(screen.center().y - WIN_H * 0.5).round());
         egui::Area::new(egui::Id::new("settings_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
             let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             ui.painter().rect_filled(r, CornerRadius::ZERO, theme::shadow(0.8));
@@ -97,76 +329,96 @@ impl App {
                 close = true;
             }
         });
-        egui::Area::new(egui::Id::new("settings")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(theme::c().elevated)
-                .stroke(Stroke::new(1.0_f32, theme::c().border_strong))
-                .corner_radius(CornerRadius::same(10))
-                .inner_margin(Margin::symmetric(16, 12))
-                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: theme::shadow(1.0) })
-                .show(ui, |ui| {
-                    ui.set_width(SETTINGS_W);
-                    ui.spacing_mut().item_spacing.y = 0.0;
+        egui::Area::new(egui::Id::new("settings")).order(egui::Order::Foreground).fixed_pos(min).show(ctx, |ui| {
+            let (win, _) = ui.allocate_exact_size(vec2(WIN_W, WIN_H), Sense::hover());
+            let p = ui.painter().clone();
+            p.add(egui::epaint::Shadow { offset: [0, 12], blur: 36, spread: 0, color: theme::shadow(1.0) }.as_shape(win, CornerRadius::same(RADIUS)));
+            p.rect_filled(win, CornerRadius::same(RADIUS), k.elevated);
+            let side = Rect::from_min_size(win.min, vec2(SIDEBAR_W, WIN_H));
+            p.rect_filled(side, CornerRadius { nw: RADIUS, sw: RADIUS, ne: 0, se: 0 }, k.sidebar);
+            p.vline(side.right(), side.y_range(), Stroke::new(1.0_f32, k.border));
 
-                    // Title and a drawn close button.
-                    let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
-                    ui.painter().text(pos2(hr.left(), hr.center().y), Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(theme::FS_TITLE), theme::c().strong);
-                    let x = Rect::from_center_size(pos2(hr.right() - 11.0, hr.center().y), vec2(22.0, 22.0));
-                    let xr = ui.interact(x, ui.id().with("settings_close"), Sense::click()).on_hover_text("Close (Esc)");
-                    if xr.hovered() {
-                        ui.painter().rect_filled(x, CornerRadius::same(5), theme::c().hover);
-                    }
-                    let xc = if xr.hovered() { theme::c().text } else { theme::c().dim };
-                    for d in [vec2(4.0, 4.0), vec2(4.0, -4.0)] {
-                        ui.painter().line_segment([x.center() - d, x.center() + d], Stroke::new(1.4_f32, xc));
-                    }
-                    if xr.clicked() {
-                        close = true;
-                    }
-                    ui.add_space(4.0);
+            // Sidebar: the window's name, then the sections.
+            p.text(pos2(side.left() + 16.0, side.top() + HEADER_H * 0.5), Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(theme::FS_TITLE), k.strong);
+            let list = Rect::from_min_max(pos2(side.left() + 8.0, side.top() + HEADER_H), pos2(side.right() - 8.0, side.bottom() - 8.0));
+            let mut sui = ui.new_child(UiBuilder::new().id_salt("settings_sidebar").max_rect(list).layout(Layout::top_down(Align::Min)));
+            sui.spacing_mut().item_spacing.y = 2.0;
+            for (i, sec) in SECTIONS.iter().enumerate() {
+                if sidebar_item(&mut sui, sec, i == section).clicked() {
+                    section = i;
+                }
+            }
 
-                    section(ui, "Appearance", true);
-                    let ctrl = row(ui, "Mode", "System follows macOS", vec2(270.0, SEG_H), true);
-                    let modes = theme::Appearance::ALL;
-                    let chosen = modes.iter().position(|a| *a == appearance).unwrap_or(0);
-                    let picked = segmented(ui, ctrl, modes.len(), chosen, true, "appearance", |p, r, i, fg, bg| {
-                        let a = modes[i];
-                        let w = 14.0 + 6.0 + p.layout_no_wrap(a.label().into(), theme::body(), fg).size().x;
-                        let x0 = r.center().x - w * 0.5;
-                        appearance_icon(p, pos2(x0 + 7.0, r.center().y), a, fg, bg);
-                        p.text(pos2(x0 + 20.0, r.center().y), Align2::LEFT_CENTER, a.label(), theme::body(), fg);
-                    });
-                    if let Some(i) = picked {
-                        if modes[i] != appearance {
-                            cmds.push(Cmd::SetAppearance(modes[i]));
-                        }
-                    }
+            // Content: the section's title and a close button, its cards, and a hint at the bottom.
+            let content = Rect::from_min_max(pos2(side.right() + 1.0, win.top()), win.max);
+            let sec = &SECTIONS[section];
+            p.text(pos2(content.left() + PAD, content.top() + HEADER_H * 0.5), Align2::LEFT_CENTER, sec.label, egui::FontId::proportional(theme::FS_TITLE), k.strong);
+            let x = Rect::from_center_size(pos2(content.right() - PAD - 4.0, content.top() + HEADER_H * 0.5), vec2(24.0, 24.0));
+            let xr = ui.interact(x, ui.id().with("settings_close"), Sense::click()).on_hover_text("Close (Esc)");
+            if xr.hovered() {
+                p.rect_filled(x, CornerRadius::same(6), k.hover);
+            }
+            let xc = if xr.hovered() { k.text } else { k.dim };
+            for d in [vec2(4.0, 4.0), vec2(4.0, -4.0)] {
+                p.line_segment([x.center() - d, x.center() + d], Stroke::new(1.4_f32, xc));
+            }
+            if xr.clicked() {
+                close = true;
+            }
+            let footer_h = 40.0;
+            let body = Rect::from_min_max(pos2(content.left() + PAD, content.top() + HEADER_H), pos2(content.right() - PAD, content.bottom() - footer_h));
+            let mut bui = ui.new_child(UiBuilder::new().id_salt(("settings_body", sec.key)).max_rect(body).layout(Layout::top_down(Align::Min)));
+            egui::ScrollArea::vertical().id_salt(("settings_scroll", sec.key)).auto_shrink([false, false]).show(&mut bui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let mut pane = Pane { appearance: self.library.appearance, variant: theme::variant(), settings: &mut s, cmds };
+                (sec.body)(ui, &mut pane);
+            });
+            p.text(pos2(content.left() + PAD, content.bottom() - footer_h * 0.5), Align2::LEFT_CENTER, "Changes apply and are saved right away · Esc to close", theme::small(), k.faint);
 
-                    ui.add_space(6.0);
-                    section(ui, "Fetch", false);
-                    let ctrl = row(ui, "Fetch automatically", "Gets new commits from the remote in the background", vec2(34.0, 20.0), true);
-                    if toggle(ui, ctrl, "auto_fetch", s.auto_fetch) {
-                        s.auto_fetch = !s.auto_fetch;
-                    }
-                    let ctrl = row(ui, "Every", "While a repository is open", vec2(270.0, SEG_H), s.auto_fetch);
-                    let chosen = FETCH_MINUTES.iter().position(|m| *m == s.fetch_minutes).unwrap_or(1);
-                    let picked = segmented(ui, ctrl, FETCH_MINUTES.len(), chosen, s.auto_fetch, "fetch_minutes", |p, r, i, fg, _| {
-                        p.text(r.center(), Align2::CENTER_CENTER, minutes_label(FETCH_MINUTES[i]), theme::body(), fg);
-                    });
-                    if let Some(i) = picked {
-                        s.fetch_minutes = FETCH_MINUTES[i];
-                    }
-
-                    ui.add_space(10.0);
-                    let (fr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-                    ui.painter().text(pos2(fr.left(), fr.center().y), Align2::LEFT_CENTER, "Changes apply and are saved right away · Esc to close", theme::small(), theme::c().faint);
-                });
+            p.rect_stroke(win, CornerRadius::same(RADIUS), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
         });
+        self.settings_section = section;
         if s != self.library.settings {
             cmds.push(Cmd::SetSettings(s));
         }
         if close {
             self.settings_open = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sections_have_unique_lowercase_keys_and_names() {
+        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch"]);
+        for (i, s) in SECTIONS.iter().enumerate() {
+            assert!(!s.label.is_empty());
+            assert_eq!(s.key, s.key.to_lowercase(), "{}", s.label);
+            assert_eq!(section_index(s.key), i, "each key finds its own section");
+            assert_eq!(SECTIONS.iter().filter(|o| o.key == s.key || o.label == s.label).count(), 1, "{} is unique", s.key);
+        }
+    }
+
+    #[test]
+    fn section_index_reads_any_case_and_falls_back_to_the_first() {
+        assert_eq!(section_index("fetch"), 1);
+        assert_eq!(section_index(" Fetch "), 1);
+        // FOURCHETTE_SETTINGS=1, or a section that does not exist yet, opens Appearance.
+        for other in ["1", "", "claude", "appearance"] {
+            assert_eq!(section_index(other), 0, "{other}");
+        }
+    }
+
+    #[test]
+    fn up_and_down_stay_inside_the_list() {
+        let last = SECTIONS.len() - 1;
+        assert_eq!(step(0, -1), 0);
+        assert_eq!(step(0, 1), 1.min(last));
+        assert_eq!(step(last, 1), last);
+        assert_eq!(step(last, -1), last.saturating_sub(1));
+        assert_eq!(step(1, 0), 1);
     }
 }
