@@ -6,6 +6,7 @@ mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
 use crate::graph::{self, Row};
+use crate::library::DetailsLayout;
 use crate::undo::{Snapshot, UNDO_DEPTH};
 use crate::{demo, theme};
 use egui::Color32;
@@ -82,6 +83,10 @@ pub enum Cmd {
     SetCommitLimit(usize),
     /// System, dark or light, kept in repos.json.
     SetAppearance(theme::Appearance),
+    /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
+    SetDetails(DetailsLayout),
+    /// ⌘J: hide the details panel, or show it again where it was.
+    ToggleDetails,
     SetVariant(theme::Variant),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
@@ -163,6 +168,8 @@ pub struct App {
     commit_limit: usize,
     ai: assistant::AiState,
     worktrees: Vec<crate::worktree::Worktree>,
+    /// Where the details panel sits in this repository.
+    details_layout: DetailsLayout,
 }
 
 pub fn short(h: &str) -> &str {
@@ -222,6 +229,7 @@ impl App {
             commit_limit: COMMIT_LIMIT,
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
+            details_layout: DetailsLayout::default(),
         };
         let cwd = std::env::current_dir().ok();
         let candidate = repo_arg
@@ -278,6 +286,10 @@ impl App {
         if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
             app.switcher = Some(repos::Switcher::default());
         }
+        // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
+        if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
+            app.details_layout = l;
+        }
         app
     }
 
@@ -306,6 +318,7 @@ impl App {
         self.project = project::ProjectState { board: Some(crate::github::sample()), ..Default::default() };
         self.after_load();
         self.sel = Sel::Commit(0);
+        self.details_layout = DetailsLayout::default();
     }
 
     fn set_repo(&mut self, r: Repo) {
@@ -327,6 +340,7 @@ impl App {
             self.library.touch(&root);
             self.library.save();
         }
+        self.details_layout = self.library.details(&root);
         self.project = project::ProjectState::default();
         self.project_load();
     }
@@ -624,6 +638,8 @@ impl App {
                     self.library.save();
                     theme::set_appearance(ctx, a);
                 }
+                Cmd::SetDetails(l) => self.set_details(l),
+                Cmd::ToggleDetails => self.set_details(self.details_layout.toggled()),
                 Cmd::SetVariant(v) => {
                     self.library.variant = v;
                     self.library.save();
@@ -653,6 +669,16 @@ impl App {
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
             }
+        }
+    }
+
+    /// Changes the details panel layout and keeps it for this repository
+    /// (not for the sample project, nor while taking a screenshot).
+    fn set_details(&mut self, l: DetailsLayout) {
+        self.details_layout = l;
+        if let (Some(r), None) = (&self.repo, &self.screenshot) {
+            self.library.set_details(&r.root, l);
+            self.library.save();
         }
     }
 
