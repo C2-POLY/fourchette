@@ -68,10 +68,10 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | Setting | Default | Used in the rebuild |
 |---|---|---|
 | useTopologicalCommitOrder | true | history uses `--topo-order` |
-| maxCommitCount | 100000 (`0x186a0`) | commit limit |
+| maxCommitCount | 100000 (`0x186a0`) | commit limit; a user setting (Settings window, "Diff and commit"), also set by the hidden palette command |
 | fetchRemotesAutomatically | true | auto fetch on by default; a user setting (Settings window) |
 | automaticStatusUpdateInterval | 60 (s) | status refresh every 60 s |
-| commitSubjectLimitLow / High | 50 / 70 | subject counter turns orange above 50, red above 70 |
+| commitSubjectLimitLow / High | 50 / 70 | subject counter turns orange above 50, red above 70, and Claude's prompt limits; user settings (Settings window, "Diff and commit"; low stays under high) |
 | compactBranchLabels | true | 2 px gap between branch labels |
 | createBranchSheetCheckout | true | "Switch to the new branch" ticked by default |
 | saveStashSheetStageNewFiles | true | Stash includes new files (`stash push -u`) |
@@ -79,7 +79,7 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit <remote> <branch>`) |
 | fetchSheetFetchAllRemotes / fetchSheetFetchAllTags | false / false | Fetch one remote, no `--tags` (Option-click = all remotes) |
 | pushSheetPushAllTags | false | no `--tags` |
-| contextSize | 3 | diffs use `--unified=3` |
+| contextSize | 3 | diffs use `--unified=3`; a user setting (Settings window, "Diff and commit"), the open diff refreshes when it changes |
 | localBranchSortOrder / remoteBranchSortOrder / tagSortOrder | 2 / 2 / 1 | meaning of the numbers not followed (*not used*) |
 | repositoryManagerScanDepth | 6 | not used |
 

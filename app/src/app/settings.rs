@@ -3,7 +3,7 @@
 //! applies and is saved at once, so there is no OK button; Esc, the close button or a click
 //! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
-use crate::settings::{minutes_label, Settings, FETCH_MINUTES};
+use crate::settings::{count_label, minutes_label, Settings, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
 use crate::theme::{Appearance, Colors, Variant};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
@@ -45,9 +45,10 @@ pub(super) struct Section {
     body: fn(&mut Ui, &mut Pane<'_>),
 }
 
-pub(super) const SECTIONS: [Section; 2] = [
+pub(super) const SECTIONS: [Section; 3] = [
     Section { key: "appearance", label: "Appearance", tint: Color32::from_rgb(0x6e, 0x5b, 0xd6), icon: appearance_glyph, body: appearance },
     Section { key: "fetch", label: "Fetch", tint: Color32::from_rgb(0x1c, 0x8c, 0xf0), icon: fetch_glyph, body: fetch },
+    Section { key: "diff", label: "Diff and commit", tint: Color32::from_rgb(0xe0, 0x7a, 0x1f), icon: diff_glyph, body: diff_commit },
 ];
 
 /// The section a key names (any case), or the first one.
@@ -67,6 +68,10 @@ fn appearance_glyph(p: &Painter, c: Pos2) {
 
 fn fetch_glyph(p: &Painter, c: Pos2) {
     crate::ui::glyph(p, c, "fetch", 15.0, 1.4, Color32::WHITE);
+}
+
+fn diff_glyph(p: &Painter, c: Pos2) {
+    crate::ui::glyph(p, c, "diff", 15.0, 1.4, Color32::WHITE);
 }
 
 /// A section's entry in the sidebar: its icon in a coloured square, then its name.
@@ -307,6 +312,84 @@ fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
 }
 
+/// A `- value +` stepper in `rect`. Returns -1 or +1 when a button is clicked and enabled.
+fn stepper(ui: &mut Ui, rect: Rect, id: &str, value: usize, can_dec: bool, can_inc: bool) -> i32 {
+    let k = theme::c();
+    let p = ui.painter().clone();
+    p.rect(rect, CornerRadius::same(7), k.input, Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+    let btn_w = rect.height();
+    let mut out = 0;
+    for (i, (sign, on)) in [(-1, can_dec), (1, can_inc)].into_iter().enumerate() {
+        let r = if i == 0 { Rect::from_min_size(rect.min, vec2(btn_w, rect.height())) } else { Rect::from_min_size(pos2(rect.right() - btn_w, rect.top()), vec2(btn_w, rect.height())) };
+        let resp = ui.interact(r, ui.id().with((id, i)), if on { Sense::click() } else { Sense::hover() });
+        if on && resp.hovered() {
+            p.rect_filled(r.shrink(3.0), CornerRadius::same(5), k.hover);
+        }
+        let col = if !on { k.faint } else if resp.hovered() { k.strong } else { k.dim };
+        let c = r.center();
+        p.line_segment([c - vec2(4.0, 0.0), c + vec2(4.0, 0.0)], Stroke::new(1.4_f32, col));
+        if sign > 0 {
+            p.line_segment([c - vec2(0.0, 4.0), c + vec2(0.0, 4.0)], Stroke::new(1.4_f32, col));
+        }
+        if on && resp.clicked() {
+            out = sign;
+        }
+    }
+    p.text(rect.center(), Align2::CENTER_CENTER, value.to_string(), theme::body(), k.strong);
+    out
+}
+
+/// The choices of a segmented control, plus the current value when it is not one of them (the
+/// palette's `settings maxCommitCount <n>` can set any number).
+fn with_current<T: Copy + Ord>(options: &[T], current: T) -> Vec<T> {
+    let mut v = options.to_vec();
+    if !v.contains(&current) {
+        v.push(current);
+        v.sort();
+    }
+    v
+}
+
+fn diff_commit(ui: &mut Ui, pane: &mut Pane<'_>) {
+    let s = &mut *pane.settings;
+    card(ui, |c| {
+        let ctrl = c.row("Diff context", "Lines shown around each change", vec2(SEG_W, SEG_H), true);
+        let opts = with_current(&DIFF_CONTEXTS, s.diff_context);
+        let chosen = opts.iter().position(|n| *n == s.diff_context).unwrap_or(0);
+        if let Some(i) = segmented(c.ui, ctrl, opts.len(), chosen, true, "diff_context", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, opts[i].to_string(), theme::body(), fg);
+        }) {
+            s.diff_context = opts[i];
+        }
+    });
+    card(ui, |c| {
+        let ctrl = c.row("Subject: warn above", "The counter turns orange", vec2(120.0, SEG_H), true);
+        let low = s.subject_low;
+        match stepper(c.ui, ctrl, "subject_low", low, low > *SUBJECT_RANGE.start(), low + 1 < s.subject_high) {
+            -1 => s.subject_low = (low.saturating_sub(5)).max(*SUBJECT_RANGE.start()),
+            1 => s.subject_low = (low + 5).min(s.subject_high - 1),
+            _ => {}
+        }
+        let ctrl = c.row("Subject: limit", "The counter turns red, and Claude keeps under it", vec2(120.0, SEG_H), true);
+        let high = s.subject_high;
+        match stepper(c.ui, ctrl, "subject_high", high, high > s.subject_low + 1, high < *SUBJECT_RANGE.end()) {
+            -1 => s.subject_high = high.saturating_sub(5).max(s.subject_low + 1),
+            1 => s.subject_high = (high + 5).min(*SUBJECT_RANGE.end()),
+            _ => {}
+        }
+    });
+    card(ui, |c| {
+        let ctrl = c.row("Commits loaded", "The most the history reads", vec2(SEG_W, SEG_H), true);
+        let opts = with_current(&MAX_COMMITS, s.max_commits);
+        let chosen = opts.iter().position(|n| *n == s.max_commits).unwrap_or(0);
+        if let Some(i) = segmented(c.ui, ctrl, opts.len(), chosen, true, "max_commits", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, count_label(opts[i]), theme::body(), fg);
+        }) {
+            s.max_commits = opts[i];
+        }
+    });
+}
+
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
         if !self.settings_open {
@@ -393,13 +476,20 @@ mod tests {
 
     #[test]
     fn sections_have_unique_lowercase_keys_and_names() {
-        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch"]);
+        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Diff and commit"]);
         for (i, s) in SECTIONS.iter().enumerate() {
             assert!(!s.label.is_empty());
             assert_eq!(s.key, s.key.to_lowercase(), "{}", s.label);
             assert_eq!(section_index(s.key), i, "each key finds its own section");
             assert_eq!(SECTIONS.iter().filter(|o| o.key == s.key || o.label == s.label).count(), 1, "{} is unique", s.key);
         }
+    }
+
+    #[test]
+    fn with_current_adds_an_unlisted_value_in_order() {
+        assert_eq!(with_current(&MAX_COMMITS, 100_000), MAX_COMMITS.to_vec());
+        assert_eq!(with_current(&MAX_COMMITS, 5_000), vec![1_000, 5_000, 10_000, 50_000, 100_000]);
+        assert_eq!(with_current(&DIFF_CONTEXTS, 7), vec![1, 3, 5, 7, 10, 25]);
     }
 
     #[test]

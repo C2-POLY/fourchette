@@ -45,6 +45,11 @@ pub struct Tab {
     /// Snapshot taken before a background job that changes the repository (Pull).
     pub(super) pending_undo: Option<Snapshot>,
     pub(super) commit_limit: usize,
+    /// The diff context and the subject limits of the settings, copied here each frame by `poll_tabs`.
+    pub(super) diff_context: u32,
+    pub(super) subject_limits: (usize, usize),
+    /// What the open diff shows, to draw it again when the context changes.
+    pub(super) diff_req: Option<DiffReq>,
     pub(super) ai: assistant::AiState,
     pub(super) worktrees: Vec<crate::worktree::Worktree>,
     /// Where the details panel sits in this repository.
@@ -57,6 +62,7 @@ pub struct Tab {
 /// its timers unless `timers` is off (screenshots).
 pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::settings::Settings, timers: bool) {
     for t in tabs {
+        t.apply_settings(settings);
         t.poll_busy();
         t.ai_poll();
         t.project_poll();
@@ -105,6 +111,9 @@ impl Tab {
             undo: Vec::new(),
             pending_undo: None,
             commit_limit: COMMIT_LIMIT,
+            diff_context: git::DIFF_CONTEXT,
+            subject_limits: (SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH),
+            diff_req: None,
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
             details_layout: DetailsLayout::default(),
@@ -175,6 +184,22 @@ impl Tab {
         } else {
             Sel::Commit(0)
         };
+    }
+
+    /// Takes the settings that shape a tab: a new diff context draws the open diff again, a new
+    /// commit limit reads the history again.
+    fn apply_settings(&mut self, s: crate::settings::Settings) {
+        self.subject_limits = (s.subject_low, s.subject_high);
+        if self.diff_context != s.diff_context {
+            self.diff_context = s.diff_context;
+            if let Some(req) = self.diff_req.clone().filter(|_| self.diff.is_some()) {
+                self.open_diff(req);
+            }
+        }
+        if self.commit_limit != s.max_commits {
+            self.commit_limit = s.max_commits;
+            self.reload();
+        }
     }
 
     pub(super) fn reload(&mut self) {
@@ -452,11 +477,6 @@ impl Tab {
                     Err(e) => self.notify(e, true),
                 }
             }
-            Cmd::SetCommitLimit(n) => {
-                self.commit_limit = n;
-                self.reload();
-                self.notify(format!("maxCommitCount set to {n}"), false);
-            }
             // App-wide: `App::run` handles them and never passes them here.
             Cmd::OpenDialog
             | Cmd::Open(_)
@@ -469,6 +489,7 @@ impl Tab {
             | Cmd::SetVariant(_)
             | Cmd::Settings
             | Cmd::SetSettings(_)
+            | Cmd::SetCommitLimit(_)
             | Cmd::Switcher
             | Cmd::RepoFavorite(_)
             | Cmd::RepoGroup(..)
@@ -605,10 +626,11 @@ impl Tab {
     fn open_diff(&mut self, req: DiffReq) {
         let (title, text) = match (&self.repo, &req) {
             (None, DiffReq::Commit { path, .. }) | (None, DiffReq::Worktree { path, .. }) => (path.clone(), demo::diff(path)),
-            (Some(r), DiffReq::Commit { hash, path }) => (path.clone(), r.diff_commit_file(hash, path)),
-            (Some(r), DiffReq::Worktree { path, staged, untracked }) => (path.clone(), r.diff_worktree_file(path, *staged, *untracked)),
+            (Some(r), DiffReq::Commit { hash, path }) => (path.clone(), r.diff_commit_file(hash, path, self.diff_context)),
+            (Some(r), DiffReq::Worktree { path, staged, untracked }) => (path.clone(), r.diff_worktree_file(path, *staged, *untracked, self.diff_context)),
         };
         self.diff = Some(DiffView { title, text });
+        self.diff_req = Some(req);
     }
 
     pub(super) fn head_has_upstream(&self) -> bool {
@@ -719,5 +741,49 @@ mod tests {
         t[0].load_demo();
         assert!(t[0].is_demo() && !t[0].commits.is_empty() && t[0].project.board.is_some());
         assert!(t[1].commits.is_empty() && t[1].project.board.is_none());
+    }
+
+    /// A repository with a 20-line file whose line 10 is changed and not committed.
+    fn changed_repo(name: &str) -> (std::path::PathBuf, Repo) {
+        let d = std::env::temp_dir().join(format!("fourchette-settings-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let g = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&d).output().unwrap().status.success(), "git {args:?}");
+        g(&["init", "-q", "-b", "main"]);
+        let lines = |x: &str| (1..=20).map(|n| if n == 10 { x.to_string() } else { format!("line {n}") }).collect::<Vec<_>>().join("\n") + "\n";
+        std::fs::write(d.join("f.txt"), lines("old")).unwrap();
+        g(&["add", "."]);
+        g(&["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", "first"]);
+        std::fs::write(d.join("f.txt"), lines("new")).unwrap();
+        let r = Repo::open(&crate::git::find_root(&d).unwrap()).unwrap();
+        (d, r)
+    }
+
+    #[test]
+    fn a_new_diff_context_draws_the_open_diff_again() {
+        let (d, r) = changed_repo("context");
+        let mut t = Tab::new();
+        t.set_repo(r);
+        let hunk_lines = |t: &Tab| t.diff.as_ref().unwrap().text.lines().filter(|l| l.starts_with(' ')).count();
+        t.open_diff(DiffReq::Worktree { path: "f.txt".into(), staged: false, untracked: false });
+        assert_eq!(hunk_lines(&t), 6, "3 lines of context on each side by default");
+        let s = crate::settings::Settings { diff_context: 1, ..Default::default() };
+        t.apply_settings(s);
+        assert_eq!(hunk_lines(&t), 2);
+        // A tab with no diff open has nothing to draw.
+        t.diff = None;
+        t.apply_settings(crate::settings::Settings { diff_context: 10, ..Default::default() });
+        assert!(t.diff.is_none() && t.diff_context == 10);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn settings_reach_every_tab_the_limit_included() {
+        let mut t = tabs(2);
+        let s = crate::settings::Settings { max_commits: 5_000, subject_low: 40, subject_high: 60, ..Default::default() };
+        poll_tabs(&mut t, &egui::Context::default(), s, false);
+        for tab in &t {
+            assert_eq!((tab.commit_limit, tab.subject_limits), (5_000, (40, 60)));
+        }
     }
 }
