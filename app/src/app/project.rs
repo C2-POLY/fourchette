@@ -50,18 +50,37 @@ pub(super) fn status_color(board: &Board, status: &str) -> Color32 {
 }
 
 impl App {
-    /// Reads the project board for the open repository, in the background.
+    /// Reads the project board of the active tab's repository, in the background.
     pub(super) fn project_load(&mut self) {
-        let Some(r) = &self.repo else { return };
         if self.screenshot.is_some() {
             return;
         }
+        let t = &mut self.tabs[self.active];
+        let preferred = t.repo.as_ref().and_then(|r| self.library.get(&r.root)).and_then(|e| e.project.clone());
+        t.project_load(preferred);
+    }
+
+    /// Remembers the chosen project for this repository and reads it.
+    pub(super) fn project_pick(&mut self, i: usize) {
+        let t = self.tab();
+        let (Some(r), Some(b)) = (&t.repo, &t.project.board) else { return };
+        let key = b.projects.get(i).map(|p| p.key());
+        let root = r.root.clone();
+        self.library.set_project(&root, key);
+        self.library.save();
+        self.project_load();
+    }
+}
+
+impl Tab {
+    /// Reads this repository's project board in the background, `preferred` if it is there.
+    fn project_load(&mut self, preferred: Option<String>) {
+        let Some(r) = &self.repo else { return };
         let url = r.default_remote().and_then(|rem| r.git(&["remote", "get-url", &rem]).ok()).unwrap_or_default();
         let Some(slug) = github::slug(&url) else {
             self.project = ProjectState::default();
             return;
         };
-        let preferred = self.library.get(&r.root).and_then(|e| e.project.clone());
         let (tx, rx) = channel();
         std::thread::spawn(move || {
             let _ = tx.send(github::load(&slug, preferred.as_deref()));
@@ -80,16 +99,6 @@ impl App {
             }
             Err(e) => self.project.error = Some(e),
         }
-    }
-
-    /// Remembers the chosen project for this repository and reads it.
-    pub(super) fn project_pick(&mut self, i: usize) {
-        let (Some(r), Some(b)) = (&self.repo, &self.project.board) else { return };
-        let key = b.projects.get(i).map(|p| p.key());
-        let root = r.root.clone();
-        self.library.set_project(&root, key);
-        self.library.save();
-        self.project_load();
     }
 
     /// Open tickets of this repository in the project: those not in a finished status.

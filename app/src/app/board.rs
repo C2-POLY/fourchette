@@ -759,12 +759,16 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
 impl App {
     /// Shows the Project view or goes back to the history; opening reads the project again.
     pub(super) fn board_toggle(&mut self) {
-        self.board.open = !self.board.open;
-        self.board.detail = None;
-        if self.board.open && self.project.loading.is_none() {
+        let t = self.tab_mut();
+        t.board.open = !t.board.open;
+        t.board.detail = None;
+        if t.board.open && t.project.loading.is_none() {
             self.project_load();
         }
     }
+}
+
+impl Tab {
 
     /// Esc closes the ticket's detail. Returns whether it did something.
     pub(super) fn board_escape(&mut self) -> bool {

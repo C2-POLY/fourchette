@@ -75,7 +75,7 @@ impl App {
         let query = sw.query.clone();
         let rows = self.switcher_rows(&query);
         let n = rows.len();
-        let current = self.repo.as_ref().map(|r| r.root.clone());
+        let current = self.tab().repo.as_ref().map(|r| r.root.clone());
         let groups = self.library.custom_groups();
         let (up, down, enter, esc) = ctx.input(|i| (i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown), i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
         let Some(sw) = self.switcher.as_mut() else { return };
