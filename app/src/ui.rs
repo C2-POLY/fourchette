@@ -84,7 +84,7 @@ mod tests {
     use super::*;
 
     fn gref(name: &str, kind: RefKind, is_head: bool) -> GitRef {
-        GitRef { name: name.into(), full: name.into(), kind, target: "abc".into(), is_head, upstream: String::new() }
+        GitRef { name: name.into(), full: name.into(), kind, target: "abc".into(), is_head, upstream: String::new(), ahead: 0, behind: 0 }
     }
 
     fn args(c: Option<Cmd>) -> Option<Vec<String>> {
@@ -105,6 +105,59 @@ mod tests {
         assert_eq!(args(label_checkout(&gref("stash@{0}", RefKind::Stash, false), &refs)), None);
         assert_eq!(args(label_checkout(&refs[2], &refs)), Some(vec!["checkout".into(), "dev".into()]));
         assert_eq!(args(label_checkout(&refs[3], &refs)), Some(vec!["checkout".into(), "--track".into(), "origin/new".into()]));
+    }
+
+    fn tracking(name: &str, up: &str, ahead: usize, behind: usize, is_head: bool) -> GitRef {
+        GitRef { upstream: up.into(), ahead, behind, full: format!("refs/heads/{name}"), ..gref(name, RefKind::Local, is_head) }
+    }
+
+    fn remote(name: &str) -> GitRef {
+        GitRef { full: format!("refs/remotes/{name}"), ..gref(name, RefKind::Remote, false) }
+    }
+
+    fn wt(branch: &str, missing: bool) -> crate::worktree::Worktree {
+        crate::worktree::Worktree { path: format!("/tmp/wt/{branch}").into(), branch: Some(branch.into()), head: String::new(), is_main: false, missing, locked: false }
+    }
+
+    #[test]
+    fn fast_forward_shows_only_when_strictly_behind() {
+        let refs = vec![remote("origin/dev"), remote("origin/main")];
+        // Behind: shown, with the count, moving the branch without checkout and offline.
+        let ff = fast_forward(&tracking("dev", "origin/dev", 0, 3, false), &refs, &[]).expect("shown");
+        assert_eq!((ff.text.as_str(), ff.count.as_str()), ("Fast-forward to 'origin/dev'", "3 commits"));
+        let Ok(Cmd::Git { label, args: a, network }) = ff.action else { panic!("enabled") };
+        assert_eq!(label, "Fast-forwarded dev");
+        assert_eq!(a, ["fetch", "--no-write-fetch-head", "--no-tags", "--no-recurse-submodules", ".", "refs/remotes/origin/dev:refs/heads/dev"]);
+        assert!(!network);
+        assert_eq!(fast_forward(&tracking("dev", "origin/dev", 0, 1, false), &refs, &[]).unwrap().count, "1 commit");
+        // The checked-out branch: merge --ff-only, which also updates the files.
+        let ff = fast_forward(&tracking("main", "origin/main", 0, 2, true), &refs, &[wt("main", false)]).expect("shown");
+        assert_eq!(args(ff.action.ok()), Some(vec!["merge".into(), "--ff-only".into(), "refs/remotes/origin/main".into()]));
+        // Up to date, ahead, diverged, no upstream, upstream gone or unknown: hidden.
+        for b in [
+            tracking("dev", "origin/dev", 0, 0, false),
+            tracking("dev", "origin/dev", 2, 0, false),
+            tracking("dev", "origin/dev", 1, 2, false),
+            tracking("dev", "", 0, 3, false),
+            tracking("dev", "origin/gone", 0, 3, false),
+            remote("origin/dev"),
+        ] {
+            assert!(fast_forward(&b, &refs, &[]).is_none(), "{} {}/{}", b.name, b.ahead, b.behind);
+        }
+    }
+
+    #[test]
+    fn fast_forward_is_greyed_out_for_a_branch_checked_out_in_another_worktree() {
+        let refs = vec![remote("origin/dev")];
+        let b = tracking("dev", "origin/dev", 0, 3, false);
+        let ff = fast_forward(&b, &refs, &[wt("other", false), wt("dev", false)]).expect("shown");
+        let why = ff.action.err().expect("greyed out");
+        assert!(why.contains("checked out in the worktree “dev”"), "{why}");
+        let why = fast_forward(&b, &refs, &[wt("dev", true)]).unwrap().action.err().expect("greyed out");
+        assert!(why.contains("Clean up missing worktrees"), "{why}");
+        // Checked out here: not "elsewhere", it fast-forwards with merge.
+        let here = tracking("dev", "origin/dev", 0, 3, true);
+        assert!(fast_forward(&here, &refs, &[wt("dev", false)]).unwrap().action.is_ok());
     }
 
     #[test]
@@ -565,9 +618,49 @@ pub fn label_checkout(r: &GitRef, refs: &[GitRef]) -> Option<Cmd> {
     }
 }
 
-pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, cmds: &mut Vec<Cmd>) {
+/// The "Fast-forward to 'origin/x'" entry of a local branch's menu.
+pub struct FastForward {
+    pub text: String,
+    /// "3 commits", shown on the right of the entry.
+    pub count: String,
+    /// What a click does, or why the entry is greyed out.
+    pub action: Result<Cmd, String>,
+}
+
+/// The fast-forward entry of a local branch, only when it is behind its upstream and not ahead (as
+/// the last fetch saw it): none when up to date, ahead, diverged, without upstream or gone. A
+/// branch checked out in another worktree gets it greyed out, since Git refuses to move it.
+pub fn fast_forward(b: &GitRef, refs: &[GitRef], worktrees: &[crate::worktree::Worktree]) -> Option<FastForward> {
+    if b.kind != RefKind::Local || b.upstream.is_empty() || b.behind == 0 || b.ahead > 0 {
+        return None;
+    }
+    let up = refs.iter().filter(|r| r.name == b.upstream).min_by_key(|r| r.kind != RefKind::Remote)?;
+    let count = if b.behind == 1 { "1 commit".to_string() } else { format!("{} commits", b.behind) };
+    let elsewhere = worktrees.iter().find(|w| !b.is_head && w.branch.as_deref() == Some(b.name.as_str()));
+    let action = match elsewhere {
+        Some(w) if w.missing => Err(format!("{} is checked out in the worktree “{}”, whose folder is gone. Clean up missing worktrees first.", b.name, w.name())),
+        Some(w) => Err(format!("{} is checked out in the worktree “{}”. Fast-forward it from there.", b.name, w.name())),
+        None => Ok(Cmd::Git { label: format!("Fast-forwarded {}", b.name), args: git::fast_forward_args(&b.name, &up.full, b.is_head), network: false }),
+    };
+    Some(FastForward { text: format!("Fast-forward to '{}'", b.upstream), count, action })
+}
+
+pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
     if !b.is_head && ui.button("Check out").clicked() {
         cmds.push(Cmd::Git { label: format!("Switched to {}", b.name), args: vec!["checkout".into(), b.name.clone()], network: false });
+    }
+    if let Some(ff) = fast_forward(b, refs, worktrees) {
+        let button = egui::Button::new(ff.text).shortcut_text(ff.count);
+        match ff.action {
+            Ok(cmd) => {
+                if ui.add(button).clicked() {
+                    cmds.push(cmd);
+                }
+            }
+            Err(why) => {
+                ui.add_enabled(false, button).on_disabled_hover_text(why);
+            }
+        }
     }
     if !b.is_head && !current.is_empty() {
         if ui.button(format!("Merge {} into {}", b.name, current)).clicked() {
