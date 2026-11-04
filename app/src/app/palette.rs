@@ -82,6 +82,7 @@ impl App {
             }
             v.push(item("Commands", "Open repository…", "", Cmd::OpenDialog));
             v.push(item("Commands", "Refresh", "⌘R", Cmd::Reload));
+            v.push(item("Commands", "Settings…", "⌘, · appearance, automatic fetch", Cmd::Settings));
             let now = self.library.appearance;
             for a in theme::Appearance::ALL {
                 let hint = match (a == now, a) {
@@ -90,6 +91,19 @@ impl App {
                     _ => "",
                 };
                 v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
+            }
+            let d = self.details_layout;
+            for place in crate::library::DetailsPlace::ALL {
+                let hint = if !d.hidden && d.place == place { "current" } else { "" };
+                v.push(item("View", format!("Details panel: {}", place.label()), hint, Cmd::SetDetails(crate::library::DetailsLayout::shown(place))));
+            }
+            v.push(item("View", "Details panel: Hidden", if d.hidden { "current" } else { "⌘J" }, Cmd::SetDetails(d.hide())));
+            // "theme" in the hint so that typing it finds the variants too. "current" is the one on
+            // screen, which FOURCHETTE_VARIANT may set apart from the saved one.
+            let now = theme::variant();
+            for t in theme::Variant::ALL {
+                let hint = if t == now { "theme · current".to_string() } else { format!("theme · {}", t.blurb()) };
+                v.push(item("Appearance", format!("Variant: {}", t.label()), hint, Cmd::SetVariant(t)));
             }
         }
         // ReferenceCommandProvider

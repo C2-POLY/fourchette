@@ -3,10 +3,12 @@ mod board;
 mod palette;
 mod project;
 mod repos;
+mod settings;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
 use crate::graph::{self, Row};
+use crate::library::DetailsLayout;
 use crate::undo::{Snapshot, UNDO_DEPTH};
 use crate::{demo, theme};
 use egui::Color32;
@@ -18,10 +20,6 @@ use std::time::Instant;
 const COMMIT_LIMIT: usize = git::MAX_COMMIT_COUNT;
 /// "automaticStatusUpdateInterval" default 60 s; 60.0 is also the fallback (sub_10031b7cc, sub_10048580c).
 pub const STATUS_UPDATE_SECS: f32 = 60.0;
-/// "fetchRemotesAutomatically" default true (sub_10031b7cc).
-pub const AUTO_FETCH: bool = true;
-/// How often the automatic fetch runs. Not found in the code (estimated).
-pub const AUTO_FETCH_SECS: f32 = 600.0;
 /// "commitSubjectLimitLow" / "commitSubjectLimitHigh" defaults (sub_10031b7cc).
 pub const SUBJECT_LIMIT_LOW: usize = 50;
 pub const SUBJECT_LIMIT_HIGH: usize = 70;
@@ -83,6 +81,16 @@ pub enum Cmd {
     SetCommitLimit(usize),
     /// System, dark or light, kept in repos.json.
     SetAppearance(theme::Appearance),
+    /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
+    SetDetails(DetailsLayout),
+    /// ⌘J: hide the details panel, or show it again where it was.
+    ToggleDetails,
+    /// The app's colours and icon, chosen in the palette.
+    SetVariant(theme::Variant),
+    /// Open or close the Settings window (⌘,).
+    Settings,
+    /// Keep the settings chosen in the Settings window; they apply at once.
+    SetSettings(crate::settings::Settings),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
     AiCommitMessage,
@@ -153,6 +161,8 @@ pub struct App {
     scroll_to: Option<usize>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
+    /// The Settings window (⌘,) is open.
+    settings_open: bool,
     project: project::ProjectState,
     board: board::BoardState,
     screenshot: Option<PathBuf>,
@@ -166,6 +176,8 @@ pub struct App {
     commit_limit: usize,
     ai: assistant::AiState,
     worktrees: Vec<crate::worktree::Worktree>,
+    /// Where the details panel sits in this repository.
+    details_layout: DetailsLayout,
 }
 
 pub fn short(h: &str) -> &str {
@@ -181,7 +193,8 @@ impl App {
         let library = crate::library::Library::load();
         // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
-        theme::apply(&cc.egui_ctx, appearance);
+        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
+        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
         let mut app = App {
             repo: None,
             commits: vec![],
@@ -211,6 +224,7 @@ impl App {
             scroll_to: None,
             library,
             switcher: None,
+            settings_open: false,
             project: project::ProjectState::default(),
             board: board::BoardState::default(),
             screenshot,
@@ -225,6 +239,7 @@ impl App {
             commit_limit: COMMIT_LIMIT,
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
+            details_layout: DetailsLayout::default(),
         };
         let cwd = std::env::current_dir().ok();
         let candidate = repo_arg
@@ -289,6 +304,13 @@ impl App {
             app.board.open = true;
             app.board.detail = app.project.board.as_ref().and_then(|b| b.items.iter().find(|i| i.number == Some(n))).map(|i| i.id.clone());
         }
+        if std::env::var("FOURCHETTE_SETTINGS").is_ok() {
+            app.settings_open = true;
+        }
+        // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
+        if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
+            app.details_layout = l;
+        }
         app
     }
 
@@ -317,6 +339,7 @@ impl App {
         self.project = project::ProjectState { board: Some(std::sync::Arc::new(crate::github::sample())), ..Default::default() };
         self.after_load();
         self.sel = Sel::Commit(0);
+        self.details_layout = DetailsLayout::default();
     }
 
     fn set_repo(&mut self, r: Repo) {
@@ -338,6 +361,7 @@ impl App {
             self.library.touch(&root);
             self.library.save();
         }
+        self.details_layout = self.library.details(&root);
         self.project = project::ProjectState::default();
         self.project_load();
     }
@@ -373,7 +397,8 @@ impl App {
     }
 
     /// The original refreshes the working copy when more than the update interval has passed
-    /// (sub_10048580c), and fetches remotes automatically when that setting is on.
+    /// (sub_10048580c), and fetches remotes automatically when that setting is on (here the
+    /// person's choice in the Settings window, with its interval).
     fn timers(&mut self, ctx: &egui::Context) {
         if self.repo.is_none() || self.screenshot.is_some() {
             return;
@@ -381,7 +406,8 @@ impl App {
         if self.last_status.elapsed().as_secs_f32() > STATUS_UPDATE_SECS && self.busy.is_none() {
             self.refresh_status();
         }
-        if AUTO_FETCH && self.last_fetch.elapsed().as_secs_f32() > AUTO_FETCH_SECS && self.busy.is_none() {
+        let s = self.library.settings;
+        if s.auto_fetch && self.last_fetch.elapsed().as_secs_f32() > s.fetch_secs() && self.busy.is_none() {
             self.last_fetch = Instant::now();
             self.fetch(false, true, ctx);
         }
@@ -635,6 +661,25 @@ impl App {
                     self.library.save();
                     theme::set_appearance(ctx, a);
                 }
+                Cmd::Settings => {
+                    self.settings_open = !self.settings_open;
+                    if self.settings_open {
+                        self.palette = None;
+                        self.switcher = None;
+                    }
+                }
+                Cmd::SetSettings(s) => {
+                    self.library.settings = s;
+                    self.library.save();
+                }
+                Cmd::SetDetails(l) => self.set_details(l),
+                Cmd::ToggleDetails => self.set_details(self.details_layout.toggled()),
+                Cmd::SetVariant(v) => {
+                    self.library.variant = v;
+                    self.library.save();
+                    theme::set_variant(ctx, v);
+                    crate::icon::show(ctx, v);
+                }
                 Cmd::Switcher => {
                     self.switcher = if self.switcher.is_some() { None } else { Some(repos::Switcher::default()) };
                 }
@@ -659,6 +704,16 @@ impl App {
                 Cmd::ProjectPick(i) => self.project_pick(i),
                 Cmd::Board => self.board_toggle(),
             }
+        }
+    }
+
+    /// Changes the details panel layout and keeps it for this repository
+    /// (not for the sample project, nor while taking a screenshot).
+    fn set_details(&mut self, l: DetailsLayout) {
+        self.details_layout = l;
+        if let (Some(r), None) = (&self.repo, &self.screenshot) {
+            self.library.set_details(&r.root, l);
+            self.library.save();
         }
     }
 

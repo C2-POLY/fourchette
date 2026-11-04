@@ -95,7 +95,12 @@ pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
     }
     let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
     let bg = if resp.hovered() { theme::c().hover } else { theme::c().sidebar };
-    let c = rect.center();
+    appearance_icon(p, rect.center(), a, col, bg);
+    resp
+}
+
+/// The icon of an appearance, about 14 pt wide; `bg` is the colour behind it (the moon is cut from it).
+pub fn appearance_icon(p: &egui::Painter, c: Pos2, a: theme::Appearance, col: Color32, bg: Color32) {
     match a {
         // Half dark, half light: follows macOS.
         theme::Appearance::System => {
@@ -117,6 +122,32 @@ pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
             }
         }
     }
+}
+
+/// The status bar button for the details panel: a window outline with its right or bottom
+/// part filled where the panel sits, or empty when the panel is hidden.
+pub fn details_button(ui: &mut Ui, l: crate::library::DetailsLayout) -> egui::Response {
+    use crate::library::DetailsPlace;
+    let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 20.0), Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(5), theme::c().hover);
+    }
+    let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
+    let win = Rect::from_center_size(rect.center(), vec2(15.0, 12.0));
+    if !l.hidden {
+        let part = match l.place {
+            DetailsPlace::Right => Rect::from_min_max(pos2(win.right() - 5.5, win.top()), win.max),
+            DetailsPlace::Bottom => Rect::from_min_max(pos2(win.left(), win.bottom() - 4.5), win.max),
+        };
+        let r = 2;
+        let corners = match l.place {
+            DetailsPlace::Right => CornerRadius { nw: 0, ne: r, sw: 0, se: r },
+            DetailsPlace::Bottom => CornerRadius { nw: 0, ne: 0, sw: r, se: r },
+        };
+        p.rect_filled(part, corners, col);
+    }
+    p.rect_stroke(win, CornerRadius::same(2), Stroke::new(1.3_f32, col), StrokeKind::Inside);
     resp
 }
 

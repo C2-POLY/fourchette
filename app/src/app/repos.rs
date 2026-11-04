@@ -223,7 +223,7 @@ impl App {
                             cmds.push(Cmd::ScanFolder);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::c().faint));
+                            ui.add(egui::Label::new(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::c().faint)).truncate());
                         });
                     });
                 });
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn matches_name_group_and_folder() {
-        let e = Entry { path: PathBuf::from("/code/nova/site"), group: Some("Clients".into()), favorite: false, last_opened: 0, project: None };
+        let e = Entry { path: PathBuf::from("/code/nova/site"), group: Some("Clients".into()), favorite: false, last_opened: 0, project: None, details: None };
         assert!(matches("site", &e));
         assert!(matches("cli SITE", &e));
         assert!(matches("nova", &e));

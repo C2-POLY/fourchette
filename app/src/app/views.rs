@@ -1,8 +1,29 @@
 //! What the window shows: toolbar, sidebar, history, details, diff, dialogs.
 use super::*;
 use crate::git::FileChange;
+use crate::library::{DetailsLayout, DetailsPlace};
 use crate::ui::*;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
+
+/// The bottom details panel's smallest height.
+const DETAILS_BOTTOM_MIN_H: f32 = 160.0;
+/// Below this width the bottom panel keeps the one-column layout of the right panel.
+const WIDE_DETAILS_MIN_W: f32 = 640.0;
+
+/// Splits the space left in `ui` into two columns with a thin line between them.
+fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
+    const GAP: f32 = 32.0;
+    let r = ui.available_rect_before_wrap();
+    let w = ((r.width() - GAP) / 2.0).max(0.0);
+    let left = Rect::from_min_size(r.min, vec2(w, r.height()));
+    let right = Rect::from_min_size(pos2(r.min.x + w + GAP, r.min.y), vec2(w, r.height()));
+    let x = r.min.x + w + GAP / 2.0;
+    ui.painter().vline(x, r.y_range().shrink(12.0), Stroke::new(1.0_f32, theme::c().border));
+    let col = |ui: &mut Ui, side: &str, rect: Rect| ui.new_child(egui::UiBuilder::new().id_salt((id, side)).max_rect(rect).layout(Layout::top_down(Align::Min)));
+    let (a, b) = (col(ui, "left", left), col(ui, "right", right));
+    ui.allocate_rect(r, Sense::hover());
+    (a, b)
+}
 
 impl App {
     // ---------------------------------------------------------------- toolbar
@@ -508,13 +529,34 @@ impl App {
     // ---------------------------------------------------------------- details panel
 
     fn details_panel(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        // At the bottom the panel is wide and short: its content goes side by side in two columns.
+        let wide = self.details_layout.place == DetailsPlace::Bottom && ui.available_width() >= WIDE_DETAILS_MIN_W;
         match self.sel.clone() {
+            Sel::Wip if wide => self.wip_panel_wide(ui, cmds),
             Sel::Wip => self.wip_panel(ui, cmds),
             Sel::Commit(_) => {
                 self.ensure_details();
                 match self.details.clone() {
+                    Some(d) if wide => {
+                        let (mut left, mut right) = two_columns(ui, "details");
+                        egui::ScrollArea::vertical().id_salt("details_info").auto_shrink([false, false]).show(&mut left, |ui| {
+                            ui.add_space(12.0);
+                            self.commit_info(ui, &d, cmds);
+                            ui.add_space(12.0);
+                        });
+                        egui::ScrollArea::vertical().id_salt("details_files").auto_shrink([false, false]).show(&mut right, |ui| {
+                            ui.add_space(12.0);
+                            self.commit_files(ui, &d, cmds);
+                        });
+                    }
                     Some(d) => {
-                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.commit_panel(ui, &d, cmds));
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            ui.add_space(12.0);
+                            self.commit_info(ui, &d, cmds);
+                            ui.add_space(12.0);
+                            ui.separator();
+                            self.commit_files(ui, &d, cmds);
+                        });
                     }
                     None => {
                         ui.label("Couldn't read this commit.");
@@ -528,8 +570,8 @@ impl App {
         }
     }
 
-    fn commit_panel(&self, ui: &mut Ui, d: &CommitDetails, cmds: &mut Vec<Cmd>) {
-        ui.add_space(12.0);
+    /// Subject, message, Claude's explanation, people and SHA, parents and refs.
+    fn commit_info(&self, ui: &mut Ui, d: &CommitDetails, cmds: &mut Vec<Cmd>) {
         ui.label(RichText::new(&d.subject).size(theme::FS_TITLE).color(theme::c().strong));
         if !d.body.is_empty() {
             ui.add_space(4.0);
@@ -603,8 +645,10 @@ impl App {
                 ui.end_row();
             }
         });
-        ui.add_space(12.0);
-        ui.separator();
+    }
+
+    /// The changed files of a commit, with their counts.
+    fn commit_files(&self, ui: &mut Ui, d: &CommitDetails, cmds: &mut Vec<Cmd>) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} changed file{}", d.files.len(), if d.files.len() == 1 { "" } else { "s" })).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -676,14 +720,37 @@ impl App {
         });
     }
 
-    fn wip_panel(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+    fn wip_title(&self, ui: &mut Ui) {
         ui.add_space(12.0);
         let total = self.status.staged.len() + self.status.unstaged.len();
         let on = self.branch.clone().unwrap_or_else(|| "HEAD".into());
         ui.label(RichText::new(format!("{total} file change{} on {on}", if total == 1 { "" } else { "s" })).size(theme::FS_TITLE).color(theme::c().strong));
         ui.add_space(8.0);
-        let list_h = ((ui.available_height() - 290.0) / 2.0).max(80.0);
+    }
 
+    fn wip_panel(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        self.wip_title(ui);
+        let list_h = ((ui.available_height() - 290.0) / 2.0).max(80.0);
+        self.wip_files(ui, list_h, cmds);
+        ui.add_space(12.0);
+        self.wip_message(ui, cmds);
+    }
+
+    /// At the bottom: the file lists on the left, the commit message on the right.
+    fn wip_panel_wide(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+        self.wip_title(ui);
+        let (mut left, mut right) = two_columns(ui, "wip");
+        // Two headers, the lists' frames, the gap between them and a bottom margin.
+        let list_h = ((left.available_height() - 100.0) / 2.0).max(40.0);
+        self.wip_files(&mut left, list_h, cmds);
+        egui::ScrollArea::vertical().id_salt("wip_message").auto_shrink([false, false]).show(&mut right, |ui| {
+            self.wip_message(ui, cmds);
+            ui.add_space(8.0);
+        });
+    }
+
+    /// Unstaged and staged files, each list `list_h` high.
+    fn wip_files(&mut self, ui: &mut Ui, list_h: f32, cmds: &mut Vec<Cmd>) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Unstaged files  {}", self.status.unstaged.len())).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -703,8 +770,10 @@ impl App {
             });
         });
         self.file_list(ui, true, list_h, cmds);
-        ui.add_space(12.0);
+    }
 
+    /// Subject, description, amend and the commit button.
+    fn wip_message(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("Commit message").size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -763,7 +832,8 @@ impl App {
             ui.label(RichText::new(&d.title).size(theme::FS_BODY).color(theme::c().strong));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
-                if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                // Esc belongs to the Settings window while it is open.
+                if ui.button("Close").clicked() || (!self.settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
                     cmds.push(Cmd::CloseDiff);
                 }
             });
@@ -994,6 +1064,14 @@ impl App {
         if self.dialog.is_some() {
             return;
         }
+        // ⌘, opens or closes Settings; while it is open, it takes the keyboard.
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Comma)) {
+            cmds.push(Cmd::Settings);
+            return;
+        }
+        if self.settings_open {
+            return;
+        }
         // ⌘K opens the command palette from anywhere.
         if ctx.input(|i| i.modifiers.command && (i.key_pressed(Key::K) || i.key_pressed(Key::P))) {
             cmds.push(Cmd::Palette);
@@ -1009,6 +1087,10 @@ impl App {
         if board_key {
             cmds.push(Cmd::Board);
             return;
+        }
+        // ⌘J hides the details panel or brings it back where it was.
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::J)) {
+            cmds.push(Cmd::ToggleDetails);
         }
         self.favorite_keys(ctx, cmds);
         if self.switcher.is_some() || self.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
@@ -1120,6 +1202,21 @@ impl eframe::App for App {
                         if appearance_button(ui, a).on_hover_text(tip).clicked() {
                             cmds.push(Cmd::SetAppearance(a.next()));
                         }
+                        let d = self.details_layout;
+                        let tip = if d.hidden { format!("Details panel: Hidden — ⌘J to show it ({})", d.place.label().to_lowercase()) } else { format!("Details panel: {} — ⌘J to hide", d.label()) };
+                        let btn = details_button(ui, d).on_hover_text(tip);
+                        egui::Popup::menu(&btn).align(egui::RectAlign::TOP_END).show(|ui| {
+                            ui.set_min_width(180.0);
+                            ui.label(RichText::new("Details panel").size(theme::FS_SMALL).color(theme::c().faint));
+                            for place in DetailsPlace::ALL {
+                                if ui.add(egui::Button::selectable(!d.hidden && d.place == place, place.label())).clicked() {
+                                    cmds.push(Cmd::SetDetails(DetailsLayout::shown(place)));
+                                }
+                            }
+                            if ui.add(egui::Button::selectable(d.hidden, "Hidden").right_text(RichText::new("⌘J").color(theme::c().faint))).clicked() {
+                                cmds.push(Cmd::SetDetails(d.hide()));
+                            }
+                        });
                         ui.add_space(4.0);
                         let where_ = self.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
                         ui.label(RichText::new(where_).color(theme::c().faint).size(theme::FS_SECONDARY));
@@ -1137,12 +1234,28 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
             .show(ctx, |ui| self.sidebar(ui, &mut cmds));
 
-            egui::SidePanel::right("details")
-            .resizable(true)
-            .default_width(330.0)
-            .width_range(280.0..=600.0)
-            .frame(egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0)))
-            .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+            // Declared after the sidebar, so at the bottom it spans the history only.
+            let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
+            match self.details_layout {
+                DetailsLayout { hidden: true, .. } => {}
+                DetailsLayout { place: DetailsPlace::Right, .. } => {
+                    egui::SidePanel::right("details")
+                        .resizable(true)
+                        .default_width(330.0)
+                        .width_range(280.0..=600.0)
+                        .frame(details_frame)
+                        .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+                }
+                DetailsLayout { place: DetailsPlace::Bottom, .. } => {
+                    let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
+                    egui::TopBottomPanel::bottom("details_bottom")
+                        .resizable(true)
+                        .default_height(300.0)
+                        .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
+                        .frame(details_frame)
+                        .show(ctx, |ui| self.details_panel(ui, &mut cmds));
+                }
+            }
         }
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| {
@@ -1177,6 +1290,7 @@ impl eframe::App for App {
         self.palette_ui(ctx, &mut cmds);
         if self.dialog.is_none() {
             self.switcher_ui(ctx, &mut cmds);
+            self.settings_ui(ctx, &mut cmds);
         }
 
         if let Some((msg, err, at)) = &self.toast {
