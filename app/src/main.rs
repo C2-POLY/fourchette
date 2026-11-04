@@ -12,6 +12,7 @@ mod theme;
 mod titlebar;
 mod ui;
 mod undo;
+mod update;
 mod worktree;
 
 use std::path::PathBuf;
