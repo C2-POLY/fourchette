@@ -101,17 +101,17 @@ impl App {
         });
         egui::Area::new(egui::Id::new("switcher")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
             egui::Frame::new()
-                .fill(theme::PANEL)
-                .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)))
-                .corner_radius(CornerRadius::same(12))
+                .fill(theme::ELEVATED)
+                .stroke(Stroke::new(1.0_f32, theme::BORDER_STRONG))
+                .corner_radius(CornerRadius::same(10))
                 .inner_margin(Margin::same(12))
                 .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(140) })
                 .show(ui, |ui| {
                     ui.set_width(SWITCHER_W);
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut sw.query)
-                            .hint_text("Switch repository — type a name, a group or a folder…")
-                            .font(FontId::proportional(16.0))
+                            .hint_text(crate::ui::faint_hint("Switch repository — type a name, a group or a folder…"))
+                            .font(FontId::proportional(theme::FS_TITLE))
                             .desired_width(f32::INFINITY)
                             .margin(Margin::symmetric(10, 8)),
                     );
@@ -127,7 +127,7 @@ impl App {
                             if row.section != last {
                                 last = &row.section;
                                 let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
-                                ui.painter().text(pos2(hr.left() + 10.0, hr.bottom() - 6.0), Align2::LEFT_BOTTOM, row.section.to_uppercase(), FontId::proportional(10.0), theme::FAINT);
+                                ui.painter().text(pos2(hr.left() + 10.0, hr.bottom() - 6.0), Align2::LEFT_BOTTOM, &row.section, theme::small(), theme::FAINT);
                             }
                             let e = &row.entry;
                             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
@@ -149,11 +149,11 @@ impl App {
                             }
                             let missing = !e.path.exists();
                             let is_current = current.as_deref() == Some(e.path.as_path());
-                            let tc = if missing { theme::FAINT } else if selected || is_current { Color32::WHITE } else { theme::TEXT };
-                            let name = p.text(pos2(rect.left() + 34.0, rect.center().y), Align2::LEFT_CENTER, e.name(), FontId::proportional(14.0), tc);
+                            let tc = if missing { theme::FAINT } else if selected || is_current { theme::STRONG } else { theme::TEXT };
+                            let name = p.text(pos2(rect.left() + 34.0, rect.center().y), Align2::LEFT_CENTER, e.name(), theme::body(), tc);
                             let mut x = name.right() + 10.0;
                             if is_current {
-                                let r = p.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, "✔ open", FontId::proportional(11.0), theme::ADDED);
+                                let r = p.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, "✔ open", theme::small(), theme::ADDED);
                                 x = r.right() + 10.0;
                             }
                             let where_ = if missing { format!("{} — folder missing", tilde(&e.path)) } else { tilde(e.path.parent().unwrap_or(&e.path)) };
@@ -161,11 +161,11 @@ impl App {
                                 pos2(x.max(rect.left() + 230.0), rect.center().y),
                                 Align2::LEFT_CENTER,
                                 where_,
-                                FontId::proportional(11.5),
+                                theme::secondary(),
                                 if missing { theme::DELETED.gamma_multiply(0.8) } else { theme::FAINT },
                             );
                             if let Some(s) = row.shortcut {
-                                p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, format!("⌘{s}"), FontId::proportional(11.0), theme::DIM);
+                                p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, format!("⌘{s}"), theme::small(), theme::DIM);
                             }
                             if resp.clicked() && !star_resp.clicked() {
                                 chosen = Some(k);
@@ -223,7 +223,7 @@ impl App {
                             cmds.push(Cmd::ScanFolder);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(RichText::new("Enter to open · right-click to organise · Esc").size(10.5).color(theme::FAINT));
+                            ui.label(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::FAINT));
                         });
                     });
                 });

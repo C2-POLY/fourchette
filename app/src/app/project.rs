@@ -1,8 +1,8 @@
 //! The GitHub project linked to the repository, in the sidebar (read only).
 use super::*;
 use crate::github::{self, Board, Item, Kind};
-use crate::ui::{section_header, side_item};
-use egui::{pos2, vec2, Align2, CornerRadius, FontId, Rect, RichText, Sense, Ui};
+use crate::ui::{fit_text, group_row, section_header};
+use egui::{pos2, vec2, Align2, CornerRadius, FontId, RichText, Sense, Ui};
 use std::sync::mpsc::Receiver;
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ fn status_color(status: &str) -> Color32 {
     } else if s.contains("review") {
         theme::RENAMED
     } else if s.contains("progress") || s.contains("doing") || s.contains("cours") {
-        theme::ACCENT
+        theme::ACCENT_TEXT
     } else if s.contains("ready") || s.contains("todo") || s.contains("to do") {
         theme::MODIFIED
     } else if s.contains("block") {
@@ -33,10 +33,10 @@ fn status_color(status: &str) -> Color32 {
 }
 
 fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
     }
     let y = rect.center().y;
     let mut x = rect.left() + 24.0;
@@ -58,10 +58,10 @@ fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
     }
     x += 14.0;
     if let Some(n) = it.number {
-        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(11.0), theme::FAINT);
+        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(theme::FS_SMALL), theme::FAINT);
         x = r.right() + 6.0;
     }
-    p.with_clip_rect(Rect::from_min_max(rect.min, pos2(rect.right() - 6.0, rect.max.y))).text(pos2(x, y), Align2::LEFT_CENTER, &it.title, FontId::proportional(12.5), theme::TEXT);
+    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &it.title, theme::body(), theme::TEXT, rect.right() - 8.0 - x);
     resp
 }
 
@@ -159,14 +159,14 @@ impl App {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             if board.projects.len() > 1 {
-                egui::ComboBox::from_id_salt("gh_project").selected_text(RichText::new(&proj.title).small()).width(ui.available_width() - 70.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("gh_project").selected_text(RichText::new(&proj.title).size(theme::FS_SECONDARY)).width(ui.available_width() - 70.0).show_ui(ui, |ui| {
                     for (i, p) in board.projects.iter().enumerate() {
                         if ui.selectable_label(i == board.chosen, &p.title).clicked() && i != board.chosen {
                             cmds.push(Cmd::ProjectPick(i));
                         }
                     }
                 });
-            } else if ui.link(RichText::new(&proj.title).small().color(theme::DIM)).on_hover_text("Open the project on GitHub").clicked() {
+            } else if ui.link(RichText::new(&proj.title).size(theme::FS_SECONDARY).color(theme::DIM)).on_hover_text("Open the project on GitHub").clicked() {
                 cmds.push(Cmd::OpenUrl(proj.url.clone()));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -189,7 +189,7 @@ impl App {
             ui.label(RichText::new(e).small().color(theme::MODIFIED));
         }
         if board.columns.is_empty() {
-            ui.label(RichText::new("  Nothing for this repository in the project yet.").small().color(theme::FAINT));
+            ui.label(RichText::new("  Nothing for this repository in the project yet.").size(theme::FS_SECONDARY).color(theme::FAINT));
             return;
         }
 
@@ -201,8 +201,7 @@ impl App {
             let key = format!("gh:{status}");
             let col_open = github::is_done(status) == self.project.flipped.contains(&key);
             let color = status_color(status);
-            let label = format!("{}  {status}", if col_open { "⏷" } else { "⏵" });
-            if side_item(ui, "remote", &label, Some(items.len()), false, None, false).clicked() {
+            if group_row(ui, status, items.len(), col_open).clicked() {
                 if !self.project.flipped.remove(&key) {
                     self.project.flipped.insert(key);
                 }

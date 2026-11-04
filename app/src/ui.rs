@@ -35,22 +35,62 @@ pub fn draw_row_graph(p: &egui::Painter, row: &Row, gx: f32, top: f32, bottom: f
     }
 }
 
-pub fn draw_node(p: &egui::Painter, c: Pos2, row: &Row, author: &str, is_head: bool, matched: bool) {
+/// A commit in the graph: a small dot in its lane colour, a hollow ring for a merge,
+/// and a ring around the checked-out commit. `bg` is the row's background.
+pub fn draw_node(p: &egui::Painter, c: Pos2, row: &Row, is_head: bool, matched: bool, bg: Color32) {
     let col = theme::lane_color(row.color);
-    let col = if matched { col } else { col.gamma_multiply(0.4) };
+    let col = if matched { col } else { theme::tint(col, bg, 0.4) };
     if is_head {
-        p.circle_stroke(c, theme::NODE_R + 3.5, Stroke::new(1.5, col.gamma_multiply(0.8)));
+        p.circle_filled(c, theme::NODE_R + 4.0, bg);
+        p.circle_stroke(c, theme::NODE_R + 3.0, Stroke::new(1.5_f32, col));
     }
     if row.is_merge {
-        p.circle_filled(c, theme::MERGE_R + 1.5, theme::BG);
-        p.circle_filled(c, theme::MERGE_R, col);
+        p.circle_filled(c, theme::MERGE_R + 2.0, bg);
+        p.circle_stroke(c, theme::MERGE_R, Stroke::new(1.75_f32, col));
         return;
     }
-    let a = theme::author_color(author);
-    let fill = Color32::from_rgb(a.r() / 3 + 0x14, a.g() / 3 + 0x14, a.b() / 3 + 0x1a);
-    p.circle_filled(c, theme::NODE_R, if matched { fill } else { theme::BG });
-    p.circle_stroke(c, theme::NODE_R, Stroke::new(2.0, col));
-    p.text(c, Align2::CENTER_CENTER, theme::initials(author), FontId::proportional(8.5), if matched { Color32::WHITE } else { theme::FAINT });
+    p.circle_filled(c, theme::NODE_R + 2.0, bg);
+    p.circle_filled(c, theme::NODE_R, col);
+}
+
+/// Fill, border and text colours of a branch or tag label drawn in its lane colour.
+pub fn ref_colors(r: &GitRef, lane: Color32, bg: Color32) -> (Color32, Option<Color32>, Color32) {
+    let text = theme::lighten(lane, 0.35);
+    match r.kind {
+        RefKind::Tag => (theme::ELEVATED, Some(theme::BORDER_STRONG), theme::TEXT),
+        RefKind::Remote => (bg, Some(theme::tint(lane, bg, 0.4)), text),
+        _ if r.is_head => (theme::tint(lane, bg, 0.3), Some(theme::tint(lane, bg, 0.6)), theme::lighten(lane, 0.55)),
+        _ => (theme::tint(lane, bg, 0.18), None, text),
+    }
+}
+
+/// Text on one line that ends with "…" when it is wider than `max_w`. Returns where it was drawn.
+pub fn fit_text(p: &egui::Painter, pos: Pos2, align: Align2, text: &str, font: FontId, color: Color32, max_w: f32) -> Rect {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: max_w.max(1.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    let galley = p.layout_job(job);
+    let rect = align.anchor_size(pos, galley.size());
+    p.galley(rect.min, galley, color);
+    rect
+}
+
+/// A small chevron pointing right (closed) or down (open), drawn rather than typed.
+pub fn chevron(p: &egui::Painter, c: Pos2, open: bool, col: Color32) {
+    let s = Stroke::new(1.4_f32, col);
+    let pts = if open { vec![c + vec2(-3.5, -1.5), c + vec2(0.0, 2.0), c + vec2(3.5, -1.5)] } else { vec![c + vec2(-1.5, -3.5), c + vec2(2.0, 0.0), c + vec2(-1.5, 3.5)] };
+    p.add(Shape::line(pts, s));
+}
+
+/// A drawn check mark (the font's own is uneven).
+pub fn check_mark(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.add(Shape::line(vec![c + vec2(-4.0, 0.0), c + vec2(-1.2, 3.0), c + vec2(4.0, -3.0)], Stroke::new(1.6_f32, col)));
+}
+
+/// A round avatar with the author's initials.
+pub fn avatar(p: &egui::Painter, c: Pos2, r: f32, name: &str) {
+    let col = theme::author_color(name);
+    p.circle_filled(c, r, theme::tint(col, theme::BG, 0.75));
+    p.text(c, Align2::CENTER_CENTER, theme::initials(name), FontId::proportional((r * 0.95).max(8.0)), theme::STRONG);
 }
 
 pub fn ref_label(r: &GitRef) -> String {
@@ -76,75 +116,92 @@ fn icon_glyph(kind: &str) -> &'static str {
 }
 
 pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, selected: bool, color: Option<Color32>, current: bool) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected || current {
-        p.rect_filled(rect, CornerRadius::same(5), theme::SELECT);
+        p.rect_filled(rect, CornerRadius::same(6), theme::SELECT);
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
     }
     let y = rect.center().y;
     let mut x = rect.left() + 10.0;
     if let Some(c) = color {
         p.circle_filled(pos2(x + 3.0, y), 3.5, c);
-        x += 14.0;
+        x += 15.0;
     } else if kind != "remote" {
-        p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::DIM);
+        p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::FAINT);
         x += 20.0;
     }
-    let tc = if current { Color32::WHITE } else { theme::TEXT };
-    let right = rect.right() - if count.is_some() || current { 36.0 } else { 6.0 };
-    p.with_clip_rect(Rect::from_min_max(rect.min, pos2(right, rect.max.y))).text(pos2(x, y), Align2::LEFT_CENTER, text, FontId::proportional(13.0), tc);
+    let tc = if selected || current { theme::STRONG } else { theme::TEXT };
+    let right = rect.right() - if count.is_some() || current { 34.0 } else { 8.0 };
+    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, text, theme::body(), tc, right - x);
     if current {
-        p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, "✔", FontId::proportional(12.0), theme::ADDED);
+        check_mark(p, pos2(rect.right() - 14.0, y), theme::ADDED);
     } else if let Some(n) = count {
         if n > 0 {
-            let s = n.to_string();
-            let w = 10.0 + s.len() as f32 * 7.0;
-            let r = Rect::from_center_size(pos2(rect.right() - 8.0 - w / 2.0, y), vec2(w, 17.0));
-            p.rect_filled(r, CornerRadius::same(8), theme::BORDER);
-            p.text(r.center(), Align2::CENTER_CENTER, s, FontId::proportional(10.5), theme::DIM);
+            p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), theme::FAINT);
         }
     }
     resp
 }
 
-pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+/// A foldable group inside a section (a remote, a project column): chevron, name, count.
+pub fn group_row(ui: &mut Ui, text: &str, count: usize, open: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+    }
+    let y = rect.center().y;
+    chevron(p, pos2(rect.left() + 14.0, y), open, theme::FAINT);
+    fit_text(p, pos2(rect.left() + 26.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::TEXT, rect.width() - 60.0);
+    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::FAINT);
+    resp
+}
+
+/// Placeholder text of a field, in the tertiary colour.
+pub fn faint_hint(text: impl Into<String>) -> RichText {
+    RichText::new(text).color(theme::FAINT)
+}
+
+pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
     }
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
     p.circle_filled(pos2(x + 3.0, y), 3.0, color);
-    p.with_clip_rect(rect.shrink(2.0)).text(pos2(x + 14.0, y), Align2::LEFT_CENTER, text, FontId::proportional(12.5), theme::TEXT);
+    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::TEXT, rect.right() - 8.0 - (x + 15.0));
     resp
 }
 
 pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+    ui.add_space(6.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     let p = ui.painter();
-    if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(5), theme::HOVER);
+    let col = if resp.hovered() { theme::TEXT } else { theme::DIM };
+    let r = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, title, theme::secondary(), col);
+    // Like Linear: the chevron sits after the title, shown when hovered or folded.
+    if resp.hovered() || !open {
+        chevron(p, pos2(r.right() + 9.0, rect.center().y), open, theme::FAINT);
     }
-    p.text(pos2(rect.left() + 8.0, rect.center().y), Align2::LEFT_CENTER, if open { "⏷" } else { "⏵" }, FontId::proportional(10.0), theme::FAINT);
-    p.text(pos2(rect.left() + 22.0, rect.center().y), Align2::LEFT_CENTER, title.to_uppercase(), FontId::proportional(11.0), theme::DIM);
-    p.text(pos2(rect.right() - 8.0, rect.center().y), Align2::RIGHT_CENTER, count.to_string(), FontId::proportional(11.0), theme::FAINT);
+    p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::FAINT);
     resp
 }
 
 pub fn toolbar_pill(ui: &mut Ui, caption: &str, value: &str) -> egui::Response {
-    let galley = ui.painter().layout_no_wrap(value.to_string(), FontId::proportional(14.0), Color32::WHITE);
-    let w = (galley.size().x + 34.0).clamp(110.0, 260.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 42.0), Sense::click());
+    let galley = ui.painter().layout_no_wrap(value.to_string(), theme::body(), theme::STRONG);
+    let w = (galley.size().x + 40.0).clamp(110.0, 260.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 40.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(7), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
     }
-    p.text(pos2(rect.left() + 10.0, rect.top() + 11.0), Align2::LEFT_CENTER, caption.to_uppercase(), FontId::proportional(9.5), theme::FAINT);
-    p.with_clip_rect(rect.shrink(2.0)).galley(pos2(rect.left() + 10.0, rect.top() + 19.0), galley, Color32::WHITE);
-    p.text(pos2(rect.right() - 10.0, rect.top() + 27.0), Align2::RIGHT_CENTER, "⏷", FontId::proportional(10.0), theme::DIM);
+    p.text(pos2(rect.left() + 10.0, rect.top() + 11.0), Align2::LEFT_CENTER, caption, theme::small(), theme::FAINT);
+    fit_text(p, pos2(rect.left() + 10.0, rect.top() + 27.0), Align2::LEFT_CENTER, value, theme::body(), theme::STRONG, rect.width() - 34.0);
+    chevron(p, pos2(rect.right() - 13.0, rect.top() + 27.0), true, theme::DIM);
     resp
 }
 
@@ -155,7 +212,7 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
     if resp.hovered() || active {
         p.rect_filled(rect, CornerRadius::same(7), theme::HOVER);
     }
-    let col = if resp.hovered() { Color32::WHITE } else { theme::TEXT };
+    let col = if resp.hovered() { theme::STRONG } else { theme::TEXT };
     let c = pos2(rect.center().x, rect.top() + 17.0);
     let s = Stroke::new(1.8, col);
     match icon {
@@ -187,7 +244,7 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
                 ];
                 p.add(Shape::convex_polygon(pts, col, Stroke::NONE));
             };
-            let col = if active { theme::ACCENT } else { col };
+            let col = if active { theme::ACCENT_TEXT } else { col };
             star(p, c + vec2(-1.5, 1.0), 8.0, col);
             star(p, c + vec2(7.0, -6.5), 3.5, col);
         }
@@ -236,63 +293,64 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
         }
         _ => {}
     }
-    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, FontId::proportional(11.0), if resp.hovered() { Color32::WHITE } else { theme::DIM });
+    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::STRONG } else { theme::DIM });
     if badge > 0 {
-        let b = Rect::from_center_size(pos2(rect.center().x + 13.0, rect.top() + 7.0), vec2(17.0, 15.0));
-        p.rect_filled(b, CornerRadius::same(7), theme::ACCENT);
-        p.text(b.center(), Align2::CENTER_CENTER, badge.min(99).to_string(), FontId::proportional(9.5), Color32::WHITE);
+        let s = badge.min(99).to_string();
+        let b = Rect::from_center_size(pos2(rect.center().x + 13.0, rect.top() + 7.0), vec2(10.0 + s.len() as f32 * 6.0, 16.0));
+        p.rect_filled(b, CornerRadius::same(8), theme::ACCENT);
+        p.text(b.center(), Align2::CENTER_CENTER, s, theme::small(), theme::STRONG);
     }
     resp
 }
 
 pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i64) {
     ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::hover());
-        let col = theme::author_color(name);
-        ui.painter().circle_filled(rect.center(), 17.0, col.gamma_multiply(0.85));
-        ui.painter().text(rect.center(), Align2::CENTER_CENTER, theme::initials(name), FontId::proportional(13.0), Color32::WHITE);
+        let (rect, _) = ui.allocate_exact_size(vec2(34.0, 34.0), Sense::hover());
+        avatar(ui.painter(), rect.center(), 16.0, name);
         ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 1.0;
+            ui.spacing_mut().item_spacing.y = 2.0;
             ui.horizontal(|ui| {
-                ui.label(RichText::new(name).strong().color(Color32::WHITE));
-                ui.label(RichText::new(caption).size(9.5).color(theme::FAINT));
+                ui.label(RichText::new(name).color(theme::STRONG));
+                ui.label(RichText::new(caption).size(theme::FS_SMALL).color(theme::FAINT));
             });
-            ui.label(RichText::new(email).small().color(theme::DIM));
-            ui.label(RichText::new(git::relative_time(time)).small().color(theme::FAINT));
+            ui.label(RichText::new(format!("{email} · {}", git::relative_time(time))).size(theme::FS_SECONDARY).color(theme::DIM));
         });
     });
 }
 
 /// A changed file; returns the row response and whether its action button was clicked.
 pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str>) -> (egui::Response, bool) {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected {
-        p.rect_filled(rect, CornerRadius::same(4), theme::SELECT);
+        p.rect_filled(rect, CornerRadius::same(6), theme::SELECT);
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(4), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
     }
     let y = rect.center().y;
     let col = theme::status_color(f.code);
-    let badge = Rect::from_center_size(pos2(rect.left() + 13.0, y), vec2(18.0, 16.0));
-    p.rect_filled(badge, CornerRadius::same(4), col.gamma_multiply(0.22));
+    let badge = Rect::from_center_size(pos2(rect.left() + 14.0, y), vec2(18.0, 17.0));
+    p.rect_filled(badge, CornerRadius::same(4), theme::tint(col, theme::PANEL, 0.16));
     let letter = if f.code == '?' { 'A' } else { f.code };
-    p.text(badge.center(), Align2::CENTER_CENTER, letter.to_string(), FontId::monospace(10.5), col);
+    p.text(badge.center(), Align2::CENTER_CENTER, letter.to_string(), FontId::monospace(theme::FS_SMALL), col);
     let (dir, file) = match f.path.rsplit_once('/') {
         Some((d, n)) => (format!("{d}/"), n.to_string()),
         None => (String::new(), f.path.clone()),
     };
     let show_btn = action.is_some() && (resp.hovered() || selected);
-    let right = rect.right() - if show_btn { 70.0 } else { 4.0 };
-    let clip = p.with_clip_rect(Rect::from_min_max(rect.min, pos2(right, rect.max.y)));
-    let r = clip.text(pos2(rect.left() + 28.0, y), Align2::LEFT_CENTER, &file, FontId::proportional(12.5), theme::TEXT);
-    clip.text(pos2(r.right() + 6.0, y), Align2::LEFT_CENTER, &dir, FontId::proportional(11.5), theme::FAINT);
+    let right = rect.right() - if show_btn { 72.0 } else { 6.0 };
+    let x = rect.left() + 30.0;
+    let r = fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &file, theme::body(), if selected { theme::STRONG } else { theme::TEXT }, right - x);
+    if r.right() + 30.0 < right {
+        fit_text(p, pos2(r.right() + 6.0, y), Align2::LEFT_CENTER, &dir, theme::secondary(), theme::FAINT, right - r.right() - 6.0);
+    }
     let mut clicked_btn = false;
     if let (Some(a), true) = (action, show_btn) {
-        let br = Rect::from_min_max(pos2(rect.right() - 66.0, rect.top() + 3.0), pos2(rect.right() - 4.0, rect.bottom() - 3.0));
+        let br = Rect::from_min_max(pos2(rect.right() - 68.0, rect.top() + 3.0), pos2(rect.right() - 4.0, rect.bottom() - 3.0));
         let hovered = ui.rect_contains_pointer(br);
-        p.rect_filled(br, CornerRadius::same(4), if hovered { theme::ACCENT } else { theme::BORDER });
-        p.text(br.center(), Align2::CENTER_CENTER, a, FontId::proportional(11.0), Color32::WHITE);
+        p.rect_filled(br, CornerRadius::same(5), if hovered { theme::ACCENT } else { theme::ELEVATED });
+        p.rect_stroke(br, CornerRadius::same(5), Stroke::new(1.0_f32, if hovered { theme::ACCENT } else { theme::BORDER_STRONG }), StrokeKind::Inside);
+        p.text(br.center(), Align2::CENTER_CENTER, a, theme::small(), theme::STRONG);
         clicked_btn = resp.clicked() && hovered;
     }
     (resp, clicked_btn)

@@ -150,9 +150,9 @@ impl App {
         });
         egui::Area::new(egui::Id::new("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
             egui::Frame::new()
-                .fill(theme::PANEL)
-                .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)))
-                .corner_radius(CornerRadius::same(12))
+                .fill(theme::ELEVATED)
+                .stroke(Stroke::new(1.0_f32, theme::BORDER_STRONG))
+                .corner_radius(CornerRadius::same(10))
                 .inner_margin(Margin::same(10))
                 .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(140) })
                 .show(ui, |ui| {
@@ -160,8 +160,8 @@ impl App {
                     let hint = if checkout_only { "Check out a branch…" } else { "Type a command, a branch or a commit…" };
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut pal.query)
-                            .hint_text(hint)
-                            .font(FontId::proportional(16.0))
+                            .hint_text(crate::ui::faint_hint(hint))
+                            .font(FontId::proportional(theme::FS_TITLE))
                             .desired_width(f32::INFINITY)
                             .margin(Margin::symmetric(10, 8)),
                     );
@@ -178,7 +178,7 @@ impl App {
                             if it.group != last_group {
                                 last_group = it.group;
                                 let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), PALETTE_HEADER_H), Sense::hover());
-                                ui.painter().text(pos2(hr.left() + 10.0, hr.center().y), Align2::LEFT_CENTER, it.group.to_uppercase(), FontId::proportional(10.0), theme::FAINT);
+                                ui.painter().text(pos2(hr.left() + 10.0, hr.center().y), Align2::LEFT_CENTER, it.group, theme::small(), theme::FAINT);
                             }
                             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), PALETTE_ROW_H), Sense::click());
                             let selected = k == pal.sel;
@@ -189,10 +189,10 @@ impl App {
                                 ui.scroll_to_rect(rect, None);
                             }
                             let p = ui.painter().with_clip_rect(rect);
-                            let tc = if it.cmd.is_none() { theme::DELETED } else if selected { Color32::WHITE } else { theme::TEXT };
-                            let tr = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, &it.title, FontId::proportional(13.5), tc);
+                            let tc = if it.cmd.is_none() { theme::DELETED } else if selected { theme::STRONG } else { theme::TEXT };
+                            let tr = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, &it.title, theme::body(), tc);
                             // Secondary text, like the original's secondaryTextField.
-                            p.text(pos2((tr.right() + 12.0).max(rect.right() - 220.0), rect.center().y), Align2::LEFT_CENTER, &it.hint, FontId::proportional(11.5), theme::FAINT);
+                            p.text(pos2((tr.right() + 12.0).max(rect.right() - 220.0), rect.center().y), Align2::LEFT_CENTER, &it.hint, theme::secondary(), theme::FAINT);
                             if resp.clicked() {
                                 chosen = Some(k);
                             }
@@ -203,7 +203,7 @@ impl App {
                         }
                     });
                     ui.add_space(4.0);
-                    ui.label(RichText::new("Up / Down to move · Enter to run · Esc to close").size(10.5).color(theme::FAINT));
+                    ui.label(RichText::new("Up / Down to move · Enter to run · Esc to close").size(theme::FS_SMALL).color(theme::FAINT));
                 });
         });
         if let Some(k) = chosen {

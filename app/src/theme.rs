@@ -1,5 +1,6 @@
-//! Dark, colourful look in the spirit of the person's request.
-use egui::{Color32, CornerRadius, Stroke, Visuals};
+//! A calm, high-contrast dark look in the spirit of Linear: near-black surfaces,
+//! subtle borders, one accent colour and a four-size type scale.
+use egui::{Color32, CornerRadius, FontId, Shadow, Stroke, TextStyle, Theme, Visuals};
 
 // Branch palette: the original program's 9 colours (see MECHANICS.md, sub_1001e0440).
 pub const PALETTE: [Color32; 9] = [
@@ -23,59 +24,139 @@ pub fn lane_color(id: usize) -> Color32 {
 }
 
 // New-look graph numbers (mechanics.json "new look" group).
-pub const LANE_W: f32 = 20.0;
-pub const LINE_W: f32 = 2.5;
-pub const NODE_R: f32 = 9.0;
-pub const MERGE_R: f32 = 4.5;
+pub const LANE_W: f32 = 16.0;
+pub const LINE_W: f32 = 2.0;
+pub const NODE_R: f32 = 5.0;
+pub const MERGE_R: f32 = 3.5;
 pub const ROW_H: f32 = 28.0;
 pub const GRAPH_INSET: f32 = 3.0 + LANE_W / 2.0;
 /// Gap between branch labels: 2 when "compactBranchLabels" is on, which is its default
 /// (sub_100105e34 picks 2 or 4; default in sub_10031b7cc).
 pub const REF_GAP: f32 = 2.0;
 
-pub const BG: Color32 = Color32::from_rgb(0x15, 0x17, 0x1f);
-pub const PANEL: Color32 = Color32::from_rgb(0x1b, 0x1e, 0x28);
-pub const SIDEBAR: Color32 = Color32::from_rgb(0x18, 0x1b, 0x24);
-pub const TOOLBAR: Color32 = Color32::from_rgb(0x20, 0x24, 0x31);
-pub const BORDER: Color32 = Color32::from_rgb(0x2b, 0x30, 0x3f);
-pub const HOVER: Color32 = Color32::from_rgb(0x23, 0x28, 0x36);
-pub const SELECT: Color32 = Color32::from_rgb(0x2a, 0x35, 0x50);
-pub const TEXT: Color32 = Color32::from_rgb(0xdc, 0xdf, 0xe6);
-pub const DIM: Color32 = Color32::from_rgb(0x8b, 0x92, 0xa5);
-pub const FAINT: Color32 = Color32::from_rgb(0x5c, 0x63, 0x77);
-pub const ACCENT: Color32 = Color32::from_rgb(0x1C, 0xAD, 0xF8);
-pub const ADDED: Color32 = Color32::from_rgb(0x5f, 0xd0, 0x6a);
-pub const MODIFIED: Color32 = Color32::from_rgb(0xf0, 0xb2, 0x3c);
-pub const DELETED: Color32 = Color32::from_rgb(0xff, 0x5b, 0x5b);
-pub const RENAMED: Color32 = Color32::from_rgb(0x9a, 0x8c, 0xff);
+// Surfaces, darkest to lightest: a calm near-black look with few, subtle borders.
+pub const SIDEBAR: Color32 = Color32::from_rgb(0x0c, 0x0d, 0x10);
+pub const TOOLBAR: Color32 = SIDEBAR;
+pub const BG: Color32 = Color32::from_rgb(0x11, 0x12, 0x15);
+pub const PANEL: Color32 = BG;
+/// Popups, menus, dialogs, text fields and buttons.
+pub const ELEVATED: Color32 = Color32::from_rgb(0x19, 0x1a, 0x1e);
+pub const INPUT: Color32 = Color32::from_rgb(0x16, 0x17, 0x1b);
+pub const HOVER: Color32 = Color32::from_rgb(0x1a, 0x1b, 0x20);
+pub const SELECT: Color32 = Color32::from_rgb(0x21, 0x23, 0x2b);
+pub const BORDER: Color32 = Color32::from_rgb(0x22, 0x24, 0x29);
+/// Border of fields and buttons, a step above the panel borders.
+pub const BORDER_STRONG: Color32 = Color32::from_rgb(0x2d, 0x2f, 0x36);
+
+// Text: primary, strong (titles, selection), secondary (author, date, SHA), tertiary (hints).
+pub const TEXT: Color32 = Color32::from_rgb(0xe3, 0xe4, 0xe8);
+pub const STRONG: Color32 = Color32::from_rgb(0xf7, 0xf8, 0xf8);
+pub const DIM: Color32 = Color32::from_rgb(0xa2, 0xa5, 0xae);
+pub const FAINT: Color32 = Color32::from_rgb(0x74, 0x78, 0x82);
+
+/// The one accent: focus, selection, primary buttons, Claude.
+pub const ACCENT: Color32 = Color32::from_rgb(0x5e, 0x6a, 0xd2);
+/// The accent as text or a link on a dark surface.
+pub const ACCENT_TEXT: Color32 = Color32::from_rgb(0x95, 0x9d, 0xf0);
+pub const ACCENT_SOFT: Color32 = Color32::from_rgb(0x26, 0x29, 0x45);
+
+pub const ADDED: Color32 = Color32::from_rgb(0x4c, 0xb7, 0x82);
+pub const MODIFIED: Color32 = Color32::from_rgb(0xe2, 0xb3, 0x40);
+pub const DELETED: Color32 = Color32::from_rgb(0xeb, 0x57, 0x57);
+pub const RENAMED: Color32 = Color32::from_rgb(0x8e, 0x8c, 0xf0);
+
+// Type scale: four sizes, used everywhere.
+/// Section headers, column headers, badges, captions.
+pub const FS_SMALL: f32 = 11.0;
+/// Secondary text: author, date, hints, status bar.
+pub const FS_SECONDARY: f32 = 12.0;
+/// Body: rows, buttons, fields.
+pub const FS_BODY: f32 = 13.0;
+/// Titles: details, dialogs, palette query.
+pub const FS_TITLE: f32 = 15.0;
+pub const FS_MONO: f32 = 12.0;
+
+pub fn small() -> FontId {
+    FontId::proportional(FS_SMALL)
+}
+pub fn secondary() -> FontId {
+    FontId::proportional(FS_SECONDARY)
+}
+pub fn body() -> FontId {
+    FontId::proportional(FS_BODY)
+}
+pub fn mono() -> FontId {
+    FontId::monospace(FS_MONO)
+}
+
+/// A colour mixed toward white, for text drawn in a lane colour.
+pub fn lighten(c: Color32, k: f32) -> Color32 {
+    let m = |v: u8| (v as f32 + (255.0 - v as f32) * k).round() as u8;
+    Color32::from_rgb(m(c.r()), m(c.g()), m(c.b()))
+}
+
+/// A colour mixed into a background, opaque (so it does not depend on what is under it).
+pub fn tint(c: Color32, over: Color32, k: f32) -> Color32 {
+    let m = |a: u8, b: u8| (b as f32 + (a as f32 - b as f32) * k).round() as u8;
+    Color32::from_rgb(m(c.r(), over.r()), m(c.g(), over.g()), m(c.b(), over.b()))
+}
 
 pub fn apply(ctx: &egui::Context) {
+    // Always dark, whatever the macOS appearance: the colours below are only for the dark theme.
+    ctx.set_theme(Theme::Dark);
     let mut v = Visuals::dark();
     v.panel_fill = PANEL;
-    v.window_fill = PANEL;
-    v.extreme_bg_color = Color32::from_rgb(0x12, 0x14, 0x1b);
+    v.window_fill = ELEVATED;
+    v.extreme_bg_color = INPUT;
+    v.text_edit_bg_color = Some(INPUT);
+    v.code_bg_color = ELEVATED;
     v.faint_bg_color = HOVER;
     v.override_text_color = Some(TEXT);
-    v.selection.bg_fill = SELECT;
+    v.weak_text_color = Some(FAINT);
+    v.selection.bg_fill = ACCENT_SOFT;
     v.selection.stroke = Stroke::new(1.0, ACCENT);
-    v.hyperlink_color = ACCENT;
+    v.hyperlink_color = ACCENT_TEXT;
     v.window_corner_radius = CornerRadius::same(10);
-    v.window_stroke = Stroke::new(1.0, BORDER);
-    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, BORDER);
-    v.widgets.noninteractive.bg_fill = PANEL;
-    v.widgets.inactive.bg_fill = Color32::from_rgb(0x2a, 0x2f, 0x3e);
-    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(0x2a, 0x2f, 0x3e);
-    v.widgets.inactive.corner_radius = CornerRadius::same(6);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(0x34, 0x3a, 0x4c);
-    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(0x34, 0x3a, 0x4c);
-    v.widgets.hovered.corner_radius = CornerRadius::same(6);
-    v.widgets.active.bg_fill = Color32::from_rgb(0x3b, 0x44, 0x5c);
-    v.widgets.active.weak_bg_fill = Color32::from_rgb(0x3b, 0x44, 0x5c);
-    v.widgets.active.corner_radius = CornerRadius::same(6);
-    ctx.set_visuals(v);
-    ctx.style_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        s.spacing.button_padding = egui::vec2(8.0, 4.0);
+    v.menu_corner_radius = CornerRadius::same(8);
+    v.window_stroke = Stroke::new(1.0_f32, BORDER_STRONG);
+    v.window_shadow = Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(140) };
+    v.popup_shadow = Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha(120) };
+    v.text_cursor.stroke = Stroke::new(1.5_f32, ACCENT_TEXT);
+
+    let r = CornerRadius::same(6);
+    let w = &mut v.widgets;
+    w.noninteractive.bg_fill = PANEL;
+    w.noninteractive.weak_bg_fill = PANEL;
+    w.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
+    w.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT);
+    w.noninteractive.corner_radius = r;
+    for (st, fill, stroke, fg) in [
+        (&mut w.inactive, ELEVATED, BORDER_STRONG, TEXT),
+        (&mut w.hovered, Color32::from_rgb(0x22, 0x24, 0x2a), Color32::from_rgb(0x3a, 0x3d, 0x46), STRONG),
+        (&mut w.active, Color32::from_rgb(0x2a, 0x2c, 0x34), Color32::from_rgb(0x44, 0x47, 0x51), STRONG),
+        (&mut w.open, Color32::from_rgb(0x22, 0x24, 0x2a), BORDER_STRONG, STRONG),
+    ] {
+        st.bg_fill = fill;
+        st.weak_bg_fill = fill;
+        st.bg_stroke = Stroke::new(1.0_f32, stroke);
+        st.fg_stroke = Stroke::new(1.5_f32, fg);
+        st.corner_radius = r;
+        st.expansion = 0.0;
+    }
+    ctx.set_visuals_of(Theme::Dark, v);
+    ctx.all_styles_mut(|s| {
+        s.spacing.item_spacing = egui::vec2(8.0, 4.0);
+        s.spacing.button_padding = egui::vec2(10.0, 4.0);
+        s.spacing.interact_size.y = 24.0;
+        s.spacing.menu_margin = egui::Margin::same(6);
+        s.text_styles = [
+            (TextStyle::Small, FontId::proportional(FS_SMALL)),
+            (TextStyle::Body, FontId::proportional(FS_BODY)),
+            (TextStyle::Button, FontId::proportional(FS_BODY)),
+            (TextStyle::Heading, FontId::proportional(FS_TITLE)),
+            (TextStyle::Monospace, FontId::monospace(FS_MONO)),
+        ]
+        .into();
     });
 }
 
