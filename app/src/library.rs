@@ -1,5 +1,6 @@
 //! The person's repositories: where they are, how they're grouped, which are favourites.
 //! Kept in `~/Library/Application Support/Fourchette/repos.json`.
+use crate::theme::Appearance;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -46,6 +47,8 @@ impl Entry {
 #[derive(Default)]
 pub struct Library {
     pub entries: Vec<Entry>,
+    /// System, dark or light, chosen in the palette or the status bar.
+    pub appearance: Appearance,
     file: Option<PathBuf>,
 }
 
@@ -91,7 +94,8 @@ impl Library {
                     .collect()
             })
             .unwrap_or_default();
-        Library { entries, file: Some(file.to_path_buf()) }
+        let appearance = v["appearance"].as_str().and_then(Appearance::parse).unwrap_or_default();
+        Library { entries, appearance, file: Some(file.to_path_buf()) }
     }
 
     pub fn save(&self) {
@@ -104,7 +108,7 @@ impl Library {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "repos": repos})).unwrap_or_default());
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "repos": repos})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -282,5 +286,22 @@ mod tests {
         }
         let found: Vec<String> = scan(&d, SCAN_DEPTH).iter().map(|p| p.strip_prefix(&d).unwrap().display().to_string()).collect();
         assert_eq!(found, ["a", "b/c"]);
+    }
+
+    #[test]
+    fn appearance_survives_a_save_and_defaults_to_system() {
+        let d = tmp("appearance");
+        let file = d.join("repos.json");
+        assert_eq!(Library::read(&file).appearance, Appearance::System);
+        let mut lib = Library::read(&file);
+        lib.add(&d.join("a"));
+        lib.appearance = Appearance::Light;
+        lib.save();
+        let back = Library::read(&file);
+        assert_eq!(back.appearance, Appearance::Light);
+        assert_eq!(back.entries.len(), 1);
+        std::fs::write(&file, r#"{"version": 1, "appearance": "sepia", "repos": []}"#).unwrap();
+        assert_eq!(Library::read(&file).appearance, Appearance::System);
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

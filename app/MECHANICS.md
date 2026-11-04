@@ -224,5 +224,8 @@ Linear. These are design choices, not values from the original:
   so lines run on from one row to the next.
 * Colours: the original 9-colour palette is kept for branches; the window uses near-black
   surfaces, subtle borders and one indigo accent. Text uses a four-size scale (11, 12, 13, 15).
+* Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
+  palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
+  uses white surfaces and deepens the branch colours by 20% so they stay readable.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).

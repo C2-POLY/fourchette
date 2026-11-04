@@ -18,17 +18,17 @@ pub struct ProjectState {
 fn status_color(status: &str) -> Color32 {
     let s = status.to_lowercase();
     if github::is_done(status) {
-        theme::ADDED
+        theme::c().added
     } else if s.contains("review") {
-        theme::RENAMED
+        theme::c().renamed
     } else if s.contains("progress") || s.contains("doing") || s.contains("cours") {
-        theme::ACCENT_TEXT
+        theme::c().accent_text
     } else if s.contains("ready") || s.contains("todo") || s.contains("to do") {
-        theme::MODIFIED
+        theme::c().modified
     } else if s.contains("block") {
-        theme::DELETED
+        theme::c().deleted
     } else {
-        theme::DIM
+        theme::c().dim
     }
 }
 
@@ -36,7 +36,7 @@ fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
     let mut x = rect.left() + 24.0;
@@ -58,10 +58,10 @@ fn item_row(ui: &mut Ui, it: &Item, color: Color32) -> egui::Response {
     }
     x += 14.0;
     if let Some(n) = it.number {
-        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(theme::FS_SMALL), theme::FAINT);
+        let r = p.text(pos2(x, y), Align2::LEFT_CENTER, format!("#{n}"), FontId::monospace(theme::FS_SMALL), theme::c().faint);
         x = r.right() + 6.0;
     }
-    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &it.title, theme::body(), theme::TEXT, rect.right() - 8.0 - x);
+    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &it.title, theme::body(), theme::c().text, rect.right() - 8.0 - x);
     resp
 }
 
@@ -115,11 +115,11 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
                     ui.spinner();
-                    ui.label(RichText::new("Reading the GitHub project…").small().color(theme::DIM));
+                    ui.label(RichText::new("Reading the GitHub project…").small().color(theme::c().dim));
                 });
             } else if let Some(e) = self.project.error.clone() {
                 if self.section(ui, "Project", 0) {
-                    ui.label(RichText::new(e).small().color(theme::MODIFIED));
+                    ui.label(RichText::new(e).small().color(theme::c().modified));
                     if ui.small_button("Try again").clicked() {
                         cmds.push(Cmd::ProjectReload);
                     }
@@ -166,7 +166,7 @@ impl App {
                         }
                     }
                 });
-            } else if ui.link(RichText::new(&proj.title).size(theme::FS_SECONDARY).color(theme::DIM)).on_hover_text("Open the project on GitHub").clicked() {
+            } else if ui.link(RichText::new(&proj.title).size(theme::FS_SECONDARY).color(theme::c().dim)).on_hover_text("Open the project on GitHub").clicked() {
                 cmds.push(Cmd::OpenUrl(proj.url.clone()));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -186,10 +186,10 @@ impl App {
             ui.ctx().request_repaint();
         }
         if let Some(e) = &self.project.error {
-            ui.label(RichText::new(e).small().color(theme::MODIFIED));
+            ui.label(RichText::new(e).small().color(theme::c().modified));
         }
         if board.columns.is_empty() {
-            ui.label(RichText::new("  Nothing for this repository in the project yet.").size(theme::FS_SECONDARY).color(theme::FAINT));
+            ui.label(RichText::new("  Nothing for this repository in the project yet.").size(theme::FS_SECONDARY).color(theme::c().faint));
             return;
         }
 
