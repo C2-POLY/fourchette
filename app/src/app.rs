@@ -182,6 +182,8 @@ pub struct App {
     switcher: Option<repos::Switcher>,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
+    /// The section shown in the Settings window, an index of `settings::SECTIONS`.
+    settings_section: usize,
     project: project::ProjectState,
     board: board::BoardState,
     screenshot: Option<PathBuf>,
@@ -246,6 +248,7 @@ impl App {
             library,
             switcher: None,
             settings_open: false,
+            settings_section: 0,
             project: project::ProjectState::default(),
             board: board::BoardState::default(),
             screenshot,
@@ -326,8 +329,10 @@ impl App {
             app.board.open = true;
             app.board.detail = app.project.board.as_ref().and_then(|b| b.items.iter().find(|i| i.number == Some(n))).map(|i| i.id.clone());
         }
-        if std::env::var("FOURCHETTE_SETTINGS").is_ok() {
+        // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
+        if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
             app.settings_open = true;
+            app.settings_section = settings::section_index(&v);
         }
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {

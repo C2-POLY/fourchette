@@ -127,17 +127,24 @@ impl Entry {
 #[derive(Default)]
 pub struct Library {
     pub entries: Vec<Entry>,
-    /// System, dark or light, chosen in the palette or the status bar.
+    /// System, dark or light, chosen in Settings, the palette or the status bar.
     pub appearance: Appearance,
     /// Everything else chosen in the Settings window.
     pub settings: Settings,
-    /// The app's colours and icon, chosen in the palette.
+    /// The app's colours and icon, chosen in Settings or the palette.
     pub variant: Variant,
     file: Option<PathBuf>,
 }
 
 fn support_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Fourchette"))
+}
+
+/// A choice kept under `"settings"`, or at the top level where files written before the Settings
+/// sections (issue #52) kept it. The new place wins when both hold a valid value; an invalid value
+/// in one place falls back to the other.
+fn legacy_setting<T>(v: &Value, key: &str, parse: fn(&str) -> Option<T>) -> Option<T> {
+    [&v["settings"][key], &v[key]].into_iter().find_map(|x| x.as_str().and_then(parse))
 }
 
 pub fn now() -> i64 {
@@ -179,9 +186,9 @@ impl Library {
                     .collect()
             })
             .unwrap_or_default();
-        let appearance = v["appearance"].as_str().and_then(Appearance::parse).unwrap_or_default();
+        let appearance = legacy_setting(&v, "appearance", Appearance::parse).unwrap_or_default();
         let settings = Settings::from_json(&v["settings"]);
-        let variant = v["variant"].as_str().and_then(Variant::parse).unwrap_or_default();
+        let variant = legacy_setting(&v, "variant", Variant::parse).unwrap_or_default();
         Library { entries, appearance, variant, settings, file: Some(file.to_path_buf()) }
     }
 
@@ -202,7 +209,11 @@ impl Library {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "appearance": self.appearance.key(), "variant": self.variant.key(), "settings": self.settings.to_json(), "repos": repos})).unwrap_or_default());
+        // The appearance and the variant sit under "settings" with the rest of the Settings window.
+        let mut settings = self.settings.to_json();
+        settings["appearance"] = json!(self.appearance.key());
+        settings["variant"] = json!(self.variant.key());
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -520,6 +531,66 @@ mod tests {
         assert_eq!(back.entries.len(), 1);
         std::fs::write(&file, r#"{"version": 1, "variant": "sepia", "repos": []}"#).unwrap();
         assert_eq!(Library::read(&file).variant, Variant::Classic);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_old_file_moves_appearance_and_variant_under_settings_without_loss() {
+        let d = tmp("migrate");
+        let file = d.join("repos.json");
+        // The layout before issue #52: appearance and variant at the top level.
+        std::fs::write(
+            &file,
+            r#"{"version": 1, "appearance": "light", "variant": "neon", "settings": {"auto_fetch": false, "fetch_minutes": 30},
+                "repos": [{"path": "/code/work/api", "group": "Work", "favorite": true, "last_opened": 7, "project": "acme#3", "details": "bottom", "details_hidden": true},
+                          {"path": "/code/perso/blog"}]}"#,
+        )
+        .unwrap();
+        let lib = Library::read(&file);
+        let check = |lib: &Library| {
+            assert_eq!((lib.appearance, lib.variant), (Appearance::Light, Variant::Neon));
+            assert_eq!(lib.settings, Settings { auto_fetch: false, fetch_minutes: 30 });
+            assert_eq!(lib.entries.len(), 2);
+            let api = lib.get(Path::new("/code/work/api")).unwrap();
+            assert_eq!((api.group.as_deref(), api.favorite, api.last_opened, api.project.as_deref()), (Some("Work"), true, 7, Some("acme#3")));
+            assert_eq!(api.details, Some(DetailsLayout { place: DetailsPlace::Bottom, hidden: true }));
+        };
+        check(&lib);
+
+        // Saving writes the new layout only, and reading it back loses nothing.
+        lib.save();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(v["settings"], json!({"appearance": "light", "variant": "neon", "auto_fetch": false, "fetch_minutes": 30}));
+        assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");
+        assert_eq!(v["repos"].as_array().map(Vec::len), Some(2));
+        check(&Library::read(&file));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_settings_place_wins_and_invalid_values_fall_back() {
+        let d = tmp("migrate-prefer");
+        let file = d.join("repos.json");
+        let read = |body: &str| {
+            std::fs::write(&file, format!(r#"{{"version": 1, {body} "repos": [{{"path": "/x/y"}}]}}"#)).unwrap();
+            let lib = Library::read(&file);
+            assert_eq!(lib.entries.len(), 1, "{body}");
+            (lib.appearance, lib.variant)
+        };
+        // Both places: the new one wins.
+        assert_eq!(read(r#""appearance": "light", "variant": "forest", "settings": {"appearance": "dark", "variant": "gold"},"#), (Appearance::Dark, Variant::Gold));
+        // Only the new place.
+        assert_eq!(read(r#""settings": {"appearance": "light", "variant": "forest"},"#), (Appearance::Light, Variant::Forest));
+        // An invalid value in the new place falls back to a valid one at the top level.
+        assert_eq!(read(r#""appearance": "light", "variant": "forest", "settings": {"appearance": "sepia", "variant": 3},"#), (Appearance::Light, Variant::Forest));
+        // Invalid or missing everywhere: the defaults.
+        assert_eq!(read(r#""appearance": 1, "variant": "sepia", "settings": {"appearance": null},"#), (Appearance::System, Variant::Classic));
+        assert_eq!(read(""), (Appearance::System, Variant::Classic));
+        // "settings" of the wrong shape: the top level still counts, the other settings take their defaults.
+        for bad in [r#""fast""#, "[1, 2]", "null"] {
+            assert_eq!(read(&format!(r#""appearance": "dark", "variant": "gold", "settings": {bad},"#)), (Appearance::Dark, Variant::Gold), "{bad}");
+            assert_eq!(Library::read(&file).settings, Settings::default(), "{bad}");
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 }

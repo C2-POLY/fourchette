@@ -90,10 +90,16 @@ in the Settings window. The exact git command Pull runs was not located.
 
 ## User settings (issue #16)
 
-The Settings window (⌘, or "Settings…" in the palette, Esc to close) holds the appearance and the
-automatic fetch (on/off and its interval). Choices apply at once and are kept in repos.json:
-`"appearance"` as before, and a `"settings"` object (`"auto_fetch"`, `"fetch_minutes"`). A missing
-or invalid key falls back to its default (on, 10 minutes) without touching the repository list.
+The Settings window (⌘, or "Settings…" in the palette, Esc to close) is laid out like macOS System
+Settings (issue #52): a sidebar of sections with drawn icons (Appearance, Fetch; Up and Down move
+between them) and, on the right, the section's settings in rounded cards. Appearance holds the mode
+(System, Dark, Light) and the variants as preview tiles; Fetch the automatic fetch (on/off and its
+interval). Choices apply at once and are kept in repos.json, all in a `"settings"` object
+(`"appearance"`, `"variant"`, `"auto_fetch"`, `"fetch_minutes"`). A file written before issue #52,
+with `"appearance"` and `"variant"` at the top level, is still read (the `"settings"` place wins
+when both hold a valid value) and is rewritten in the new layout at the next save. A missing or
+invalid key falls back to its default (System, Classic, on, 10 minutes) without touching the
+repository list.
 
 ## Screens (from the compiled layouts in Resources/*.nib)
 
@@ -272,13 +278,13 @@ Linear. These are design choices, not values from the original:
 * Colours: the original 9-colour palette is kept for branches; the window uses near-black
   surfaces, subtle borders and one indigo accent. Text uses a four-size scale (11, 12, 13, 15).
 * Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
-  Settings window, the palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
+  Settings window, the palette or with the status bar button and kept in repos.json (`"settings"."appearance"`). The light mode
   uses white surfaces and deepens the branch colours by 20% so they stay readable.
 * Variants (issue #14, a design choice, not a measured value): Classic (the look above, silver
   fork), Gold (night-brown surfaces, amber accent, golden fork), Neon (night-violet surfaces,
   magenta accent, glowing pink and cyan fork) and Forest (deep green surfaces, green accent, copper
   fork). Each has a dark and a light palette, so Appearance works with all of them; the branch
-  colours are the same in all. Chosen in the palette ("Variant: …"), kept in repos.json
-  (`"variant"`, Classic by default), and the Dock icon changes at once.
+  colours are the same in all. Chosen in the Settings window or the palette ("Variant: …"), kept in
+  repos.json (`"settings"."variant"`, Classic by default), and the Dock icon changes at once.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).

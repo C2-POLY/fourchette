@@ -33,7 +33,7 @@ cargo clippy
 (cd /tmp && <app>/target/debug/fourchette --screenshot <out.png>)
 ```
 
-Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window, `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
+Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window (`FOURCHETTE_SETTINGS=<section>` at that section: `appearance`, `fetch`), `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_VARIANT=classic|gold|neon|forest` a variant, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
 
 ## Architecture
 
