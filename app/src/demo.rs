@@ -66,6 +66,8 @@ pub fn build() -> Demo {
         target: h(id),
         is_head: head,
         upstream: String::new(),
+        ahead: 0,
+        behind: 0,
     };
     let refs = vec![
         r("develop", RefKind::Local, 30, true),

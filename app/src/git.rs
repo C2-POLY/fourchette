@@ -33,6 +33,10 @@ pub struct GitRef {
     pub target: String,
     pub is_head: bool,
     pub upstream: String,
+    /// Commits this branch has that its upstream lacks, and the reverse, as the last fetch saw
+    /// them (`%(upstream:track)`). Both 0 without an upstream, or when it is gone.
+    pub ahead: usize,
+    pub behind: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +126,35 @@ pub fn exec(dir: &Path, args: &[&str]) -> Result<(String, String), String> {
 
 pub fn run_in(dir: &Path, args: &[&str]) -> Result<String, String> {
     exec(dir, args).map(|(o, _)| o)
+}
+
+/// (ahead, behind) from `%(upstream:track)`: "[ahead 1, behind 2]", "[behind 3]", "[gone]" or "".
+pub fn parse_track(track: &str) -> (usize, usize) {
+    let (mut ahead, mut behind) = (0, 0);
+    for part in track.trim().trim_start_matches('[').trim_end_matches(']').split(',') {
+        match part.trim().split_once(' ') {
+            Some(("ahead", n)) => ahead = n.trim().parse().unwrap_or(0),
+            Some(("behind", n)) => behind = n.trim().parse().unwrap_or(0),
+            _ => {}
+        }
+    }
+    (ahead, behind)
+}
+
+/// Moves `branch` up to `upstream` (a full ref name such as `refs/remotes/origin/main`) without
+/// the network. The checked-out branch: `merge --ff-only`, which also updates the files and
+/// refuses when local changes are in the way. Any other branch: `fetch` from the repository
+/// itself into it, without a checkout. Git refuses a move that is not a fast-forward, and a
+/// branch checked out in a worktree. Nothing else is touched: no FETCH_HEAD, tags or submodules.
+pub fn fast_forward_args(branch: &str, upstream: &str, current: bool) -> Vec<String> {
+    if current {
+        return vec!["merge".into(), "--ff-only".into(), upstream.into()];
+    }
+    ["fetch", "--no-write-fetch-head", "--no-tags", "--no-recurse-submodules", "."]
+        .into_iter()
+        .map(String::from)
+        .chain([format!("{upstream}:refs/heads/{branch}")])
+        .collect()
 }
 
 /// `fetch --prune [--tags] <remote>|--all --progress` (sub_1000c56b8).
@@ -287,7 +320,7 @@ impl Repo {
     pub fn refs(&self) -> Vec<GitRef> {
         // Same fields as the original's for-each-ref format (sub_100296878).
         let out = self
-            .git(&["for-each-ref", "--format=%(objectname)\t%(refname)\t%(HEAD)\t%(upstream:short)\t%(*objectname)"])
+            .git(&["for-each-ref", "--format=%(objectname)\t%(refname)\t%(HEAD)\t%(upstream:short)\t%(*objectname)\t%(upstream:track)"])
             .unwrap_or_default();
         let mut refs = Vec::new();
         for l in out.lines() {
@@ -311,7 +344,8 @@ impl Repo {
             } else {
                 continue;
             };
-            refs.push(GitRef { name, full, kind, target, is_head: f[2] == "*", upstream: f[3].to_string() });
+            let (ahead, behind) = parse_track(f.get(5).unwrap_or(&""));
+            refs.push(GitRef { name, full, kind, target, is_head: f[2] == "*", upstream: f[3].to_string(), ahead, behind });
         }
         if !refs.iter().any(|r| r.is_head) {
             if let Ok(h) = self.git(&["rev-parse", "HEAD"]) {
@@ -322,6 +356,8 @@ impl Repo {
                     target: h.trim().to_string(),
                     is_head: true,
                     upstream: String::new(),
+                    ahead: 0,
+                    behind: 0,
                 });
             }
         }
@@ -662,6 +698,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&bare);
         g(&["stash", "list"]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn track_gives_ahead_and_behind() {
+        assert_eq!(parse_track("[behind 3]"), (0, 3));
+        assert_eq!(parse_track("[ahead 1]"), (1, 0));
+        assert_eq!(parse_track("[ahead 1, behind 2]"), (1, 2));
+        assert_eq!(parse_track("[gone]"), (0, 0));
+        assert_eq!(parse_track(""), (0, 0));
+    }
+
+    #[test]
+    fn fast_forward_moves_the_current_branch_with_merge_and_others_with_fetch() {
+        assert_eq!(fast_forward_args("main", "refs/remotes/origin/main", true), ["merge", "--ff-only", "refs/remotes/origin/main"]);
+        assert_eq!(
+            fast_forward_args("dev", "refs/remotes/up/dev", false),
+            ["fetch", "--no-write-fetch-head", "--no-tags", "--no-recurse-submodules", ".", "refs/remotes/up/dev:refs/heads/dev"]
+        );
     }
 
     #[test]

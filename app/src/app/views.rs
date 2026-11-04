@@ -179,7 +179,7 @@ impl Tab {
                     if resp.double_clicked() {
                         cmds.extend(label_checkout(b, &self.refs));
                     }
-                    resp.context_menu(|ui| branch_menu(ui, b, &cur, cmds));
+                    resp.context_menu(|ui| branch_menu(ui, b, &cur, &self.refs, &self.worktrees, cmds));
                 }
             }
 

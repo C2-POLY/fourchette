@@ -474,6 +474,73 @@ mod pull_tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
+    /// What the branch menu's fast-forward entry runs, through `Tab::git` (snapshot, git, undo).
+    fn fast_forward(repo: &Repo, name: &str) -> Result<(Snapshot, Result<String, String>), String> {
+        let refs = repo.refs();
+        let b = refs.iter().find(|r| r.name == name).unwrap();
+        let ff = crate::ui::fast_forward(b, &refs, &repo.worktrees()).ok_or("no entry")?;
+        let crate::app::Cmd::Git { label, args, network: false } = ff.action? else { panic!("not a local Git command") };
+        let snap = repo.snapshot(&label, false, false);
+        let res = repo.git(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        Ok((snap, res))
+    }
+
+    #[test]
+    fn fast_forward_moves_a_branch_and_undo_puts_it_back() {
+        // `behind` tracks origin/main from before the fetch: 1 behind. `main` has diverged.
+        let (base, repo) = fixture("fast-forward");
+        repo.git(&["branch", "-q", "--track", "behind", "origin/main"]).unwrap();
+        repo.git(&["fetch", "-q"]).unwrap();
+        let refs = repo.refs();
+        let get = |n: &str| refs.iter().find(|r| r.name == n).unwrap().clone();
+        assert_eq!((get("behind").ahead, get("behind").behind), (0, 1));
+        assert_eq!((get("main").ahead, get("main").behind), (1, 1));
+        assert_eq!(fast_forward(&repo, "main").err().as_deref(), Some("no entry"), "diverged: no entry");
+        let remote = repo.git(&["rev-parse", "origin/main"]).unwrap();
+        let sha = |r: &str| repo.git(&["rev-parse", r]).unwrap();
+
+        // Not checked out: the branch moves, nothing else does (no checkout, files untouched).
+        let before = repo.state();
+        std::fs::remove_file(repo.root.join(".git/FETCH_HEAD")).unwrap();
+        let (snap, res) = fast_forward(&repo, "behind").unwrap();
+        res.unwrap();
+        assert_eq!(sha("behind"), remote);
+        assert_eq!(repo.current_branch().as_deref(), Some("main"));
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\n");
+        assert!(repo.status().is_empty());
+        assert!(!repo.root.join(".git/FETCH_HEAD").exists(), "FETCH_HEAD left alone");
+        repo.undo(&snap).unwrap();
+        assert_eq!(repo.state(), before, "the branch is back");
+
+        // Checked out in another worktree: greyed out, and Git refuses it anyway.
+        let wt = base.join("wt");
+        repo.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "behind"]).unwrap();
+        let e = fast_forward(&repo, "behind").err().unwrap();
+        assert!(e.contains("checked out in the worktree “wt”"), "{e}");
+        let args = crate::git::fast_forward_args("behind", "refs/remotes/origin/main", false);
+        assert!(repo.git(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>()).is_err());
+        repo.git(&["worktree", "remove", wt.to_str().unwrap()]).unwrap();
+
+        // The current branch: `merge --ff-only`. Local changes in the way: refused, nothing moves.
+        repo.git(&["checkout", "-q", "behind"]).unwrap();
+        std::fs::write(repo.root.join("f.txt"), "1\n2\n3\nmine\n").unwrap();
+        let before = repo.state();
+        let (_, res) = fast_forward(&repo, "behind").unwrap();
+        assert!(res.unwrap_err().contains("would be overwritten"));
+        assert_eq!(repo.state(), before);
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nmine\n");
+        // Clean: the branch and the files move; Undo takes both back.
+        repo.git(&["checkout", "--", "f.txt"]).unwrap();
+        let (snap, res) = fast_forward(&repo, "behind").unwrap();
+        res.unwrap();
+        assert_eq!(sha("HEAD"), remote);
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nB\n");
+        repo.undo(&snap).unwrap();
+        assert_eq!(repo.state(), before);
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\n");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn undo_of_apply_and_delete_stores_the_stash_again_under_its_name() {
         let (base, repo) = fixture("apply-delete");
