@@ -109,12 +109,31 @@ pub enum Cmd {
     RepoForget(PathBuf),
     ScanFolder,
     Reveal(PathBuf),
+    /// Repository > Open in Terminal (⌃⌘T).
+    OpenTerminal(PathBuf),
     /// GitHub Projects.
     OpenUrl(String),
     ProjectReload,
     ProjectPick(usize),
     /// Open or close the project board (⌘B).
     Board,
+}
+
+impl Cmd {
+    /// The toolbar's Stash, also in the palette and the Repository menu.
+    pub fn stash() -> Cmd {
+        Cmd::Git { label: "Changes stashed".into(), args: vec!["stash".into(), "push".into(), "-u".into()], network: false }
+    }
+
+    /// The toolbar's Pop.
+    pub fn pop_stash() -> Cmd {
+        Cmd::Git { label: "Stash applied".into(), args: vec!["stash".into(), "pop".into()], network: false }
+    }
+
+    /// The toolbar's Branch: a new branch at HEAD, or a tag there.
+    pub fn new_ref_at_head(tag: bool) -> Cmd {
+        Cmd::Dialog(Dialog::NewRef { at: "HEAD".into(), label: "the current commit".into(), name: String::new(), checkout: !tag, tag })
+    }
 }
 
 /// The command palette (Cmd+K), modelled on the original's Quick Launch window.
@@ -178,6 +197,8 @@ pub struct App {
     worktrees: Vec<crate::worktree::Worktree>,
     /// Where the details panel sits in this repository.
     details_layout: DetailsLayout,
+    /// Actions picked in the macOS menu bar, run with the next frame's.
+    menu_cmds: Vec<Cmd>,
 }
 
 pub fn short(h: &str) -> &str {
@@ -240,6 +261,7 @@ impl App {
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
             details_layout: DetailsLayout::default(),
+            menu_cmds: Vec::new(),
         };
         let cwd = std::env::current_dir().ok();
         let candidate = repo_arg
@@ -698,6 +720,9 @@ impl App {
                 Cmd::ScanFolder => self.scan_folder(),
                 Cmd::Reveal(p) => {
                     let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
+                }
+                Cmd::OpenTerminal(p) => {
+                    let _ = std::process::Command::new("open").args(["-a", "Terminal"]).arg(&p).spawn();
                 }
                 Cmd::OpenUrl(u) => ctx.open_url(egui::OpenUrl::new_tab(u)),
                 Cmd::ProjectReload => self.project_load(),
