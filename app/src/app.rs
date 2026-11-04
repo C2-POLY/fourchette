@@ -1,4 +1,5 @@
 mod assistant;
+mod board;
 mod palette;
 mod project;
 mod repos;
@@ -114,6 +115,8 @@ pub enum Cmd {
     OpenUrl(String),
     ProjectReload,
     ProjectPick(usize),
+    /// Open or close the project board (⌘B).
+    Board,
 }
 
 impl Cmd {
@@ -180,6 +183,7 @@ pub struct App {
     /// The Settings window (⌘,) is open.
     settings_open: bool,
     project: project::ProjectState,
+    board: board::BoardState,
     screenshot: Option<PathBuf>,
     frame: u64,
     shot_requested: bool,
@@ -243,6 +247,7 @@ impl App {
             switcher: None,
             settings_open: false,
             project: project::ProjectState::default(),
+            board: board::BoardState::default(),
             screenshot,
             frame: 0,
             shot_requested: false,
@@ -313,6 +318,14 @@ impl App {
         if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
             app.switcher = Some(repos::Switcher::default());
         }
+        if let Ok(v) = std::env::var("FOURCHETTE_BOARD") {
+            app.board.open = true;
+            app.board.all = v == "all";
+        }
+        if let Some(n) = std::env::var("FOURCHETTE_BOARD_DETAIL").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
+            app.board.open = true;
+            app.board.detail = app.project.board.as_ref().and_then(|b| b.items.iter().find(|i| i.number == Some(n))).map(|i| i.id.clone());
+        }
         if std::env::var("FOURCHETTE_SETTINGS").is_ok() {
             app.settings_open = true;
         }
@@ -345,7 +358,7 @@ impl App {
             locked: false,
         };
         self.worktrees = vec![wt("graph-colours", Some("feature/graph-colours"), false), wt("search-fix", Some("feature/search"), false), wt("old-try", None, true)];
-        self.project = project::ProjectState { board: Some(crate::github::sample()), ..Default::default() };
+        self.project = project::ProjectState { board: Some(std::sync::Arc::new(crate::github::sample())), ..Default::default() };
         self.after_load();
         self.sel = Sel::Commit(0);
         self.details_layout = DetailsLayout::default();
@@ -714,6 +727,7 @@ impl App {
                 Cmd::OpenUrl(u) => ctx.open_url(egui::OpenUrl::new_tab(u)),
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
+                Cmd::Board => self.board_toggle(),
             }
         }
     }

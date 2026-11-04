@@ -73,7 +73,8 @@ Puis :
 ```bash
 # Le type (Feature, Task, Bug) se donne à la création par l'API ; --body-file évite les problèmes de guillemets.
 url=$(gh api repos/C2-POLY/fourchette/issues -f title="<titre>" -F body=@<fichier du corps> -f type=Task -f 'labels[]=zone:<zone>' -f "assignees[]=$(gh api user --jq .login)" --jq .html_url)
-gh project item-add 1 --owner C2-POLY --url "$url"
+# Garde l'id de l'item : `item-list` ne montre pas tout de suite un item qui vient d'être ajouté.
+item=$(gh project item-add 1 --owner C2-POLY --url "$url" --format json --jq .id)
 ```
 
 Un label `zone:` qui manque se crée (`gh label create zone:<zone> --repo C2-POLY/fourchette`) plutôt que d'être omis. Un sujet découpé est une Feature avec des sous-issues ; une dépendance est une relation `blocked by`, pas une phrase.
@@ -81,7 +82,8 @@ Un label `zone:` qui manque se crée (`gh label create zone:<zone> --repo C2-POL
 **Changer un statut** (les identifiants sont dans `CLAUDE.md`, « Work items ») :
 
 ```bash
-item=$(gh project item-list 1 --owner C2-POLY --format json --limit 300 --jq ".items[] | select(.content.number == <n>) | .id")
+# Sans id gardé à l'étape 2 (issue ajoutée plus tôt), cherche-le dans le Project.
+[ -n "$item" ] || item=$(gh project item-list 1 --owner C2-POLY --format json --limit 300 --jq ".items[] | select(.content.number == <n>) | .id")
 gh project item-edit --project-id PVT_kwDODd-WqM4BqKPF --id "$item" --field-id PVTSSF_lADODd-WqM4BqKPFzhoijpg --single-select-option-id <option>
 ```
 
