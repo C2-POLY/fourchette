@@ -12,7 +12,7 @@ mod worktree;
 
 use std::path::PathBuf;
 
-/// The app icon (Dock and Cmd+Tab): a fork whose tines are three branches of the graph.
+/// The app icon (Dock and Cmd+Tab): a silver fork whose tines are dipped in the graph's colours.
 /// Drawn in `assets/icon.svg`; `assets/icon.icns` is the same picture for a future .app bundle.
 const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 
