@@ -222,7 +222,7 @@ pub fn pull_args(remote: &str, branch: &str, rebase: bool, autostash: bool) -> V
 }
 
 /// "a.txt", "a.txt and b.txt", "a.txt, b.txt, c.txt and 2 more".
-fn file_list(files: &[String]) -> String {
+pub(crate) fn file_list(files: &[String]) -> String {
     match files {
         [] => "some files".into(),
         [a] => a.clone(),

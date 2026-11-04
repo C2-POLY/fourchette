@@ -30,10 +30,10 @@ pub struct Snapshot {
     pub trashed: Option<(String, PathBuf)>,
     /// Worktrees removed by the action (with their saved uncommitted work).
     pub worktrees: Vec<crate::worktree::Removed>,
-    /// Uncommitted changes before a pull (`git stash create`). A pull that put them aside and
-    /// back moved them onto the new commits, which `reset --keep` refuses to take back; Undo
-    /// then resets with `--hard` and re-applies these, as long as the changes are still as the
-    /// pull left them (`dirty_after`).
+    /// Uncommitted changes before a pull or a checkout-and-sync (`git stash create`). One that
+    /// put them aside and back moved them onto the new commits, which `reset --keep` (or the
+    /// checkout back) refuses to take back; Undo then resets with `--hard` and re-applies these,
+    /// as long as the changes are still as the action left them (`dirty_after`).
     pub dirty: Option<String>,
     /// `Repo::worktree_fingerprint` right after the pull.
     pub dirty_after: Option<u64>,
@@ -89,27 +89,30 @@ impl Repo {
         }
         let now = self.state();
 
-        // 1. Go back to the branch (or detached commit) that was checked out.
+        // 1. Go back to the branch (or detached commit) that was checked out. A checkout that put
+        //    the uncommitted changes back on the other branch's new commits blocks it: see
+        //    `reset_dirty`.
+        let mut put_back = None;
         if now.head_branch != old.head_branch {
-            match &old.head_branch {
+            let switch: Vec<&str> = match &old.head_branch {
                 Some(b) => {
                     if let Some((_, sha)) = old.refs.iter().find(|(r, _)| r == &format!("refs/heads/{b}")) {
                         self.git(&["update-ref", &format!("refs/heads/{b}"), sha])?;
                     }
-                    self.git(&["checkout", b])?;
+                    vec!["checkout", b.as_str()]
                 }
-                None => {
-                    self.git(&["checkout", "--detach", &old.head_sha])?;
-                }
+                None => vec!["checkout", "--detach", old.head_sha.as_str()],
+            };
+            if let Err(e) = self.git(&switch) {
+                put_back = Some(self.reset_dirty(s, e, &switch)?);
             }
         }
         // 2. Move the checked-out branch back to where it was.
         let head_now = self.git(&["rev-parse", "-q", "--verify", "HEAD"]).unwrap_or_default().trim().to_string();
-        let mut put_back = None;
         if !old.head_sha.is_empty() && head_now != old.head_sha {
             let mode = if s.soft { "--soft" } else { "--keep" };
             if let Err(e) = self.git(&["reset", "-q", mode, &old.head_sha]) {
-                put_back = Some(self.reset_dirty(s, e)?);
+                put_back = Some(self.reset_dirty(s, e, &[])?);
             }
         }
         // 3. Every other branch and tag back to its old place; new ones removed, removed ones restored.
@@ -167,13 +170,20 @@ impl Repo {
     /// Takes the branch back when `reset --keep` refused (`err`) because a pull moved the
     /// uncommitted changes onto its commits: `reset --hard`, then the changes as they were before
     /// the pull. Only when they are still as the pull left them, so no later edit is lost.
+    /// With a `switch` (the checkout back to the branch a checkout-and-sync left), which refused
+    /// for the same reason: `reset --hard` where it is, then that checkout, then the changes.
     /// Returns the stash commit re-applied.
-    fn reset_dirty(&self, s: &Snapshot, err: String) -> Result<String, String> {
+    fn reset_dirty(&self, s: &Snapshot, err: String, switch: &[&str]) -> Result<String, String> {
         let Some(dirty) = s.dirty.as_ref().filter(|_| !s.soft) else { return Err(err) };
         if s.dirty_after != Some(self.worktree_fingerprint()) {
             return Err(format!("Your uncommitted changes were edited after “{}”. Commit or stash them, then Undo again.", s.label));
         }
-        self.git(&["reset", "-q", "--hard", &s.state.head_sha])?;
+        if switch.is_empty() {
+            self.git(&["reset", "-q", "--hard", &s.state.head_sha])?;
+        } else {
+            self.git(&["reset", "-q", "--hard"])?;
+            self.git(switch)?;
+        }
         if let Err(e) = self.git(&["stash", "apply", "-q", dirty]) {
             // Never leave them only in a commit nobody points at.
             let _ = self.git(&["stash", "store", "-m", &format!("Changes before {}", s.label), dirty]);

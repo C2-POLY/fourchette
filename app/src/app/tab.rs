@@ -407,6 +407,12 @@ impl Tab {
                 self.record(snap);
             }
             Cmd::Git { label, args, network } => self.git(label, args, network, ctx),
+            Cmd::Checkout { name, remote } => {
+                if let Some(c) = self.checkout(&name, remote) {
+                    self.run(c, ctx);
+                }
+            }
+            Cmd::CheckoutSync { sync, action, stash } => self.checkout_sync(&sync, action, stash),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
@@ -543,6 +549,41 @@ impl Tab {
                 Ok(_) => self.notify(label, false),
                 Err(e) => self.notify(e, true),
             }
+        }
+    }
+
+    /// Checks out `name` (`remote`: a remote branch). Returns the plain checkout to run, or opens
+    /// the Check out dialog, with fresh local changes, when the branch is behind its upstream.
+    pub(super) fn checkout(&mut self, name: &str, remote: bool) -> Option<Cmd> {
+        match crate::checkout::plan(name, remote, &self.refs, &self.worktrees) {
+            crate::checkout::Plan::Now { label, args } => Some(Cmd::Git { label, args, network: false }),
+            crate::checkout::Plan::Ask(sync) => {
+                self.refresh_status();
+                let action = sync.default_action();
+                self.dialog = Some(Dialog::CheckoutSync { sync, action, stash: false, dirty: !self.status.is_empty() });
+                None
+            }
+        }
+    }
+
+    /// The Check out dialog's choice: the whole sequence under one snapshot, which also keeps the
+    /// uncommitted changes, so one Undo takes back the branch, HEAD and the changes.
+    fn checkout_sync(&mut self, sync: &crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        if self.busy.is_some() {
+            self.notify("Please wait for the current operation to finish.", true);
+            return;
+        }
+        let snap = Snapshot { dirty: r.stash_create(), ..r.snapshot(&sync.label(action), false, false) };
+        let res = crate::checkout::run(r, sync, action, stash);
+        self.reload();
+        self.record(Some(snap));
+        match res {
+            Ok(msg) => self.notify(msg, false),
+            Err(e) => self.notify(e, true),
         }
     }
 
