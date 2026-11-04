@@ -14,7 +14,7 @@ impl App {
             if toolbar_pill(ui, "repository", &name).on_hover_text("Switch repository (⌘O)").clicked() {
                 cmds.push(Cmd::Switcher);
             }
-            ui.label(RichText::new("/").color(theme::BORDER_STRONG).size(theme::FS_TITLE));
+            ui.label(RichText::new("/").color(theme::c().border_strong).size(theme::FS_TITLE));
             let br = self.branch.clone().unwrap_or_else(|| format!("detached at {}", short(&self.head)));
             // Like the original's status view, the branch button opens Quick Launch in checkout mode.
             if toolbar_pill(ui, "branch", &br).on_hover_text("Check out another branch").clicked() {
@@ -66,7 +66,7 @@ impl App {
             let ai_btn = tool_button(ui, "ai", "Assistant", 0, self.ai.busy()).on_hover_text("Ask Claude (uses your Claude subscription)");
             egui::Popup::menu(&ai_btn).show(|ui| {
                 ui.set_min_width(260.0);
-                ui.label(RichText::new("Claude · your subscription").size(theme::FS_SMALL).color(theme::FAINT));
+                ui.label(RichText::new("Claude · your subscription").size(theme::FS_SMALL).color(theme::c().faint));
                 if ui.button("🧹  Clean up branches…").clicked() {
                     cmds.push(Cmd::AiCleanup);
                 }
@@ -85,7 +85,7 @@ impl App {
                 }
                 if crate::ai::find_claude().is_none() {
                     ui.separator();
-                    ui.label(RichText::new("Claude Code isn't installed on this Mac.").small().color(theme::MODIFIED));
+                    ui.label(RichText::new("Claude Code isn't installed on this Mac.").small().color(theme::c().modified));
                 }
             });
 
@@ -94,13 +94,13 @@ impl App {
                 ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(220.0).margin(Margin::symmetric(10, 6)));
                 if let Some(b) = &busy {
                     ui.add_space(8.0);
-                    ui.label(RichText::new(format!("{b}…")).color(theme::DIM));
+                    ui.label(RichText::new(format!("{b}…")).color(theme::c().dim));
                     ui.spinner();
                 } else if self.ai.busy() {
                     ui.add_space(8.0);
                     // The original's progress text for commit messages (sub_1003e4338).
                     let text = if matches!(self.ai.job, Some((assistant::AiJob::CommitMessage, _))) { crate::ai::GENERATING_WITH_CLAUDE } else { "Claude is thinking…" };
-                    ui.label(RichText::new(text).color(theme::ACCENT_TEXT));
+                    ui.label(RichText::new(text).color(theme::c().accent_text));
                     ui.spinner();
                 }
             });
@@ -253,7 +253,7 @@ impl App {
                             cmds.push(Cmd::Copy(w.path.display().to_string()));
                         }
                         ui.separator();
-                        if ui.button(RichText::new("Delete worktree…").color(theme::DELETED)).clicked() {
+                        if ui.button(RichText::new("Delete worktree…").color(theme::c().deleted)).clicked() {
                             cmds.push(Cmd::AskDeleteWorktree(w.path.clone()));
                         }
                     });
@@ -297,7 +297,7 @@ impl App {
         let mut need: f32 = if self.status.is_empty() { 0.0 } else { 96.0 };
         for refs in self.by_target.values() {
             if let Some(r) = refs.first() {
-                let w = ui.painter().layout_no_wrap(ref_label(r), theme::small(), theme::TEXT).size().x + 16.0;
+                let w = ui.painter().layout_no_wrap(ref_label(r), theme::small(), theme::c().text).size().x + 16.0;
                 need = need.max(w + 16.0 + if refs.len() > 1 { 28.0 } else { 0.0 });
             }
         }
@@ -320,21 +320,21 @@ impl App {
         let (hrect, _) = ui.allocate_exact_size(vec2(full_w, 30.0), Sense::hover());
         {
             let p = ui.painter();
-            p.rect_filled(hrect, CornerRadius::ZERO, theme::BG);
-            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0, theme::BORDER));
+            p.rect_filled(hrect, CornerRadius::ZERO, theme::c().bg);
+            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0, theme::c().border));
             let y = hrect.center().y;
             let f = theme::small();
-            p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "Branch", f.clone(), theme::FAINT);
-            p.text(pos2(hrect.left() + refs_w + 4.0, y), Align2::LEFT_CENTER, "Graph", f.clone(), theme::FAINT);
-            p.text(pos2(hrect.left() + refs_w + graph_w + 8.0, y), Align2::LEFT_CENTER, "Message", f.clone(), theme::FAINT);
+            p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "Branch", f.clone(), theme::c().faint);
+            p.text(pos2(hrect.left() + refs_w + 4.0, y), Align2::LEFT_CENTER, "Graph", f.clone(), theme::c().faint);
+            p.text(pos2(hrect.left() + refs_w + graph_w + 8.0, y), Align2::LEFT_CENTER, "Message", f.clone(), theme::c().faint);
             if show_meta {
                 let r = hrect.right();
-                p.text(pos2(r - sha_w - date_w - author_w + 4.0, y), Align2::LEFT_CENTER, "Author", f.clone(), theme::FAINT);
+                p.text(pos2(r - sha_w - date_w - author_w + 4.0, y), Align2::LEFT_CENTER, "Author", f.clone(), theme::c().faint);
                 if date_w > 0.0 {
-                    p.text(pos2(r - sha_w - date_w + 4.0, y), Align2::LEFT_CENTER, "Date", f.clone(), theme::FAINT);
+                    p.text(pos2(r - sha_w - date_w + 4.0, y), Align2::LEFT_CENTER, "Date", f.clone(), theme::c().faint);
                 }
                 if sha_w > 0.0 {
-                    p.text(pos2(r - sha_w + 4.0, y), Align2::LEFT_CENTER, "SHA", f, theme::FAINT);
+                    p.text(pos2(r - sha_w + 4.0, y), Align2::LEFT_CENTER, "SHA", f, theme::c().faint);
                 }
             }
         }
@@ -368,13 +368,13 @@ impl App {
 
                 // Background: hover, or the selection with a bar in the branch colour.
                 let bg = if selected {
-                    theme::SELECT
+                    theme::c().select
                 } else if resp.hovered() {
-                    theme::HOVER
+                    theme::c().hover
                 } else {
-                    theme::BG
+                    theme::c().bg
                 };
-                if bg != theme::BG {
+                if bg != theme::c().bg {
                     p.rect_filled(rect, CornerRadius::ZERO, bg);
                 }
                 if selected {
@@ -390,10 +390,10 @@ impl App {
                         let galley = p.layout_no_wrap(ref_label(r), theme::small(), text);
                         let w = galley.size().x + 14.0;
                         if x + w > max_x && k > 0 {
-                            let mg = p.layout_no_wrap(format!("+{}", refs.len() - k), theme::small(), theme::DIM);
+                            let mg = p.layout_no_wrap(format!("+{}", refs.len() - k), theme::small(), theme::c().dim);
                             let mr = Rect::from_min_size(pos2(x, y - 9.0), vec2(mg.size().x + 10.0, 18.0));
-                            p.rect_filled(mr, CornerRadius::same(4), theme::ELEVATED);
-                            p.galley(pos2(mr.left() + 5.0, y - mg.size().y / 2.0), mg, theme::DIM);
+                            p.rect_filled(mr, CornerRadius::same(4), theme::c().elevated);
+                            p.galley(pos2(mr.left() + 5.0, y - mg.size().y / 2.0), mg, theme::c().dim);
                             x = mr.right() + theme::REF_GAP;
                             break;
                         }
@@ -415,17 +415,17 @@ impl App {
 
                 // Text columns
                 let tc = if !matched {
-                    theme::FAINT
+                    theme::c().faint
                 } else if selected {
-                    theme::STRONG
+                    theme::c().strong
                 } else {
-                    theme::TEXT
+                    theme::c().text
                 };
                 let mx = gx + graph_w + 8.0;
                 let msg_right = rect.right() - sha_w - date_w - author_w - 12.0;
                 fit_text(&p, pos2(mx, y), Align2::LEFT_CENTER, &c.subject, theme::body(), tc, msg_right - mx);
                 if show_meta {
-                    let sc = if matched { theme::DIM } else { theme::FAINT };
+                    let sc = if matched { theme::c().dim } else { theme::c().faint };
                     let ax = rect.right() - sha_w - date_w - author_w;
                     avatar(&p, pos2(ax + 12.0, y), 9.0, &c.author);
                     fit_text(&p, pos2(ax + 27.0, y), Align2::LEFT_CENTER, &c.author, theme::secondary(), sc, author_w - 35.0);
@@ -449,16 +449,16 @@ impl App {
     fn wip_row(&self, ui: &Ui, rect: Rect, resp: &egui::Response, refs_w: f32, graph_w: f32, cmds: &mut Vec<Cmd>) {
         let p = ui.painter_at(rect);
         let bg = if self.sel == Sel::Wip {
-            theme::SELECT
+            theme::c().select
         } else if resp.hovered() {
-            theme::HOVER
+            theme::c().hover
         } else {
-            theme::BG
+            theme::c().bg
         };
         p.rect_filled(rect, CornerRadius::ZERO, bg);
         let gx = rect.left() + refs_w;
         let head_row = self.index.get(&self.head).copied();
-        let (lane, col) = head_row.and_then(|i| self.rows.get(i)).map(|r| (r.lane, theme::lane_color(r.color))).unwrap_or((0, theme::DIM));
+        let (lane, col) = head_row.and_then(|i| self.rows.get(i)).map(|r| (r.lane, theme::lane_color(r.color))).unwrap_or((0, theme::c().dim));
         if self.sel == Sel::Wip {
             p.rect_filled(Rect::from_min_size(rect.min, vec2(2.0, rect.height())), CornerRadius::ZERO, col);
         }
@@ -477,13 +477,13 @@ impl App {
             .collect();
         p.extend(Shape::dashed_line(&pts, Stroke::new(1.5_f32, soft), 2.5, 2.0));
         let mx = gx + graph_w + 8.0;
-        let tr = p.text(pos2(mx, c.y), Align2::LEFT_CENTER, "Uncommitted changes", theme::body(), theme::DIM);
+        let tr = p.text(pos2(mx, c.y), Align2::LEFT_CENTER, "Uncommitted changes", theme::body(), theme::c().dim);
         let count = |pred: &dyn Fn(&FileChange) -> bool| self.status.unstaged.iter().filter(|f| pred(f)).count() + self.status.staged.iter().filter(|f| pred(f)).count();
         let mut bx = tr.right() + 10.0;
         for (n, colr, sym) in [
-            (count(&|f| f.code == 'M' || f.code == 'R' || f.code == 'U'), theme::MODIFIED, "~"),
-            (count(&|f| f.code == '?' || f.code == 'A'), theme::ADDED, "+"),
-            (count(&|f| f.code == 'D'), theme::DELETED, "−"),
+            (count(&|f| f.code == 'M' || f.code == 'R' || f.code == 'U'), theme::c().modified, "~"),
+            (count(&|f| f.code == '?' || f.code == 'A'), theme::c().added, "+"),
+            (count(&|f| f.code == 'D'), theme::c().deleted, "−"),
         ] {
             if n == 0 {
                 continue;
@@ -494,7 +494,7 @@ impl App {
             p.galley(r.center() - g.size() / 2.0, g, colr);
             bx = r.right() + 4.0;
         }
-        p.text(pos2(rect.left() + 12.0, c.y), Align2::LEFT_CENTER, "Local changes", theme::small(), theme::FAINT);
+        p.text(pos2(rect.left() + 12.0, c.y), Align2::LEFT_CENTER, "Local changes", theme::small(), theme::c().faint);
         if resp.clicked() {
             cmds.push(Cmd::Select(Sel::Wip));
         }
@@ -518,37 +518,37 @@ impl App {
             }
             Sel::None => {
                 ui.add_space(40.0);
-                ui.vertical_centered(|ui| ui.label(RichText::new("Select a commit to see its details").color(theme::DIM)));
+                ui.vertical_centered(|ui| ui.label(RichText::new("Select a commit to see its details").color(theme::c().dim)));
             }
         }
     }
 
     fn commit_panel(&self, ui: &mut Ui, d: &CommitDetails, cmds: &mut Vec<Cmd>) {
         ui.add_space(12.0);
-        ui.label(RichText::new(&d.subject).size(theme::FS_TITLE).color(theme::STRONG));
+        ui.label(RichText::new(&d.subject).size(theme::FS_TITLE).color(theme::c().strong));
         if !d.body.is_empty() {
             ui.add_space(4.0);
-            ui.label(RichText::new(&d.body).color(theme::DIM));
+            ui.label(RichText::new(&d.body).color(theme::c().dim));
         }
         ui.add_space(8.0);
         // Plain-words explanation by Claude.
         match &self.ai.explanation {
             Some((h, text)) if h == &d.hash => {
-                egui::Frame::new().fill(theme::ACCENT_SOFT).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(12)).show(ui, |ui| {
+                egui::Frame::new().fill(theme::c().accent_soft).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(12)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     if text.is_empty() {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            ui.label(RichText::new("Claude is reading this commit…").color(theme::DIM));
+                            ui.label(RichText::new("Claude is reading this commit…").color(theme::c().dim));
                         });
                     } else {
-                        ui.label(RichText::new("In plain words").small().color(theme::ACCENT_TEXT));
-                        ui.label(RichText::new(text).color(theme::TEXT));
+                        ui.label(RichText::new("In plain words").small().color(theme::c().accent_text));
+                        ui.label(RichText::new(text).color(theme::c().text));
                     }
                 });
             }
             _ => {
-                if ui.button(RichText::new("✨ Explain with Claude").color(theme::ACCENT_TEXT)).on_hover_text("Claude explains this commit in plain words").clicked() {
+                if ui.button(RichText::new("✨ Explain with Claude").color(theme::c().accent_text)).on_hover_text("Claude explains this commit in plain words").clicked() {
                     cmds.push(Cmd::AiExplain(d.hash.clone()));
                 }
             }
@@ -561,32 +561,32 @@ impl App {
         }
         ui.add_space(10.0);
         egui::Grid::new("meta").num_columns(2).spacing(vec2(16.0, 8.0)).show(ui, |ui| {
-            ui.label(RichText::new("SHA").size(theme::FS_SECONDARY).color(theme::FAINT));
+            ui.label(RichText::new("SHA").size(theme::FS_SECONDARY).color(theme::c().faint));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(short(&d.hash)).monospace().color(theme::TEXT));
+                ui.label(RichText::new(short(&d.hash)).monospace().color(theme::c().text));
                 if ui.small_button("Copy").clicked() {
                     cmds.push(Cmd::Copy(d.hash.clone()));
                 }
             });
             ui.end_row();
-            ui.label(RichText::new("Parents").size(theme::FS_SECONDARY).color(theme::FAINT));
+            ui.label(RichText::new("Parents").size(theme::FS_SECONDARY).color(theme::c().faint));
             ui.horizontal(|ui| {
                 if d.parents.is_empty() {
-                    ui.label(RichText::new("none").color(theme::FAINT));
+                    ui.label(RichText::new("none").color(theme::c().faint));
                 }
                 for p in &d.parents {
-                    if ui.link(RichText::new(short(p)).monospace().color(theme::ACCENT_TEXT)).clicked() {
+                    if ui.link(RichText::new(short(p)).monospace().color(theme::c().accent_text)).clicked() {
                         cmds.push(Cmd::SelectHash(p.clone()));
                     }
                 }
             });
             ui.end_row();
             if let Some(refs) = self.by_target.get(&d.hash) {
-                ui.label(RichText::new("Refs").size(theme::FS_SECONDARY).color(theme::FAINT));
+                ui.label(RichText::new("Refs").size(theme::FS_SECONDARY).color(theme::c().faint));
                 ui.horizontal_wrapped(|ui| {
                     let col = self.ref_color(&d.hash);
                     for r in refs {
-                        let (fill, stroke, text) = ref_colors(r, col, theme::PANEL);
+                        let (fill, stroke, text) = ref_colors(r, col, theme::c().bg);
                         egui::Frame::new()
                             .fill(fill)
                             .stroke(stroke.map(|s| Stroke::new(1.0_f32, s)).unwrap_or(Stroke::NONE))
@@ -601,16 +601,16 @@ impl App {
         ui.add_space(12.0);
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{} changed file{}", d.files.len(), if d.files.len() == 1 { "" } else { "s" })).size(theme::FS_SECONDARY).color(theme::DIM));
+            ui.label(RichText::new(format!("{} changed file{}", d.files.len(), if d.files.len() == 1 { "" } else { "s" })).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let (a, m, del) = d.files.iter().fold((0, 0, 0), |acc, f| match f.code {
                     'A' => (acc.0 + 1, acc.1, acc.2),
                     'D' => (acc.0, acc.1, acc.2 + 1),
                     _ => (acc.0, acc.1 + 1, acc.2),
                 });
-                ui.label(RichText::new(format!("− {del}")).color(theme::DELETED).small());
-                ui.label(RichText::new(format!("~ {m}")).color(theme::MODIFIED).small());
-                ui.label(RichText::new(format!("+ {a}")).color(theme::ADDED).small());
+                ui.label(RichText::new(format!("− {del}")).color(theme::c().deleted).small());
+                ui.label(RichText::new(format!("~ {m}")).color(theme::c().modified).small());
+                ui.label(RichText::new(format!("+ {a}")).color(theme::c().added).small());
             });
         });
         ui.add_space(4.0);
@@ -625,7 +625,7 @@ impl App {
     fn file_list(&self, ui: &mut Ui, staged: bool, list_h: f32, cmds: &mut Vec<Cmd>) {
         let files = if staged { self.status.staged.clone() } else { self.status.unstaged.clone() };
         let current = self.diff.as_ref().map(|d| d.title.clone());
-        egui::Frame::new().fill(theme::SIDEBAR).stroke(Stroke::new(1.0_f32, theme::BORDER)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(4)).show(ui, |ui| {
+        egui::Frame::new().fill(theme::c().sidebar).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(4)).show(ui, |ui| {
             egui::ScrollArea::vertical().id_salt(if staged { "staged" } else { "unstaged" }).max_height(list_h).min_scrolled_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
                 for f in &files {
                     let (resp, btn) = file_row(ui, f, current.as_deref() == Some(f.path.as_str()), Some(if staged { "Unstage" } else { "Stage" }));
@@ -641,7 +641,7 @@ impl App {
                             if ui.button("Stage").clicked() {
                                 cmds.push(Cmd::Git { label: format!("Staged {}", f.path), args: vec!["add".into(), "-A".into(), "--".into(), f.path.clone()], network: false });
                             }
-                            if ui.button(RichText::new("Discard changes…").color(theme::DELETED)).clicked() {
+                            if ui.button(RichText::new("Discard changes…").color(theme::c().deleted)).clicked() {
                                 if f.code == '?' {
                                     // Like the original, a new file goes to the Trash instead of being erased.
                                     cmds.push(Cmd::Discard { path: f.path.clone(), untracked: true });
@@ -665,7 +665,7 @@ impl App {
                 }
                 if files.is_empty() {
                     ui.add_space(4.0);
-                    ui.label(RichText::new(if staged { "Stage files to include them in the commit" } else { "No unstaged changes" }).color(theme::FAINT));
+                    ui.label(RichText::new(if staged { "Stage files to include them in the commit" } else { "No unstaged changes" }).color(theme::c().faint));
                 }
             });
         });
@@ -675,14 +675,14 @@ impl App {
         ui.add_space(12.0);
         let total = self.status.staged.len() + self.status.unstaged.len();
         let on = self.branch.clone().unwrap_or_else(|| "HEAD".into());
-        ui.label(RichText::new(format!("{total} file change{} on {on}", if total == 1 { "" } else { "s" })).size(theme::FS_TITLE).color(theme::STRONG));
+        ui.label(RichText::new(format!("{total} file change{} on {on}", if total == 1 { "" } else { "s" })).size(theme::FS_TITLE).color(theme::c().strong));
         ui.add_space(8.0);
         let list_h = ((ui.available_height() - 290.0) / 2.0).max(80.0);
 
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("Unstaged files  {}", self.status.unstaged.len())).size(theme::FS_SECONDARY).color(theme::DIM));
+            ui.label(RichText::new(format!("Unstaged files  {}", self.status.unstaged.len())).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.add_enabled(!self.status.unstaged.is_empty(), egui::Button::new(RichText::new("Stage all").color(theme::ADDED))).clicked() {
+                if ui.add_enabled(!self.status.unstaged.is_empty(), egui::Button::new(RichText::new("Stage all").color(theme::c().added))).clicked() {
                     cmds.push(Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false });
                 }
             });
@@ -690,9 +690,9 @@ impl App {
         self.file_list(ui, false, list_h, cmds);
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("Staged files  {}", self.status.staged.len())).size(theme::FS_SECONDARY).color(theme::DIM));
+            ui.label(RichText::new(format!("Staged files  {}", self.status.staged.len())).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new(RichText::new("Unstage all").color(theme::DELETED))).clicked() {
+                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new(RichText::new("Unstage all").color(theme::c().deleted))).clicked() {
                     cmds.push(Cmd::Git { label: "All changes unstaged".into(), args: vec!["reset".into(), "-q".into()], network: false });
                 }
             });
@@ -701,13 +701,13 @@ impl App {
         ui.add_space(12.0);
 
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Commit message").size(theme::FS_SECONDARY).color(theme::DIM));
+            ui.label(RichText::new("Commit message").size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let thinking = matches!(self.ai.job, Some((assistant::AiJob::CommitMessage, _)));
                 if thinking {
                     ui.spinner();
                 } else if ui
-                    .add_enabled(!self.status.staged.is_empty(), egui::Button::new(RichText::new("✨ Suggest").color(theme::ACCENT_TEXT)))
+                    .add_enabled(!self.status.staged.is_empty(), egui::Button::new(RichText::new("✨ Suggest").color(theme::c().accent_text)))
                     .on_hover_text("Claude writes a message from your staged changes")
                     .clicked()
                 {
@@ -719,7 +719,7 @@ impl App {
         let n = self.summary.chars().count();
         if n > 0 {
             // Subject length warning at the original's limits (50 / 70 characters).
-            let col = if n > SUBJECT_LIMIT_HIGH { theme::DELETED } else if n > SUBJECT_LIMIT_LOW { theme::MODIFIED } else { theme::FAINT };
+            let col = if n > SUBJECT_LIMIT_HIGH { theme::c().deleted } else if n > SUBJECT_LIMIT_LOW { theme::c().modified } else { theme::c().faint };
             ui.painter().text(pos2(resp.rect.right() - 8.0, resp.rect.center().y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), col);
         }
         ui.add(egui::TextEdit::multiline(&mut self.description).hint_text(faint_hint("Description")).desired_rows(3).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 6)));
@@ -738,9 +738,9 @@ impl App {
         } else {
             format!("Commit {staged} file{}", if staged == 1 { "" } else { "s" })
         };
-        let btn = egui::Button::new(RichText::new(label).color(if can { theme::STRONG } else { theme::FAINT }))
-            .fill(if can { theme::ACCENT } else { theme::ELEVATED })
-            .stroke(Stroke::new(1.0_f32, if can { theme::ACCENT } else { theme::BORDER }))
+        let btn = egui::Button::new(RichText::new(label).color(if can { theme::c().on_accent } else { theme::c().faint }))
+            .fill(if can { theme::c().accent } else { theme::c().elevated })
+            .stroke(Stroke::new(1.0_f32, if can { theme::c().accent } else { theme::c().border }))
             .corner_radius(CornerRadius::same(6))
             .min_size(vec2(ui.available_width(), 32.0));
         if ui.add_enabled(can, btn).clicked() {
@@ -755,7 +755,7 @@ impl App {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.add_space(10.0);
-            ui.label(RichText::new(&d.title).size(theme::FS_BODY).color(theme::STRONG));
+            ui.label(RichText::new(&d.title).size(theme::FS_BODY).color(theme::c().strong));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
                 if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
@@ -768,7 +768,7 @@ impl App {
         let lines: Vec<&str> = d.text.lines().collect();
         if lines.is_empty() {
             ui.add_space(20.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("No text changes to show (binary file or only a mode change).").color(theme::DIM)));
+            ui.vertical_centered(|ui| ui.label(RichText::new("No text changes to show (binary file or only a mode change).").color(theme::c().dim)));
             return;
         }
         let is_header = |l: &str| {
@@ -809,20 +809,20 @@ impl App {
                 let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
                 let p = ui.painter();
                 let (bg, fg) = if is_header(l) {
-                    (theme::PANEL, theme::FAINT)
+                    (theme::c().bg, theme::c().faint)
                 } else if l.starts_with("@@") {
-                    (theme::ACCENT_SOFT, theme::ACCENT_TEXT)
+                    (theme::c().accent_soft, theme::c().accent_text)
                 } else if l.starts_with('+') {
-                    (theme::tint(theme::ADDED, theme::BG, 0.13), Color32::from_rgb(0xc8, 0xf0, 0xd8))
+                    (theme::tint(theme::c().added, theme::c().bg, 0.13), theme::c().diff_added_text)
                 } else if l.starts_with('-') {
-                    (theme::tint(theme::DELETED, theme::BG, 0.13), Color32::from_rgb(0xf8, 0xd0, 0xd0))
+                    (theme::tint(theme::c().deleted, theme::c().bg, 0.13), theme::c().diff_deleted_text)
                 } else {
-                    (Color32::TRANSPARENT, theme::TEXT)
+                    (Color32::TRANSPARENT, theme::c().text)
                 };
                 p.rect_filled(rect, CornerRadius::ZERO, bg);
                 let num = |v: Option<u32>| v.map(|x| x.to_string()).unwrap_or_default();
-                p.text(pos2(rect.left() + 40.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].0), FontId::monospace(theme::FS_SMALL), theme::FAINT);
-                p.text(pos2(rect.left() + 80.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].1), FontId::monospace(theme::FS_SMALL), theme::FAINT);
+                p.text(pos2(rect.left() + 40.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].0), FontId::monospace(theme::FS_SMALL), theme::c().faint);
+                p.text(pos2(rect.left() + 80.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].1), FontId::monospace(theme::FS_SMALL), theme::c().faint);
                 p.text(pos2(rect.left() + 96.0, rect.center().y), Align2::LEFT_CENTER, l.replace('\t', "    "), font.clone(), fg);
             }
         });
@@ -838,7 +838,7 @@ impl App {
                 egui::Modal::new(egui::Id::new("newref")).show(ctx, |ui| {
                     ui.set_width(380.0);
                     ui.heading(if *tag { "New tag" } else { "New branch" });
-                    ui.label(RichText::new(format!("Starting at {label}")).color(theme::DIM));
+                    ui.label(RichText::new(format!("Starting at {label}")).color(theme::c().dim));
                     ui.add_space(8.0);
                     ui.add(egui::TextEdit::singleline(name).hint_text(faint_hint(if *tag { "v1.0.0" } else { "feature/my-idea" })).desired_width(f32::INFINITY)).request_focus();
                     if !*tag {
@@ -847,7 +847,7 @@ impl App {
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         let ok = !name.trim().is_empty() && !name.trim().contains(' ');
-                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::STRONG)).fill(theme::ACCENT).stroke(Stroke::new(1.0_f32, theme::ACCENT))).clicked();
+                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::c().on_accent)).fill(theme::c().accent).stroke(Stroke::new(1.0_f32, theme::c().accent))).clicked();
                         if create || (ok && ui.input(|i| i.key_pressed(Key::Enter))) {
                             let n = name.trim().to_string();
                             let args = if *tag {
@@ -870,24 +870,24 @@ impl App {
                 // Layout and wording of the original's delete-branch sheet (sub_100070d94).
                 egui::Modal::new(egui::Id::new("delete_branch")).show(ctx, |ui| {
                     ui.set_width(420.0);
-                    ui.label(RichText::new("Delete Branch").size(theme::FS_TITLE).color(theme::STRONG));
-                    ui.label(RichText::new("Delete local branch from your repository").color(theme::DIM));
+                    ui.label(RichText::new("Delete Branch").size(theme::FS_TITLE).color(theme::c().strong));
+                    ui.label(RichText::new("Delete local branch from your repository").color(theme::c().dim));
                     ui.add_space(8.0);
-                    ui.label(RichText::new(name.as_str()).monospace().color(theme::TEXT));
+                    ui.label(RichText::new(name.as_str()).monospace().color(theme::c().text));
                     if let Some(w) = worktree.as_ref() {
                         ui.add_space(8.0);
-                        egui::Frame::new().fill(theme::tint(theme::MODIFIED, theme::ELEVATED, 0.1)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(10)).show(ui, |ui| {
+                        egui::Frame::new().fill(theme::tint(theme::c().modified, theme::c().elevated, 0.1)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(10)).show(ui, |ui| {
                             ui.set_width(ui.available_width());
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("⚠").color(theme::MODIFIED));
-                                ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(theme::TEXT)).on_hover_text(w.path.display().to_string());
+                                ui.label(RichText::new("⚠").color(theme::c().modified));
+                                ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(theme::c().text)).on_hover_text(w.path.display().to_string());
                             });
                             ui.checkbox(also_worktree, "Also delete worktree");
                             if *dirty && *also_worktree {
-                                ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::MODIFIED));
+                                ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::c().modified));
                             }
                             if !*also_worktree {
-                                ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").small().color(theme::DELETED));
+                                ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").small().color(theme::c().deleted));
                             }
                         });
                     }
@@ -896,11 +896,11 @@ impl App {
                         ui.checkbox(force, "Delete even though it isn't merged into the current branch");
                     }
                     ui.add_space(6.0);
-                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").small().color(theme::FAINT));
+                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").small().color(theme::c().faint));
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         let ok = (worktree.is_none() || *also_worktree) && (*merged || *force);
-                        if ui.add_enabled(ok, egui::Button::new(RichText::new("Delete").color(theme::STRONG)).fill(theme::tint(theme::DELETED, theme::ELEVATED, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::DELETED, theme::ELEVATED, 0.8)))).clicked() {
+                        if ui.add_enabled(ok, egui::Button::new(RichText::new("Delete").color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
                             cmds.push(Cmd::DeleteBranch { name: name.clone(), force: *force, also_worktree: *also_worktree });
                             close = true;
                         }
@@ -914,18 +914,18 @@ impl App {
                 // The original's wording (sub_1002008ec).
                 egui::Modal::new(egui::Id::new("delete_worktree")).show(ctx, |ui| {
                     ui.set_width(420.0);
-                    ui.label(RichText::new(format!("Delete worktree '{}'", wt.name())).size(theme::FS_TITLE).color(theme::STRONG));
-                    ui.label(RichText::new(format!("Do you want to delete worktree '{}'?", wt.name())).color(theme::TEXT));
-                    ui.label(RichText::new(wt.path.display().to_string()).small().color(theme::FAINT));
+                    ui.label(RichText::new(format!("Delete worktree '{}'", wt.name())).size(theme::FS_TITLE).color(theme::c().strong));
+                    ui.label(RichText::new(format!("Do you want to delete worktree '{}'?", wt.name())).color(theme::c().text));
+                    ui.label(RichText::new(wt.path.display().to_string()).small().color(theme::c().faint));
                     if *dirty {
-                        ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::MODIFIED));
+                        ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::c().modified));
                     }
                     if let Some(b) = &wt.branch {
-                        ui.label(RichText::new(format!("The branch “{b}” is kept.")).small().color(theme::DIM));
+                        ui.label(RichText::new(format!("The branch “{b}” is kept.")).small().color(theme::c().dim));
                     }
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new("Delete").color(theme::STRONG)).fill(theme::tint(theme::DELETED, theme::ELEVATED, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::DELETED, theme::ELEVATED, 0.8)))).clicked() {
+                        if ui.add(egui::Button::new(RichText::new("Delete").color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
                             cmds.push(Cmd::DeleteWorktree(wt.path.clone()));
                             close = true;
                         }
@@ -942,12 +942,12 @@ impl App {
                 let verb = title.split_whitespace().next().unwrap_or("Continue").to_string();
                 egui::Modal::new(egui::Id::new("confirm")).show(ctx, |ui| {
                     ui.set_width(400.0);
-                    ui.label(RichText::new(message.as_str()).size(theme::FS_TITLE).color(theme::STRONG));
+                    ui.label(RichText::new(message.as_str()).size(theme::FS_TITLE).color(theme::c().strong));
                     ui.add_space(4.0);
-                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").color(theme::DIM));
+                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").color(theme::c().dim));
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new(verb).color(theme::STRONG)).fill(theme::tint(theme::DELETED, theme::ELEVATED, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::DELETED, theme::ELEVATED, 0.8)))).clicked() {
+                        if ui.add(egui::Button::new(RichText::new(verb).color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
                             cmds.push(Cmd::Git { label: label.clone(), args: args.clone(), network: *network });
                             close = true;
                         }
@@ -962,13 +962,13 @@ impl App {
                     ui.set_width(360.0);
                     ui.heading("New group");
                     let repo = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                    ui.label(RichText::new(format!("{repo} goes into it")).color(theme::DIM));
+                    ui.label(RichText::new(format!("{repo} goes into it")).color(theme::c().dim));
                     ui.add_space(8.0);
                     ui.add(egui::TextEdit::singleline(name).hint_text(faint_hint("Clients, Side projects…")).desired_width(f32::INFINITY)).request_focus();
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         let ok = !name.trim().is_empty();
-                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::STRONG)).fill(theme::ACCENT).stroke(Stroke::new(1.0_f32, theme::ACCENT))).clicked();
+                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::c().on_accent)).fill(theme::c().accent).stroke(Stroke::new(1.0_f32, theme::c().accent))).clicked();
                         if create || (ok && ui.input(|i| i.key_pressed(Key::Enter))) {
                             cmds.push(Cmd::RepoGroup(path.clone(), Some(name.trim().to_string())));
                             close = true;
@@ -1065,6 +1065,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The mode on screen can change with macOS (System), so the colours follow it each frame.
+        theme::sync(ctx);
         self.poll_busy();
         self.ai_poll();
         self.project_poll();
@@ -1078,25 +1080,31 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("toolbar")
             .exact_height(60.0)
-            .frame(egui::Frame::new().fill(theme::TOOLBAR))
+            .frame(egui::Frame::new().fill(theme::c().sidebar))
             .show(ctx, |ui| self.toolbar(ui, &mut cmds));
 
         egui::TopBottomPanel::bottom("status")
             .exact_height(28.0)
-            .frame(egui::Frame::new().fill(theme::SIDEBAR).inner_margin(Margin::symmetric(12, 4)))
+            .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(12, 4)))
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     let (dot, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
                     ui.painter().circle_filled(dot.center(), 4.0, self.ref_color(&self.head));
-                    ui.label(RichText::new(self.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::TEXT));
+                    ui.label(RichText::new(self.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::c().text));
                     if let Some((a, b)) = self.ahead_behind {
-                        ui.label(RichText::new(format!("{a} ahead, {b} behind")).color(theme::DIM).size(theme::FS_SECONDARY));
+                        ui.label(RichText::new(format!("{a} ahead, {b} behind")).color(theme::c().dim).size(theme::FS_SECONDARY));
                     }
-                    ui.label(RichText::new("·").color(theme::FAINT));
-                    ui.label(RichText::new(format!("{} commits", self.commits.len())).color(theme::DIM).size(theme::FS_SECONDARY));
+                    ui.label(RichText::new("·").color(theme::c().faint));
+                    ui.label(RichText::new(format!("{} commits", self.commits.len())).color(theme::c().dim).size(theme::FS_SECONDARY));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let a = self.library.appearance;
+                        let tip = format!("Appearance: {} — click for {}", a.label(), a.next().label());
+                        if appearance_button(ui, a).on_hover_text(tip).clicked() {
+                            cmds.push(Cmd::SetAppearance(a.next()));
+                        }
+                        ui.add_space(4.0);
                         let where_ = self.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
-                        ui.label(RichText::new(where_).color(theme::FAINT).size(theme::FS_SECONDARY));
+                        ui.label(RichText::new(where_).color(theme::c().faint).size(theme::FS_SECONDARY));
                     });
                 });
             });
@@ -1105,22 +1113,22 @@ impl eframe::App for App {
             .resizable(true)
             .default_width(230.0)
             .width_range(190.0..=420.0)
-            .frame(egui::Frame::new().fill(theme::SIDEBAR).inner_margin(Margin::symmetric(8, 0)))
+            .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
             .show(ctx, |ui| self.sidebar(ui, &mut cmds));
 
         egui::SidePanel::right("details")
             .resizable(true)
             .default_width(330.0)
             .width_range(280.0..=600.0)
-            .frame(egui::Frame::new().fill(theme::PANEL).inner_margin(Margin::symmetric(16, 0)))
+            .frame(egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0)))
             .show(ctx, |ui| self.details_panel(ui, &mut cmds));
 
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::BG)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| {
             if self.is_demo() {
-                egui::Frame::new().fill(theme::ACCENT_SOFT).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
+                egui::Frame::new().fill(theme::c().accent_soft).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("This is a sample history so you can look around.").color(theme::TEXT));
+                        ui.label(RichText::new("This is a sample history so you can look around.").color(theme::c().text));
                         if ui.button("Open a repository…").clicked() {
                             cmds.push(Cmd::OpenDialog);
                         }
@@ -1131,7 +1139,7 @@ impl eframe::App for App {
                 self.diff_view(ui, &mut cmds);
             } else if self.commits.is_empty() && self.status.is_empty() {
                 ui.add_space(80.0);
-                ui.vertical_centered(|ui| ui.label(RichText::new("This repository has no commits yet.").color(theme::DIM)));
+                ui.vertical_centered(|ui| ui.label(RichText::new("This repository has no commits yet.").color(theme::c().dim)));
             } else {
                 self.commit_list(ui, &mut cmds);
             }
@@ -1149,14 +1157,14 @@ impl eframe::App for App {
             if at.elapsed().as_secs_f32() < 4.0 {
                 egui::Area::new(egui::Id::new("toast")).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0)).show(ctx, |ui| {
                     egui::Frame::new()
-                        .fill(theme::ELEVATED)
-                        .stroke(Stroke::new(1.0_f32, theme::tint(if *err { theme::DELETED } else { theme::ADDED }, theme::ELEVATED, 0.6)))
+                        .fill(theme::c().elevated)
+                        .stroke(Stroke::new(1.0_f32, theme::tint(if *err { theme::c().deleted } else { theme::c().added }, theme::c().elevated, 0.6)))
                         .shadow(ctx.style().visuals.popup_shadow)
                         .corner_radius(CornerRadius::same(8))
                         .inner_margin(Margin::symmetric(14, 8))
                         .show(ui, |ui| {
                             ui.set_max_width(520.0);
-                            ui.label(RichText::new(msg.as_str()).color(theme::STRONG));
+                            ui.label(RichText::new(msg.as_str()).color(theme::c().strong));
                         });
                 });
                 ctx.request_repaint_after(std::time::Duration::from_millis(250));

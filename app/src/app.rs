@@ -80,6 +80,8 @@ pub enum Cmd {
     PaletteCheckout,
     /// The original's hidden Quick Launch command "settings maxCommitCount <n>".
     SetCommitLimit(usize),
+    /// System, dark or light, kept in repos.json.
+    SetAppearance(theme::Appearance),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
     AiCommitMessage,
@@ -172,8 +174,10 @@ fn graph_width(max_lanes: usize) -> f32 {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext, repo_arg: Option<PathBuf>, screenshot: Option<PathBuf>) -> Self {
-        theme::apply(&cc.egui_ctx);
         let library = crate::library::Library::load();
+        // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
+        let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
+        theme::apply(&cc.egui_ctx, appearance);
         let mut app = App {
             repo: None,
             commits: vec![],
@@ -613,6 +617,11 @@ impl App {
                     self.reload();
                     self.notify(format!("maxCommitCount set to {n}"), false);
                 }
+                Cmd::SetAppearance(a) => {
+                    self.library.appearance = a;
+                    self.library.save();
+                    theme::set_appearance(ctx, a);
+                }
                 Cmd::Switcher => {
                     self.switcher = if self.switcher.is_some() { None } else { Some(repos::Switcher::default()) };
                 }
@@ -795,6 +804,6 @@ impl App {
     }
 
     fn ref_color(&self, target: &str) -> Color32 {
-        self.index.get(target).and_then(|&i| self.rows.get(i)).map(|r| theme::lane_color(r.color)).unwrap_or(theme::FAINT)
+        self.index.get(target).and_then(|&i| self.rows.get(i)).map(|r| theme::lane_color(r.color)).unwrap_or(theme::c().faint)
     }
 }

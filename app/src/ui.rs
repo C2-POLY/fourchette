@@ -55,11 +55,11 @@ pub fn draw_node(p: &egui::Painter, c: Pos2, row: &Row, is_head: bool, matched: 
 
 /// Fill, border and text colours of a branch or tag label drawn in its lane colour.
 pub fn ref_colors(r: &GitRef, lane: Color32, bg: Color32) -> (Color32, Option<Color32>, Color32) {
-    let text = theme::lighten(lane, 0.35);
+    let text = theme::readable(lane, 0.35);
     match r.kind {
-        RefKind::Tag => (theme::ELEVATED, Some(theme::BORDER_STRONG), theme::TEXT),
+        RefKind::Tag => (theme::c().elevated, Some(theme::c().border_strong), theme::c().text),
         RefKind::Remote => (bg, Some(theme::tint(lane, bg, 0.4)), text),
-        _ if r.is_head => (theme::tint(lane, bg, 0.3), Some(theme::tint(lane, bg, 0.6)), theme::lighten(lane, 0.55)),
+        _ if r.is_head => (theme::tint(lane, bg, 0.3), Some(theme::tint(lane, bg, 0.6)), theme::readable(lane, 0.55)),
         _ => (theme::tint(lane, bg, 0.18), None, text),
     }
 }
@@ -86,11 +86,46 @@ pub fn check_mark(p: &egui::Painter, c: Pos2, col: Color32) {
     p.add(Shape::line(vec![c + vec2(-4.0, 0.0), c + vec2(-1.2, 3.0), c + vec2(4.0, -3.0)], Stroke::new(1.6_f32, col)));
 }
 
+/// The status bar button that shows the appearance and switches to the next one.
+pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 20.0), Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(5), theme::c().hover);
+    }
+    let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
+    let bg = if resp.hovered() { theme::c().hover } else { theme::c().sidebar };
+    let c = rect.center();
+    match a {
+        // Half dark, half light: follows macOS.
+        theme::Appearance::System => {
+            p.circle_stroke(c, 5.5, Stroke::new(1.3_f32, col));
+            let half: Vec<Pos2> = (0..=16).map(|k| c + egui::Vec2::angled(std::f32::consts::FRAC_PI_2 + k as f32 / 16.0 * std::f32::consts::PI) * 5.5).collect();
+            p.add(Shape::convex_polygon(half, col, Stroke::NONE));
+        }
+        // A crescent moon.
+        theme::Appearance::Dark => {
+            p.circle_filled(c, 5.5, col);
+            p.circle_filled(c + vec2(2.8, -2.3), 4.6, bg);
+        }
+        // A sun: a disc and eight rays.
+        theme::Appearance::Light => {
+            p.circle_filled(c, 2.8, col);
+            for k in 0..8 {
+                let d = egui::Vec2::angled(k as f32 * std::f32::consts::FRAC_PI_4);
+                p.line_segment([c + d * 4.6, c + d * 6.6], Stroke::new(1.3_f32, col));
+            }
+        }
+    }
+    resp
+}
+
 /// A round avatar with the author's initials.
 pub fn avatar(p: &egui::Painter, c: Pos2, r: f32, name: &str) {
     let col = theme::author_color(name);
-    p.circle_filled(c, r, theme::tint(col, theme::BG, 0.75));
-    p.text(c, Align2::CENTER_CENTER, theme::initials(name), FontId::proportional((r * 0.95).max(8.0)), theme::STRONG);
+    let k = if theme::is_light() { 0.9 } else { 0.75 };
+    p.circle_filled(c, r, theme::tint(col, theme::c().bg, k));
+    p.text(c, Align2::CENTER_CENTER, theme::initials(name), FontId::proportional((r * 0.95).max(8.0)), theme::c().on_accent);
 }
 
 pub fn ref_label(r: &GitRef) -> String {
@@ -119,9 +154,9 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected || current {
-        p.rect_filled(rect, CornerRadius::same(6), theme::SELECT);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().select);
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
     let mut x = rect.left() + 10.0;
@@ -129,17 +164,17 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
         p.circle_filled(pos2(x + 3.0, y), 3.5, c);
         x += 15.0;
     } else if kind != "remote" {
-        p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::FAINT);
+        p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::c().faint);
         x += 20.0;
     }
-    let tc = if selected || current { theme::STRONG } else { theme::TEXT };
+    let tc = if selected || current { theme::c().strong } else { theme::c().text };
     let right = rect.right() - if count.is_some() || current { 34.0 } else { 8.0 };
     fit_text(p, pos2(x, y), Align2::LEFT_CENTER, text, theme::body(), tc, right - x);
     if current {
-        check_mark(p, pos2(rect.right() - 14.0, y), theme::ADDED);
+        check_mark(p, pos2(rect.right() - 14.0, y), theme::c().added);
     } else if let Some(n) = count {
         if n > 0 {
-            p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), theme::FAINT);
+            p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), theme::c().faint);
         }
     }
     resp
@@ -150,30 +185,30 @@ pub fn group_row(ui: &mut Ui, text: &str, count: usize, open: bool) -> egui::Res
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
-    chevron(p, pos2(rect.left() + 14.0, y), open, theme::FAINT);
-    fit_text(p, pos2(rect.left() + 26.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::TEXT, rect.width() - 60.0);
-    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::FAINT);
+    chevron(p, pos2(rect.left() + 14.0, y), open, theme::c().faint);
+    fit_text(p, pos2(rect.left() + 26.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, rect.width() - 60.0);
+    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
     resp
 }
 
 /// Placeholder text of a field, in the tertiary colour.
 pub fn faint_hint(text: impl Into<String>) -> RichText {
-    RichText::new(text).color(theme::FAINT)
+    RichText::new(text).color(theme::c().faint)
 }
 
 pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
     p.circle_filled(pos2(x + 3.0, y), 3.0, color);
-    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::TEXT, rect.right() - 8.0 - (x + 15.0));
+    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, rect.right() - 8.0 - (x + 15.0));
     resp
 }
 
@@ -181,27 +216,27 @@ pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool) -> egu
     ui.add_space(6.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     let p = ui.painter();
-    let col = if resp.hovered() { theme::TEXT } else { theme::DIM };
+    let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
     let r = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, title, theme::secondary(), col);
     // Like Linear: the chevron sits after the title, shown when hovered or folded.
     if resp.hovered() || !open {
-        chevron(p, pos2(r.right() + 9.0, rect.center().y), open, theme::FAINT);
+        chevron(p, pos2(r.right() + 9.0, rect.center().y), open, theme::c().faint);
     }
-    p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::FAINT);
+    p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
     resp
 }
 
 pub fn toolbar_pill(ui: &mut Ui, caption: &str, value: &str) -> egui::Response {
-    let galley = ui.painter().layout_no_wrap(value.to_string(), theme::body(), theme::STRONG);
+    let galley = ui.painter().layout_no_wrap(value.to_string(), theme::body(), theme::c().strong);
     let w = (galley.size().x + 40.0).clamp(110.0, 260.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 40.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
-    p.text(pos2(rect.left() + 10.0, rect.top() + 11.0), Align2::LEFT_CENTER, caption, theme::small(), theme::FAINT);
-    fit_text(p, pos2(rect.left() + 10.0, rect.top() + 27.0), Align2::LEFT_CENTER, value, theme::body(), theme::STRONG, rect.width() - 34.0);
-    chevron(p, pos2(rect.right() - 13.0, rect.top() + 27.0), true, theme::DIM);
+    p.text(pos2(rect.left() + 10.0, rect.top() + 11.0), Align2::LEFT_CENTER, caption, theme::small(), theme::c().faint);
+    fit_text(p, pos2(rect.left() + 10.0, rect.top() + 27.0), Align2::LEFT_CENTER, value, theme::body(), theme::c().strong, rect.width() - 34.0);
+    chevron(p, pos2(rect.right() - 13.0, rect.top() + 27.0), true, theme::c().dim);
     resp
 }
 
@@ -210,9 +245,9 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
     let (rect, resp) = ui.allocate_exact_size(vec2(58.0, 48.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() || active {
-        p.rect_filled(rect, CornerRadius::same(7), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(7), theme::c().hover);
     }
-    let col = if resp.hovered() { theme::STRONG } else { theme::TEXT };
+    let col = if resp.hovered() { theme::c().strong } else { theme::c().text };
     let c = pos2(rect.center().x, rect.top() + 17.0);
     let s = Stroke::new(1.8, col);
     match icon {
@@ -244,7 +279,7 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
                 ];
                 p.add(Shape::convex_polygon(pts, col, Stroke::NONE));
             };
-            let col = if active { theme::ACCENT_TEXT } else { col };
+            let col = if active { theme::c().accent_text } else { col };
             star(p, c + vec2(-1.5, 1.0), 8.0, col);
             star(p, c + vec2(7.0, -6.5), 3.5, col);
         }
@@ -293,12 +328,12 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
         }
         _ => {}
     }
-    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::STRONG } else { theme::DIM });
+    p.text(pos2(rect.center().x, rect.bottom() - 8.0), Align2::CENTER_CENTER, label, theme::small(), if resp.hovered() { theme::c().strong } else { theme::c().dim });
     if badge > 0 {
         let s = badge.min(99).to_string();
         let b = Rect::from_center_size(pos2(rect.center().x + 13.0, rect.top() + 7.0), vec2(10.0 + s.len() as f32 * 6.0, 16.0));
-        p.rect_filled(b, CornerRadius::same(8), theme::ACCENT);
-        p.text(b.center(), Align2::CENTER_CENTER, s, theme::small(), theme::STRONG);
+        p.rect_filled(b, CornerRadius::same(8), theme::c().accent);
+        p.text(b.center(), Align2::CENTER_CENTER, s, theme::small(), theme::c().on_accent);
     }
     resp
 }
@@ -310,10 +345,10 @@ pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i6
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
             ui.horizontal(|ui| {
-                ui.label(RichText::new(name).color(theme::STRONG));
-                ui.label(RichText::new(caption).size(theme::FS_SMALL).color(theme::FAINT));
+                ui.label(RichText::new(name).color(theme::c().strong));
+                ui.label(RichText::new(caption).size(theme::FS_SMALL).color(theme::c().faint));
             });
-            ui.label(RichText::new(format!("{email} · {}", git::relative_time(time))).size(theme::FS_SECONDARY).color(theme::DIM));
+            ui.label(RichText::new(format!("{email} · {}", git::relative_time(time))).size(theme::FS_SECONDARY).color(theme::c().dim));
         });
     });
 }
@@ -323,14 +358,14 @@ pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected {
-        p.rect_filled(rect, CornerRadius::same(6), theme::SELECT);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().select);
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::HOVER);
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
     let y = rect.center().y;
     let col = theme::status_color(f.code);
     let badge = Rect::from_center_size(pos2(rect.left() + 14.0, y), vec2(18.0, 17.0));
-    p.rect_filled(badge, CornerRadius::same(4), theme::tint(col, theme::PANEL, 0.16));
+    p.rect_filled(badge, CornerRadius::same(4), theme::tint(col, theme::c().bg, 0.16));
     let letter = if f.code == '?' { 'A' } else { f.code };
     p.text(badge.center(), Align2::CENTER_CENTER, letter.to_string(), FontId::monospace(theme::FS_SMALL), col);
     let (dir, file) = match f.path.rsplit_once('/') {
@@ -340,17 +375,17 @@ pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str
     let show_btn = action.is_some() && (resp.hovered() || selected);
     let right = rect.right() - if show_btn { 72.0 } else { 6.0 };
     let x = rect.left() + 30.0;
-    let r = fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &file, theme::body(), if selected { theme::STRONG } else { theme::TEXT }, right - x);
+    let r = fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &file, theme::body(), if selected { theme::c().strong } else { theme::c().text }, right - x);
     if r.right() + 30.0 < right {
-        fit_text(p, pos2(r.right() + 6.0, y), Align2::LEFT_CENTER, &dir, theme::secondary(), theme::FAINT, right - r.right() - 6.0);
+        fit_text(p, pos2(r.right() + 6.0, y), Align2::LEFT_CENTER, &dir, theme::secondary(), theme::c().faint, right - r.right() - 6.0);
     }
     let mut clicked_btn = false;
     if let (Some(a), true) = (action, show_btn) {
         let br = Rect::from_min_max(pos2(rect.right() - 68.0, rect.top() + 3.0), pos2(rect.right() - 4.0, rect.bottom() - 3.0));
         let hovered = ui.rect_contains_pointer(br);
-        p.rect_filled(br, CornerRadius::same(5), if hovered { theme::ACCENT } else { theme::ELEVATED });
-        p.rect_stroke(br, CornerRadius::same(5), Stroke::new(1.0_f32, if hovered { theme::ACCENT } else { theme::BORDER_STRONG }), StrokeKind::Inside);
-        p.text(br.center(), Align2::CENTER_CENTER, a, theme::small(), theme::STRONG);
+        p.rect_filled(br, CornerRadius::same(5), if hovered { theme::c().accent } else { theme::c().elevated });
+        p.rect_stroke(br, CornerRadius::same(5), Stroke::new(1.0_f32, if hovered { theme::c().accent } else { theme::c().border_strong }), StrokeKind::Inside);
+        p.text(br.center(), Align2::CENTER_CENTER, a, theme::small(), if hovered { theme::c().on_accent } else { theme::c().strong });
         clicked_btn = resp.clicked() && hovered;
     }
     (resp, clicked_btn)
@@ -391,7 +426,7 @@ pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, cmds: &mut Vec<Cmd>) 
     }
     if !b.is_head {
         ui.separator();
-        if ui.button(RichText::new("Delete branch…").color(theme::DELETED)).clicked() {
+        if ui.button(RichText::new("Delete branch…").color(theme::c().deleted)).clicked() {
             // Opens the delete dialog, which also handles a worktree using the branch.
             cmds.push(Cmd::AskDeleteBranch(b.name.clone()));
         }
