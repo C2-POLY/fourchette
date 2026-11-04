@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn matches_name_group_and_folder() {
-        let e = Entry { path: PathBuf::from("/code/nova/site"), group: Some("Clients".into()), favorite: false, last_opened: 0, project: None };
+        let e = Entry { path: PathBuf::from("/code/nova/site"), group: Some("Clients".into()), favorite: false, last_opened: 0, project: None, details: None };
         assert!(matches("site", &e));
         assert!(matches("cli SITE", &e));
         assert!(matches("nova", &e));

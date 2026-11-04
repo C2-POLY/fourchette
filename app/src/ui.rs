@@ -120,6 +120,33 @@ pub fn appearance_button(ui: &mut Ui, a: theme::Appearance) -> egui::Response {
     resp
 }
 
+/// The status bar button for the details panel: a window outline with its right or bottom
+/// part filled where the panel sits, or empty when the panel is hidden.
+pub fn details_button(ui: &mut Ui, l: crate::library::DetailsLayout) -> egui::Response {
+    use crate::library::DetailsPlace;
+    let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 20.0), Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(5), theme::c().hover);
+    }
+    let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
+    let win = Rect::from_center_size(rect.center(), vec2(15.0, 12.0));
+    if !l.hidden {
+        let part = match l.place {
+            DetailsPlace::Right => Rect::from_min_max(pos2(win.right() - 5.5, win.top()), win.max),
+            DetailsPlace::Bottom => Rect::from_min_max(pos2(win.left(), win.bottom() - 4.5), win.max),
+        };
+        let r = 2;
+        let corners = match l.place {
+            DetailsPlace::Right => CornerRadius { nw: 0, ne: r, sw: 0, se: r },
+            DetailsPlace::Bottom => CornerRadius { nw: 0, ne: 0, sw: r, se: r },
+        };
+        p.rect_filled(part, corners, col);
+    }
+    p.rect_stroke(win, CornerRadius::same(2), Stroke::new(1.3_f32, col), StrokeKind::Inside);
+    resp
+}
+
 /// A round avatar with the author's initials.
 pub fn avatar(p: &egui::Painter, c: Pos2, r: f32, name: &str) {
     let col = theme::author_color(name);

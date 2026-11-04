@@ -91,6 +91,12 @@ impl App {
                 };
                 v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
             }
+            let d = self.details_layout;
+            for place in crate::library::DetailsPlace::ALL {
+                let hint = if !d.hidden && d.place == place { "current" } else { "" };
+                v.push(item("View", format!("Details panel: {}", place.label()), hint, Cmd::SetDetails(crate::library::DetailsLayout::shown(place))));
+            }
+            v.push(item("View", "Details panel: Hidden", if d.hidden { "current" } else { "⌘J" }, Cmd::SetDetails(d.hide())));
         }
         // ReferenceCommandProvider
         for r in &self.refs {
