@@ -30,6 +30,90 @@ pub const DEFAULT_MAX_COMMITS: usize = 100_000;
 /// The commit counts the Settings window offers.
 pub const MAX_COMMITS: [usize; 4] = [1_000, 10_000, 50_000, 100_000];
 
+/// The model Claude Code answers with (`claude -p --model <alias>`), for every Claude request.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClaudeModel {
+    /// Claude Code's own choice: no `--model`.
+    #[default]
+    Default,
+    Haiku,
+    Sonnet,
+    Opus,
+    Fable,
+}
+
+impl ClaudeModel {
+    pub const ALL: [ClaudeModel; 5] = [ClaudeModel::Default, ClaudeModel::Haiku, ClaudeModel::Sonnet, ClaudeModel::Opus, ClaudeModel::Fable];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            ClaudeModel::Default => "default",
+            ClaudeModel::Haiku => "haiku",
+            ClaudeModel::Sonnet => "sonnet",
+            ClaudeModel::Opus => "opus",
+            ClaudeModel::Fable => "fable",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ClaudeModel::Default => "Default",
+            ClaudeModel::Haiku => "Haiku",
+            ClaudeModel::Sonnet => "Sonnet",
+            ClaudeModel::Opus => "Opus",
+            ClaudeModel::Fable => "Fable",
+        }
+    }
+
+    /// What `--model` gets; none for Claude Code's own choice.
+    pub fn alias(self) -> Option<&'static str> {
+        match self {
+            ClaudeModel::Default => None,
+            m => Some(m.key()),
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<ClaudeModel> {
+        Self::ALL.into_iter().find(|m| m.key() == key)
+    }
+}
+
+/// The language Claude writes commit messages in (only commit messages).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CommitLanguage {
+    /// The language of the branch's last commit subjects, English when there is none.
+    #[default]
+    Auto,
+    English,
+    French,
+}
+
+impl CommitLanguage {
+    pub const ALL: [CommitLanguage; 3] = [CommitLanguage::Auto, CommitLanguage::English, CommitLanguage::French];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            CommitLanguage::Auto => "auto",
+            CommitLanguage::English => "english",
+            CommitLanguage::French => "french",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CommitLanguage::Auto => "Automatic",
+            CommitLanguage::English => "English",
+            CommitLanguage::French => "French",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<CommitLanguage> {
+        Self::ALL.into_iter().find(|l| l.key() == key)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// Fetch the open repository's remote in the background.
@@ -50,6 +134,10 @@ pub struct Settings {
     pub subject_high: usize,
     /// How many commits the history loads (`settings maxCommitCount <n>` in the palette sets it too).
     pub max_commits: usize,
+    /// The model of every Claude request.
+    pub claude_model: ClaudeModel,
+    /// The language of the commit messages Claude writes.
+    pub commit_language: CommitLanguage,
 }
 
 impl Default for Settings {
@@ -64,6 +152,8 @@ impl Default for Settings {
             subject_low: DEFAULT_SUBJECT_LOW,
             subject_high: DEFAULT_SUBJECT_HIGH,
             max_commits: DEFAULT_MAX_COMMITS,
+            claude_model: ClaudeModel::Default,
+            commit_language: CommitLanguage::Auto,
         }
     }
 }
@@ -88,6 +178,8 @@ impl Settings {
             subject_low: limits.0,
             subject_high: limits.1,
             max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
+            claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
+            commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
         }
     }
 
@@ -102,6 +194,8 @@ impl Settings {
             "subject_low": self.subject_low,
             "subject_high": self.subject_high,
             "max_commits": self.max_commits,
+            "claude_model": self.claude_model.key(),
+            "commit_language": self.commit_language.key(),
         })
     }
 
@@ -219,6 +313,35 @@ mod tests {
         }
         let s = Settings::from_json(&json!({"subject_low": 40}));
         assert_eq!((s.subject_low, s.subject_high), (50, 70));
+    }
+
+    #[test]
+    fn claude_settings_default_to_claude_codes_model_and_automatic() {
+        let d = Settings::default();
+        assert_eq!((d.claude_model, d.commit_language), (ClaudeModel::Default, CommitLanguage::Auto));
+        assert_eq!(ClaudeModel::ALL.map(ClaudeModel::label), ["Default", "Haiku", "Sonnet", "Opus", "Fable"]);
+        assert_eq!(ClaudeModel::ALL.map(ClaudeModel::alias), [None, Some("haiku"), Some("sonnet"), Some("opus"), Some("fable")]);
+        assert_eq!(CommitLanguage::ALL.map(CommitLanguage::label), ["Automatic", "English", "French"]);
+    }
+
+    #[test]
+    fn claude_settings_survive_a_round_trip_and_fall_back_one_by_one() {
+        for m in ClaudeModel::ALL {
+            for l in CommitLanguage::ALL {
+                let s = Settings { claude_model: m, commit_language: l, ..Settings::default() };
+                assert_eq!(Settings::from_json(&s.to_json()), s, "{m:?} {l:?}");
+            }
+        }
+        // A file saved before these settings existed gets the defaults and keeps the rest.
+        let old = Settings::from_json(&json!({"auto_fetch": false, "max_commits": 5_000}));
+        assert_eq!(old, Settings { auto_fetch: false, max_commits: 5_000, ..Settings::default() });
+        // An unknown name, another case or another type goes back to its default; the valid one next to it is kept.
+        for bad in [json!("gpt"), json!("Opus"), json!(""), json!(2), json!(null), json!(["opus"])] {
+            let s = Settings::from_json(&json!({"claude_model": bad, "commit_language": "french"}));
+            assert_eq!(s, Settings { commit_language: CommitLanguage::French, ..Settings::default() }, "{bad}");
+            let s = Settings::from_json(&json!({"claude_model": "haiku", "commit_language": bad}));
+            assert_eq!(s, Settings { claude_model: ClaudeModel::Haiku, ..Settings::default() }, "{bad}");
+        }
     }
 
     #[test]

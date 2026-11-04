@@ -2,6 +2,7 @@
 //! explanation, answered by Claude through the person's subscription (see crate::ai).
 use super::*;
 use crate::ai::{self, Advice, BranchFacts};
+use crate::settings::CommitLanguage;
 use egui::{vec2, Align, CornerRadius, Layout, Margin, RichText, Stroke};
 use serde_json::Value;
 
@@ -42,8 +43,9 @@ impl Tab {
         }
         let (tx, rx) = channel();
         let ctx = ctx.clone();
+        let model = self.claude_model;
         std::thread::spawn(move || {
-            let _ = tx.send(ai::ask(&prompt, ai::SYSTEM, schema.as_ref()));
+            let _ = tx.send(ai::ask(&prompt, ai::SYSTEM, schema.as_ref(), model));
             ctx.request_repaint();
         });
         self.ai.job = Some((job, rx));
@@ -84,7 +86,10 @@ impl Tab {
             self.notify("Stage some changes first, then Claude can describe them.", true);
             return;
         }
-        let prompt = ai::commit_message_prompt(&diff, self.amend, self.subject_limits.0, self.subject_limits.1, ai::PAGE_GUIDE_COLUMN);
+        // The automatic language reads the branch's last subjects, next to the diff; a fixed one needs none.
+        let recent = if self.commit_language == CommitLanguage::Auto { ai::recent_subjects(r) } else { Vec::new() };
+        let language = ai::language_rule(self.commit_language, &recent);
+        let prompt = ai::commit_message_prompt(&diff, self.amend, self.subject_limits.0, self.subject_limits.1, ai::PAGE_GUIDE_COLUMN, &language);
         self.ai_spawn(AiJob::CommitMessage, prompt, None, ctx);
     }
 
