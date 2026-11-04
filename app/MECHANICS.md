@@ -61,7 +61,7 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | Discard | Tracked files: reset through git with the paths on stdin. **Untracked files are moved to the Trash** (NSFileManager), not deleted | `sub_100053aac` [ev_86e3bc3d] |
 | Locked repository | On `index.lock': File exists.` it retries up to **3** times, waiting **0.5 s × attempt** ("Retrying in %.1f") | `sub_100053aac` |
 | Auto status refresh | Refreshes when more than "automaticStatusUpdateInterval" seconds passed (default **60**; 60.0 is also the fallback) | `sub_10048580c` [ev_28a44267] |
-| Auto fetch | "fetchRemotesAutomatically" on by default; a timer (`updateTimerTick:`) fetches each open repository | `sub_10049189c` [ev_7c550d93], `sub_100490a98` |
+| Auto fetch | "fetchRemotesAutomatically" on by default; a timer (`updateTimerTick:`) fetches each open repository. In the rebuild it is a user setting (Settings window, ⌘,): on or off, every 5, 10, 30 or 60 minutes | `sub_10049189c` [ev_7c550d93], `sub_100490a98` |
 
 ## Settings and their defaults (`sub_10031b7cc`, registerDefaults) [ev_ce11436f]
 
@@ -69,7 +69,7 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 |---|---|---|
 | useTopologicalCommitOrder | true | history uses `--topo-order` |
 | maxCommitCount | 100000 (`0x186a0`) | commit limit |
-| fetchRemotesAutomatically | true | auto fetch on |
+| fetchRemotesAutomatically | true | auto fetch on by default; a user setting (Settings window) |
 | automaticStatusUpdateInterval | 60 (s) | status refresh every 60 s |
 | commitSubjectLimitLow / High | 50 / 70 | subject counter turns orange above 50, red above 70 |
 | compactBranchLabels | true | 2 px gap between branch labels |
@@ -85,7 +85,15 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 
 Not found in code (*estimated*): how often the automatic fetch runs (the timer interval was not
 located; the two other timers in this area are 0.05 s and 0.2 s debounces, `sub_1003ade30`,
-`sub_1004739bc`) — the rebuild uses 10 minutes. The exact git command Pull runs was not located.
+`sub_1004739bc`) — the rebuild uses 10 minutes by default, and the person can pick 5, 10, 30 or 60
+in the Settings window. The exact git command Pull runs was not located.
+
+## User settings (issue #16)
+
+The Settings window (⌘, or "Settings…" in the palette, Esc to close) holds the appearance and the
+automatic fetch (on/off and its interval). Choices apply at once and are kept in repos.json:
+`"appearance"` as before, and a `"settings"` object (`"auto_fetch"`, `"fetch_minutes"`). A missing
+or invalid key falls back to its default (on, 10 minutes) without touching the repository list.
 
 ## Screens (from the compiled layouts in Resources/*.nib)
 
@@ -225,7 +233,7 @@ Linear. These are design choices, not values from the original:
 * Colours: the original 9-colour palette is kept for branches; the window uses near-black
   surfaces, subtle borders and one indigo accent. Text uses a four-size scale (11, 12, 13, 15).
 * Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
-  palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
+  Settings window, the palette or with the status bar button and kept in repos.json (`"appearance"`). The light mode
   uses white surfaces and deepens the branch colours by 20% so they stay readable.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).

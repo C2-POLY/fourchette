@@ -5,6 +5,7 @@ mod git;
 mod github;
 mod graph;
 mod library;
+mod settings;
 mod theme;
 mod ui;
 mod undo;

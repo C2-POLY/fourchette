@@ -758,7 +758,8 @@ impl App {
             ui.label(RichText::new(&d.title).size(theme::FS_BODY).color(theme::c().strong));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
-                if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                // Esc belongs to the Settings window while it is open.
+                if ui.button("Close").clicked() || (!self.settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
                     cmds.push(Cmd::CloseDiff);
                 }
             });
@@ -989,6 +990,14 @@ impl App {
         if self.dialog.is_some() {
             return;
         }
+        // ⌘, opens or closes Settings; while it is open, it takes the keyboard.
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Comma)) {
+            cmds.push(Cmd::Settings);
+            return;
+        }
+        if self.settings_open {
+            return;
+        }
         // ⌘K opens the command palette from anywhere.
         if ctx.input(|i| i.modifiers.command && (i.key_pressed(Key::K) || i.key_pressed(Key::P))) {
             cmds.push(Cmd::Palette);
@@ -1151,6 +1160,7 @@ impl eframe::App for App {
         self.palette_ui(ctx, &mut cmds);
         if self.dialog.is_none() {
             self.switcher_ui(ctx, &mut cmds);
+            self.settings_ui(ctx, &mut cmds);
         }
 
         if let Some((msg, err, at)) = &self.toast {
