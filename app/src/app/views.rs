@@ -348,7 +348,7 @@ impl Tab {
         {
             let p = ui.painter();
             p.rect_filled(hrect, CornerRadius::ZERO, theme::c().bg);
-            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0, theme::c().border));
+            p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0_f32, theme::c().border));
             let y = hrect.center().y;
             let f = theme::small();
             p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "Branch", f.clone(), theme::c().faint);
