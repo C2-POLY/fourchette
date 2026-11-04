@@ -63,7 +63,10 @@ pub enum Dialog {
 pub enum Cmd {
     Git { label: String, args: Vec<String>, network: bool },
     Fetch { all: bool, quiet: bool },
+    /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
+    /// A stash's Apply: `stash apply`, or `stash pop` when "Delete stash after Apply" is on.
+    ApplyStash(String),
     Push,
     Discard { path: String, untracked: bool },
     Select(Sel),
@@ -139,6 +142,14 @@ impl Cmd {
     }
 
     /// The toolbar's Pop.
+    /// A stash's Apply, which also deletes it when `delete` ("deleteStashAfterApply"). `pop`
+    /// deletes it only once applied without conflicts, and through `Tab::git` it takes a
+    /// snapshot, so Undo stores the stash again.
+    pub fn apply_stash(name: &str, delete: bool) -> Cmd {
+        let (label, verb) = if delete { ("Stash applied and deleted", "pop") } else { ("Stash applied", "apply") };
+        Cmd::Git { label: label.into(), args: vec!["stash".into(), verb.into(), name.into()], network: false }
+    }
+
     pub fn pop_stash() -> Cmd {
         Cmd::Git { label: "Stash applied".into(), args: vec!["stash".into(), "pop".into()], network: false }
     }
@@ -429,6 +440,14 @@ impl App {
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
                 Cmd::Board => self.board_toggle(),
+                Cmd::Pull => {
+                    let s = self.library.settings;
+                    self.tab_mut().pull(ctx, s);
+                }
+                Cmd::ApplyStash(name) => {
+                    let c = Cmd::apply_stash(&name, self.library.settings.delete_stash_after_apply);
+                    self.tab_mut().run(c, ctx);
+                }
                 c => self.tab_mut().run(c, ctx),
             }
             // Each command's message in turn, so the last one shown is the last one said.
