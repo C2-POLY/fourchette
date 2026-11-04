@@ -284,11 +284,11 @@ fn checkbox_icon(p: &egui::Painter, c: Pos2, done: bool) {
     let r = Rect::from_center_size(c, vec2(12.0, 12.0));
     if done {
         p.rect_filled(r, CornerRadius::same(3), theme::c().accent);
-        let s = Stroke::new(1.6, theme::c().on_accent);
+        let s = Stroke::new(1.6_f32, theme::c().on_accent);
         p.line_segment([c + vec2(-3.0, 0.2), c + vec2(-0.8, 2.5)], s);
         p.line_segment([c + vec2(-0.8, 2.5), c + vec2(3.2, -2.5)], s);
     } else {
-        p.rect_stroke(r, CornerRadius::same(3), Stroke::new(1.2, theme::c().dim), StrokeKind::Inside);
+        p.rect_stroke(r, CornerRadius::same(3), Stroke::new(1.2_f32, theme::c().dim), StrokeKind::Inside);
     }
 }
 
@@ -307,7 +307,7 @@ fn markdown(ui: &mut Ui, body: &str) {
                 ui.add(egui::Label::new(g).selectable(false));
                 if level <= 2 {
                     let y = ui.cursor().top();
-                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
+                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, theme::c().border));
                     ui.add_space(4.0);
                 }
             }
@@ -344,7 +344,7 @@ fn markdown(ui: &mut Ui, body: &str) {
             Block::Rule => {
                 ui.add_space(4.0);
                 let y = ui.cursor().top();
-                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
+                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, theme::c().border));
                 ui.add_space(6.0);
             }
         }
@@ -384,7 +384,7 @@ fn label_pill(ui: &mut Ui, l: &github::Label) {
     let r = pill(ui, &l.name, readable_on(c), c, None);
     // Pale labels would melt into a white card.
     if theme::is_light() {
-        ui.painter().rect_stroke(r.rect, CornerRadius::same(9), Stroke::new(1.0, theme::c().border_strong), StrokeKind::Inside);
+        ui.painter().rect_stroke(r.rect, CornerRadius::same(9), Stroke::new(1.0_f32, theme::c().border_strong), StrokeKind::Inside);
     }
 }
 
@@ -397,20 +397,20 @@ fn field_chip(ui: &mut Ui, f: &github::Field) {
 fn pr_icon(p: &egui::Painter, c: Pos2, color: Color32) {
     p.circle_filled(c + vec2(-3.0, -3.0), 2.0, color);
     p.circle_filled(c + vec2(3.0, 3.5), 2.0, color);
-    p.circle_stroke(c + vec2(3.0, -3.5), 1.6, Stroke::new(1.2, color));
-    p.line_segment([c + vec2(-3.0, -3.0), c + vec2(-3.0, 4.5)], Stroke::new(1.3, color));
-    p.line_segment([c + vec2(3.0, -2.0), c + vec2(3.0, 3.5)], Stroke::new(1.3, color));
+    p.circle_stroke(c + vec2(3.0, -3.5), 1.6, Stroke::new(1.2_f32, color));
+    p.line_segment([c + vec2(-3.0, -3.0), c + vec2(-3.0, 4.5)], Stroke::new(1.3_f32, color));
+    p.line_segment([c + vec2(3.0, -2.0), c + vec2(3.0, 3.5)], Stroke::new(1.3_f32, color));
 }
 
 /// An issue's state symbol: a ring when open, a filled disc with a tick when closed.
 fn issue_icon(p: &egui::Painter, c: Pos2, closed: bool) {
     if closed {
         p.circle_filled(c, 6.0, theme::c().renamed);
-        let s = Stroke::new(1.5, theme::c().on_accent);
+        let s = Stroke::new(1.5_f32, theme::c().on_accent);
         p.line_segment([c + vec2(-2.8, 0.2), c + vec2(-0.8, 2.3)], s);
         p.line_segment([c + vec2(-0.8, 2.3), c + vec2(2.8, -2.0)], s);
     } else {
-        p.circle_stroke(c, 5.5, Stroke::new(1.5, theme::c().added));
+        p.circle_stroke(c, 5.5, Stroke::new(1.5_f32, theme::c().added));
         p.circle_filled(c, 1.7, theme::c().added);
     }
 }
@@ -471,7 +471,7 @@ fn close_button(ui: &mut Ui) -> Response {
     if resp.hovered() {
         p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
     }
-    let s = Stroke::new(1.6, if resp.hovered() { theme::c().strong } else { theme::c().dim });
+    let s = Stroke::new(1.6_f32, if resp.hovered() { theme::c().strong } else { theme::c().dim });
     let c = rect.center();
     p.line_segment([c + vec2(-4.5, -4.5), c + vec2(4.5, 4.5)], s);
     p.line_segment([c + vec2(-4.5, 4.5), c + vec2(4.5, -4.5)], s);
@@ -491,7 +491,7 @@ fn refresh_button(ui: &mut Ui, loading: bool) -> Response {
     let pts: Vec<Pos2> = (0..=20).map(|k| c + egui::Vec2::angled(spin - 0.4 + k as f32 / 20.0 * 5.0) * 6.5).collect();
     let end = *pts.last().unwrap_or(&c);
     let dir = egui::Vec2::angled(spin - 0.4 + 5.0 + std::f32::consts::FRAC_PI_2);
-    p.add(egui::Shape::line(pts, Stroke::new(1.6, col)));
+    p.add(egui::Shape::line(pts, Stroke::new(1.6_f32, col)));
     p.add(egui::Shape::convex_polygon(vec![end + dir * 3.5, end + dir.rot90() * 3.0, end - dir.rot90() * 3.0], col, Stroke::NONE));
     resp.on_hover_text("Read the project again")
 }
@@ -502,7 +502,7 @@ fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
     let widths: Vec<f32> = options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).collect();
     let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum::<f32>() + 4.0, 28.0), Sense::hover());
     ui.painter().rect_filled(rect, CornerRadius::same(8), theme::c().input);
-    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, theme::c().border), StrokeKind::Inside);
+    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, theme::c().border), StrokeKind::Inside);
     let mut x = rect.left() + 2.0;
     let mut picked = None;
     for (i, (o, w)) in options.iter().zip(&widths).enumerate() {
@@ -530,7 +530,7 @@ fn parent_line(ui: &mut Ui, parent: &Linked, size: f32) -> Response {
     let col = if hot { theme::c().accent } else { theme::c().dim };
     let p = ui.painter();
     let (x, y) = (rect.left() + 2.0, rect.center().y);
-    let s = Stroke::new(1.3, col);
+    let s = Stroke::new(1.3_f32, col);
     p.line_segment([pos2(x + 1.0, y - 5.0), pos2(x + 1.0, y)], s);
     p.line_segment([pos2(x + 1.0, y), pos2(x + 9.0, y)], s);
     p.line_segment([pos2(x + 9.0, y), pos2(x + 6.0, y - 3.0)], s);
@@ -551,12 +551,12 @@ fn toggle_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
     let p = ui.painter();
     let fill = if on { theme::c().select } else if resp.hovered() { theme::c().hover } else { theme::c().input };
     p.rect_filled(rect, CornerRadius::same(8), fill);
-    p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, if on { theme::c().accent } else { theme::c().border }), StrokeKind::Inside);
+    p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, if on { theme::c().accent } else { theme::c().border }), StrokeKind::Inside);
     // A small person: head and shoulders.
     let c = pos2(rect.left() + 13.0, rect.center().y);
     let col = if on { theme::c().strong } else { theme::c().dim };
     p.circle_filled(c + vec2(0.0, -3.0), 2.6, col);
-    p.add(egui::epaint::CubicBezierShape::from_points_stroke([c + vec2(-4.5, 5.0), c + vec2(-4.0, 0.5), c + vec2(4.0, 0.5), c + vec2(4.5, 5.0)], false, Color32::TRANSPARENT, Stroke::new(1.5, col)));
+    p.add(egui::epaint::CubicBezierShape::from_points_stroke([c + vec2(-4.5, 5.0), c + vec2(-4.0, 0.5), c + vec2(4.0, 0.5), c + vec2(4.5, 5.0)], false, Color32::TRANSPARENT, Stroke::new(1.5_f32, col)));
     p.text(pos2(rect.left() + 22.0, rect.center().y), Align2::LEFT_CENTER, text, font, if on { theme::c().strong } else { theme::c().dim });
     resp
 }
@@ -659,7 +659,7 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
         let (rect, _) = ui.allocate_exact_size(vec2(64.0, 52.0), Sense::hover());
         let p = ui.painter();
         p.rect_filled(rect, CornerRadius::same(10), theme::c().elevated);
-        p.rect_stroke(rect, CornerRadius::same(10), Stroke::new(1.0, theme::c().border), StrokeKind::Inside);
+        p.rect_stroke(rect, CornerRadius::same(10), Stroke::new(1.0_f32, theme::c().border), StrokeKind::Inside);
         board_icon(p, rect.center() + vec2(1.0, 2.0), theme::c().faint);
         ui.add_space(14.0);
         ui.label(RichText::new(title).size(16.0).color(theme::c().strong));
@@ -678,7 +678,7 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
 /// covers the whole card, so the caller tells a click on the parent apart by where it landed.
 fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, Option<Rect>) {
     let mut parent_rect = None;
-    let mut prepared = egui::Frame::new().fill(card_fill()).stroke(Stroke::new(1.0, theme::c().border)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
+    let mut prepared = egui::Frame::new().fill(card_fill()).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
     {
         let ui = &mut prepared.content_ui;
         ui.set_width(ui.available_width());
@@ -746,11 +746,11 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
     let outer = prepared.content_ui.min_rect().expand(10.0);
     let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click());
     if selected {
-        prepared.frame.stroke = Stroke::new(1.5, theme::c().accent);
+        prepared.frame.stroke = Stroke::new(1.5_f32, theme::c().accent);
         prepared.frame.fill = card_hover();
     } else if resp.contains_pointer() {
         prepared.frame.fill = card_hover();
-        prepared.frame.stroke = Stroke::new(1.0, theme::c().widget_hover_border);
+        prepared.frame.stroke = Stroke::new(1.0_f32, theme::c().widget_hover_border);
     }
     prepared.end(ui);
     (resp, parent_rect)
@@ -851,7 +851,7 @@ impl Tab {
                     let done = github::is_done(status);
                     let limit = if done && !self.board.done_all.contains(status) { DONE_LIMIT } else { usize::MAX };
                     ui.allocate_ui_with_layout(vec2(COL_W, h), Layout::top_down(Align::Min), |ui| {
-                        let frame = egui::Frame::new().fill(column_fill()).stroke(Stroke::new(1.0, theme::c().border)).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
+                        let frame = egui::Frame::new().fill(column_fill()).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
                         frame.show(ui, |ui| {
                             ui.set_min_size(vec2(COL_W - 18.0, h - 10.0));
                             ui.set_max_width(COL_W - 18.0);
@@ -1111,7 +1111,7 @@ impl Tab {
 
             ui.add_space(14.0);
             let y = ui.cursor().top();
-            ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, theme::c().border));
+            ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, theme::c().border));
             ui.add_space(10.0);
             if it.body.trim().is_empty() {
                 ui.label(RichText::new("No description.").italics().color(theme::c().faint));
