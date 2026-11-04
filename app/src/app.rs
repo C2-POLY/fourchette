@@ -115,7 +115,7 @@ pub enum Cmd {
     OpenUrl(String),
     ProjectReload,
     ProjectPick(usize),
-    /// Open or close the project board (⌘B).
+    /// Go to the Project view, or back to the history (⌘B).
     Board,
 }
 
@@ -320,6 +320,10 @@ impl App {
         }
         if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
             app.switcher = Some(repos::Switcher::default());
+        }
+        if std::env::var("FOURCHETTE_BOARD_LIST").is_ok() {
+            app.board.open = true;
+            app.board.list = true;
         }
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD") {
             app.board.open = true;
@@ -558,6 +562,7 @@ impl App {
                 Cmd::Select(s) => {
                     self.sel = s;
                     self.diff = None;
+                    self.board.open = false;
                 }
                 Cmd::SelectHash(h) => {
                     if let Some(&i) = self.index.get(&h) {
@@ -565,6 +570,7 @@ impl App {
                         self.scroll_to = Some(i);
                         self.diff = None;
                     }
+                    self.board.open = false;
                 }
                 Cmd::Diff(req) => self.open_diff(req),
                 Cmd::CloseDiff => self.diff = None,

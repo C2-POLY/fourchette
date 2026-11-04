@@ -194,6 +194,9 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
     if let Some(c) = color {
         p.circle_filled(pos2(x + 3.0, y), 3.5, c);
         x += 15.0;
+    } else if kind == "project" {
+        board_icon(p, pos2(x + 5.0, y), theme::c().faint);
+        x += 20.0;
     } else if kind != "remote" {
         p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::c().faint);
         x += 20.0;
@@ -572,5 +575,16 @@ pub fn commit_menu(ui: &mut Ui, hash: &str, subject: &str, branch: Option<&str>,
     }
     if ui.button("Copy message").clicked() {
         cmds.push(Cmd::Copy(subject.into()));
+    }
+}
+
+/// The board symbol: a frame cut in three columns with a card or two in each.
+pub fn board_icon(p: &egui::Painter, c: egui::Pos2, color: Color32) {
+    for (i, cards) in [2, 1, 3].iter().enumerate() {
+        let x = c.x - 9.0 + i as f32 * 6.5;
+        for k in 0..*cards {
+            let r = egui::Rect::from_min_size(pos2(x, c.y - 7.0 + k as f32 * 5.0), vec2(5.0, 3.6));
+            p.rect_filled(r, CornerRadius::same(1), color);
+        }
     }
 }
