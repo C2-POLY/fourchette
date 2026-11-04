@@ -113,12 +113,14 @@ repository list.
 Decoded from `Fork.app/Contents/Resources/Base.lproj/MainMenu.nib` (`investigation.cany/evidence/1c/`):
 menus **Fork, File, Edit, View, Repository, Window, Help**, 137 items. Fourchette keeps that order and
 those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what it doesn't have
-(New Window/Tab, Clone, Git Flow, Git LFS, Bisect, Apply Patch, Treemap, Statistics, Accounts, SSH keys…).
+(New Window, Clone, Git Flow, Git LFS, Bisect, Apply Patch, Treemap, Statistics, Accounts, SSH keys…).
 
 | Original item (action) | Shortcut | Fourchette |
 |---|---|---|
 | Preferences… (`preferences:`) | ⌘, | Settings… → `Cmd::Settings` |
 | Hide / Hide Others / Show All / Quit | ⌘H, ⌥⌘H, —, ⌘Q | the same AppKit actions |
+| File > New Tab (`newWindowForTab:`) | ⌘T | New Tab: the switcher, and the pick opens in a new tab (issue #59) |
+| File > Close (`performClose:`) | ⌘W | Close Tab: the active tab, never the last |
 | File > Open… (`openRepository:`) | ⌘O | Open Repository… (no key: ⌘O is Fourchette's switcher) |
 | File > Open Recent | — | Open Recent, from the repository list |
 | File > Quick Launch… (`showQuickOpenWindow:`) | ⌘P | Command Palette… ⌘P (⌘K also opens it) |
@@ -136,6 +138,7 @@ those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what
 | New Branch… / New Tag… | ⇧⌘B / ⇧⌘T | the new branch / tag dialog at HEAD |
 | Show in Finder / Open in Terminal | ⌃⌘O / ⌃⌘T | the same |
 | Window > Minimize / Zoom / Bring All to Front | ⌘M | the same AppKit actions |
+| Window > Show Previous / Next Tab (added by macOS for its tabs) | ⌃⇧Tab / ⌃Tab | the same names, with Safari's ⇧⌘[ / ⇧⌘]; ⌃Tab and ⌃⇧Tab work too |
 | Help > Issue Tracker, Website | — | Fourchette on GitHub, Report an Issue |
 
 ## Window frame (no title bar, issue #53)

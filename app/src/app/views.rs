@@ -44,11 +44,7 @@ impl Tab {
         ui.horizontal_centered(|ui| {
             // Room for the red, yellow and green buttons, which sit on the toolbar.
             ui.add_space(crate::titlebar::inset(fullscreen).max(6.0));
-            let name = self.repo.as_ref().map(|r| r.name()).unwrap_or_else(|| "sample-project".into());
-            if toolbar_pill(ui, "repository", &name).on_hover_text("Switch repository (⌘O)").clicked() {
-                cmds.push(Cmd::Switcher);
-            }
-            ui.label(RichText::new("/").color(theme::c().border_strong).size(theme::FS_TITLE));
+            // The repository is the tab's (⌘O switches it); the branch menu comes first.
             let br = self.branch.clone().unwrap_or_else(|| format!("detached at {}", short(&self.head)));
             // Like the original's status view, the branch button opens Quick Launch in checkout mode.
             if toolbar_pill(ui, "branch", &br).on_hover_text("Check out another branch").clicked() {
@@ -1157,6 +1153,7 @@ impl App {
     fn menu_state(&self, ctx: &egui::Context) -> menu::State {
         let t = self.tab();
         menu::State {
+            tabs: self.tabs.len(),
             repo: t.repo.is_some(),
             busy: t.busy.is_some(),
             modal: t.dialog.is_some(),
@@ -1206,6 +1203,10 @@ impl App {
             Id::OpenInTerminal => Cmd::OpenTerminal(root()?),
             Id::Website => Cmd::OpenUrl(menu::REPO_URL.into()),
             Id::Issues => Cmd::OpenUrl(menu::ISSUES_URL.into()),
+            Id::NewTab => Cmd::NewTab,
+            Id::CloseTab => Cmd::CloseTab(self.active),
+            Id::NextTab => Cmd::ShowTab { next: true },
+            Id::PrevTab => Cmd::ShowTab { next: false },
         })
     }
 
@@ -1262,6 +1263,25 @@ impl eframe::App for App {
     /// copies text selected in a label), the others as the `Cmd` of their button.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let text = ctx.wants_keyboard_input();
+        // Tab keys, taken before egui sees them (⌃Tab would otherwise move the focus). A dialog
+        // or the Settings window keeps the keyboard, as it greys out the menu items.
+        if self.tab().dialog.is_none() && !self.settings_open {
+            let active = self.active;
+            let mut keys = Vec::new();
+            raw.events.retain(|e| match e {
+                egui::Event::Key { key, pressed, modifiers, .. } => match tabs::TabKey::of(*key, *modifiers) {
+                    Some(k) => {
+                        if *pressed {
+                            keys.push(k.cmd(active));
+                        }
+                        false
+                    }
+                    None => true,
+                },
+                _ => true,
+            });
+            self.menu_cmds.extend(keys);
+        }
         for pick in menu::take() {
             match pick {
                 menu::Pick::Recent(n) => self.menu_cmds.extend(self.library.recent().get(n).map(|e| Cmd::Open(e.path.clone()))),
@@ -1290,7 +1310,19 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("toolbar")
             .exact_height(crate::titlebar::TOOLBAR_H)
             .frame(egui::Frame::new().fill(theme::c().sidebar))
-            .show(ctx, |ui| self.tab_mut().toolbar(ui, &mut cmds));
+            .show(ctx, |ui| {
+                let key = self.tab().key;
+                ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds));
+            });
+
+        // The tabs, from two on (issue #59): with one, the window looks as before tabs.
+        if self.tabs.len() > 1 {
+            egui::TopBottomPanel::top("tabs")
+                .exact_height(tabs::STRIP_H)
+                .show_separator_line(false)
+                .frame(egui::Frame::new().fill(theme::c().sidebar))
+                .show(ctx, |ui| self.tab_strip(ui, &mut cmds));
+        }
 
         egui::TopBottomPanel::bottom("status")
             .exact_height(28.0)
@@ -1341,7 +1373,11 @@ impl eframe::App for App {
         .default_width(230.0)
         .width_range(190.0..=420.0)
         .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
-        .show(ctx, |ui| self.tab_mut().sidebar(ui, &mut cmds));
+        .show(ctx, |ui| {
+            // Each tab's own id scope keeps its scroll positions and text fields apart.
+            let key = self.tab().key;
+            ui.push_id(key, |ui| self.tab_mut().sidebar(ui, &mut cmds));
+        });
 
         // Declared after the sidebar, so at the bottom it spans the history only.
         let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
@@ -1353,7 +1389,10 @@ impl eframe::App for App {
                     .default_width(330.0)
                     .width_range(280.0..=600.0)
                     .frame(details_frame)
-                    .show(ctx, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                    .show(ctx, |ui| {
+                        let key = self.tab().key;
+                        ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                    });
             }
             DetailsLayout { place: DetailsPlace::Bottom, .. } => {
                 let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
@@ -1362,13 +1401,16 @@ impl eframe::App for App {
                     .default_height(300.0)
                     .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
                     .frame(details_frame)
-                    .show(ctx, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                    .show(ctx, |ui| {
+                        let key = self.tab().key;
+                        ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                    });
             }
         }
 
         let settings_open = self.settings_open;
         let t = &mut self.tabs[self.active];
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
             if board_open {
                 t.board_view(ui, &mut cmds);
                 return;
@@ -1392,7 +1434,7 @@ impl eframe::App for App {
             } else {
                 t.commit_list(ui, &mut cmds);
             }
-        });
+        }));
 
         let t = self.tab_mut();
         t.dialogs(ctx, &mut cmds);

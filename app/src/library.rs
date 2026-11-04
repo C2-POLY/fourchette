@@ -133,7 +133,29 @@ pub struct Library {
     pub settings: Settings,
     /// The app's colours and icon, chosen in Settings or the palette.
     pub variant: Variant,
+    /// The repositories open in tabs, in order, brought back at launch.
+    pub tabs: Vec<PathBuf>,
+    /// The tab on screen, an index of `tabs`.
+    pub active_tab: usize,
     file: Option<PathBuf>,
+}
+
+/// The saved tabs whose folder `exists`, without repeats, and where the saved active tab
+/// lands among them: on its repository, else on the tab before it, else on the first.
+pub fn restore_tabs(tabs: &[PathBuf], active: usize, exists: impl Fn(&Path) -> bool) -> (Vec<PathBuf>, usize) {
+    let mut out: Vec<PathBuf> = Vec::new();
+    let mut at = None;
+    for (k, p) in tabs.iter().enumerate() {
+        let kept = exists(p);
+        if kept && !out.contains(p) {
+            out.push(p.clone());
+        }
+        if k == active {
+            at = Some(if kept { out.iter().position(|o| o == p).unwrap_or(0) } else { out.len().saturating_sub(1) });
+        }
+    }
+    let last = out.len().saturating_sub(1);
+    (out, at.unwrap_or(last))
 }
 
 fn support_dir() -> Option<PathBuf> {
@@ -189,7 +211,10 @@ impl Library {
         let appearance = legacy_setting(&v, "appearance", Appearance::parse).unwrap_or_default();
         let settings = Settings::from_json(&v["settings"]);
         let variant = legacy_setting(&v, "variant", Variant::parse).unwrap_or_default();
-        Library { entries, appearance, variant, settings, file: Some(file.to_path_buf()) }
+        // "tabs": {"open": [paths], "active": n}; files written before tabs (issue #59) have none.
+        let tabs = v["tabs"]["open"].as_array().map(|a| a.iter().filter_map(|p| p.as_str()).map(PathBuf::from).collect()).unwrap_or_default();
+        let active_tab = v["tabs"]["active"].as_u64().unwrap_or(0) as usize;
+        Library { entries, appearance, variant, settings, tabs, active_tab, file: Some(file.to_path_buf()) }
     }
 
     pub fn save(&self) {
@@ -213,7 +238,8 @@ impl Library {
         let mut settings = self.settings.to_json();
         settings["appearance"] = json!(self.appearance.key());
         settings["variant"] = json!(self.variant.key());
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos})).unwrap_or_default());
+        let tabs = json!({"open": self.tabs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(), "active": self.active_tab});
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -256,6 +282,11 @@ impl Library {
         if let Some(e) = self.get_mut(path) {
             e.project = project;
         }
+    }
+
+    /// The saved tabs that can still be opened, and the active one among them.
+    pub fn restored_tabs(&self) -> (Vec<PathBuf>, usize) {
+        restore_tabs(&self.tabs, self.active_tab, |p| p.exists())
     }
 
     /// The details panel layout of a repository: on the right until the person moves it.
@@ -592,5 +623,62 @@ mod tests {
             assert_eq!(Library::read(&file).settings, Settings::default(), "{bad}");
         }
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn open_tabs_survive_a_save_and_an_old_file_has_none() {
+        let d = tmp("tabs");
+        let file = d.join("repos.json");
+        // A file written before tabs: no "tabs" key, everything else kept.
+        std::fs::write(&file, r#"{"version": 1, "settings": {"appearance": "dark"}, "repos": [{"path": "/code/work/api", "favorite": true}]}"#).unwrap();
+        let old = Library::read(&file);
+        assert_eq!((old.tabs.len(), old.active_tab), (0, 0));
+        assert_eq!((old.entries.len(), old.appearance), (1, Appearance::Dark));
+        assert_eq!(old.restored_tabs(), (vec![], 0));
+
+        let (a, b, c) = (d.join("a"), d.join("b"), d.join("c"));
+        for p in [&a, &b, &c] {
+            std::fs::create_dir_all(p).unwrap();
+        }
+        let mut lib = old;
+        lib.tabs = vec![a.clone(), b.clone(), c.clone()];
+        lib.active_tab = 2;
+        lib.save();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(v["tabs"]["open"].as_array().map(Vec::len), Some(3));
+        assert_eq!(v["tabs"]["active"], 2);
+        let back = Library::read(&file);
+        assert_eq!((back.tabs.clone(), back.active_tab), (vec![a.clone(), b.clone(), c.clone()], 2));
+        assert_eq!(back.entries.len(), 1, "the repos are untouched");
+        assert_eq!(back.restored_tabs(), (vec![a.clone(), b.clone(), c.clone()], 2));
+
+        // A folder gone since: skipped, and the active tab moves to the one before it.
+        std::fs::remove_dir_all(&c).unwrap();
+        assert_eq!(Library::read(&file).restored_tabs(), (vec![a, b], 1));
+
+        // Tabs of the wrong shape read as none.
+        for bad in [r#""a""#, "[1, 2]", r#"{"open": "x", "active": "y"}"#] {
+            std::fs::write(&file, format!(r#"{{"version": 1, "tabs": {bad}, "repos": [{{"path": "/x/y"}}]}}"#)).unwrap();
+            let lib = Library::read(&file);
+            assert_eq!((lib.tabs.len(), lib.active_tab, lib.entries.len()), (0, 0, 1), "{bad}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn restored_tabs_skip_missing_folders_and_repeats() {
+        let p = |s: &str| PathBuf::from(s);
+        let tabs = [p("/a"), p("/gone"), p("/b"), p("/a"), p("/c")];
+        let exists = |x: &Path| x != Path::new("/gone");
+        assert_eq!(restore_tabs(&tabs, 0, exists), (vec![p("/a"), p("/b"), p("/c")], 0));
+        // The active one is gone: the tab before it.
+        assert_eq!(restore_tabs(&tabs, 1, exists).1, 0);
+        assert_eq!(restore_tabs(&tabs, 2, exists).1, 1);
+        // A repeat of /a was active: the tab of /a.
+        assert_eq!(restore_tabs(&tabs, 3, exists).1, 0);
+        assert_eq!(restore_tabs(&tabs, 4, exists).1, 2);
+        // An index past the end keeps the last tab; nothing left gives nothing.
+        assert_eq!(restore_tabs(&tabs, 99, exists).1, 2);
+        assert_eq!(restore_tabs(&[p("/gone")], 0, exists), (vec![], 0));
     }
 }
