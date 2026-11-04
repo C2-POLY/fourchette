@@ -48,6 +48,9 @@ pub struct Tab {
     /// The diff context and the subject limits of the settings, copied here each frame by `poll_tabs`.
     pub(super) diff_context: u32,
     pub(super) subject_limits: (usize, usize),
+    /// The Claude model and the commit-message language of the settings, copied the same way.
+    pub(super) claude_model: crate::settings::ClaudeModel,
+    pub(super) commit_language: crate::settings::CommitLanguage,
     /// What the open diff shows, to draw it again when the context changes.
     pub(super) diff_req: Option<DiffReq>,
     pub(super) ai: assistant::AiState,
@@ -113,6 +116,8 @@ impl Tab {
             commit_limit: COMMIT_LIMIT,
             diff_context: git::DIFF_CONTEXT,
             subject_limits: (SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH),
+            claude_model: Default::default(),
+            commit_language: Default::default(),
             diff_req: None,
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
@@ -190,6 +195,8 @@ impl Tab {
     /// commit limit reads the history again.
     fn apply_settings(&mut self, s: crate::settings::Settings) {
         self.subject_limits = (s.subject_low, s.subject_high);
+        self.claude_model = s.claude_model;
+        self.commit_language = s.commit_language;
         if self.diff_context != s.diff_context {
             self.diff_context = s.diff_context;
             if let Some(req) = self.diff_req.clone().filter(|_| self.diff.is_some()) {
@@ -796,10 +803,12 @@ mod tests {
     #[test]
     fn settings_reach_every_tab_the_limit_included() {
         let mut t = tabs(2);
-        let s = crate::settings::Settings { max_commits: 5_000, subject_low: 40, subject_high: 60, ..Default::default() };
+        use crate::settings::{ClaudeModel, CommitLanguage};
+        let s = crate::settings::Settings { max_commits: 5_000, subject_low: 40, subject_high: 60, claude_model: ClaudeModel::Opus, commit_language: CommitLanguage::French, ..Default::default() };
         poll_tabs(&mut t, &egui::Context::default(), s, false);
         for tab in &t {
             assert_eq!((tab.commit_limit, tab.subject_limits), (5_000, (40, 60)));
+            assert_eq!((tab.claude_model, tab.commit_language), (ClaudeModel::Opus, CommitLanguage::French));
         }
     }
 }

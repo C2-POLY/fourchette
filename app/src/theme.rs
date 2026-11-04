@@ -593,7 +593,8 @@ pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u
     }
     for (family, name, path) in chosen {
         let Some(bytes) = path.and_then(read).filter(|b| looks_like_a_font(b)) else { continue };
-        f.font_data.insert(name.into(), Arc::new(FontData::from_owned(bytes)));
+        let index = regular_face(&bytes);
+        f.font_data.insert(name.into(), Arc::new(FontData { index, ..FontData::from_owned(bytes) }));
         f.families.entry(family).or_default().insert(0, name.into());
     }
     f
@@ -608,6 +609,41 @@ pub fn read_system_font(path: &str) -> Option<Vec<u8>> {
 /// out instead of reaching the font parser.
 fn looks_like_a_font(b: &[u8]) -> bool {
     matches!(b.get(..4), Some([0, 1, 0, 0] | b"OTTO" | b"ttcf" | b"true"))
+}
+
+/// The face of a collection (.ttc) whose style is "Regular", or 0: faces are not in the same
+/// order in every file (Avenir Next's first face is its Bold). A single font is face 0.
+fn regular_face(b: &[u8]) -> u32 {
+    let u16_at = |o: usize| b.get(o..o + 2).map(|x| u16::from_be_bytes([x[0], x[1]]) as usize);
+    let u32_at = |o: usize| b.get(o..o + 4).map(|x| u32::from_be_bytes([x[0], x[1], x[2], x[3]]) as usize);
+    if b.get(..4) != Some(b"ttcf") {
+        return 0;
+    }
+    // The style of the font whose table directory starts at `o`: its typographic style (name id
+    // 17) when it has one, else its legacy style (id 2), which calls Avenir Next's Demi Bold "Regular".
+    let style = |o: usize| -> Option<String> {
+        let tables = u16_at(o + 4)?;
+        let name = (0..tables).map(|t| o + 12 + 16 * t).find(|&e| b.get(e..e + 4) == Some(b"name"))?;
+        let table = u32_at(name + 8)?;
+        let (count, strings) = (u16_at(table + 2)?, table + u16_at(table + 4)?);
+        let named = |want: usize| {
+            (0..count).map(|r| table + 6 + 12 * r).find_map(|rec| {
+                let (platform, id, len, off) = (u16_at(rec)?, u16_at(rec + 6)?, u16_at(rec + 8)?, u16_at(rec + 10)?);
+                if id != want {
+                    return None;
+                }
+                let raw = b.get(strings + off..strings + off + len)?;
+                Some(if platform == 0 || platform == 3 {
+                    String::from_utf16_lossy(&raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                } else {
+                    String::from_utf8_lossy(raw).into_owned()
+                })
+            })
+        };
+        named(17).or_else(|| named(2))
+    };
+    let faces = u32_at(8).unwrap_or(0).min(64);
+    (0..faces).find(|&i| u32_at(12 + 4 * i).and_then(style).as_deref() == Some("Regular")).unwrap_or(0) as u32
 }
 
 /// Shows the chosen fonts at once (the system ones are read now).
@@ -748,6 +784,20 @@ mod tests {
         assert_eq!(shade(c, 1.0), Color32::from_rgb(0, 0, 0));
         assert_eq!(lighten(c, 1.0), Color32::from_rgb(255, 255, 255));
         assert_eq!(shade(c, 0.0), c);
+    }
+
+    #[test]
+    fn a_collection_gives_its_regular_face() {
+        // A single font, or bytes that are not a collection, give face 0.
+        assert_eq!(regular_face(include_bytes!("../assets/fonts/Inter-Regular.ttf")), 0);
+        assert_eq!(regular_face(b"ttcf"), 0);
+        assert_eq!(regular_face(b""), 0);
+        // On this Mac's own files: Avenir Next's Regular is not its first face.
+        for (path, face) in [("/System/Library/Fonts/Avenir Next.ttc", 7), ("/System/Library/Fonts/HelveticaNeue.ttc", 0), ("/System/Library/Fonts/Menlo.ttc", 0)] {
+            if let Some(b) = read_system_font(path) {
+                assert_eq!(regular_face(&b), face, "{path}");
+            }
+        }
     }
 
     fn no_files(_: &str) -> Option<Vec<u8>> {

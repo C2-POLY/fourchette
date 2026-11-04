@@ -2,6 +2,7 @@
 //! subscription), never through an API key. Claude only reads what the app sends and answers;
 //! it has no tools, so it can't run anything. The app shows its advice and the person decides.
 use crate::git::Repo;
+use crate::settings::{ClaudeModel, CommitLanguage};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::path::PathBuf;
@@ -40,28 +41,31 @@ pub const GENERATING_WITH_CLAUDE: &str = "Generating with Claude…";
 /// "pageGuideLinePosition" — read by the original, but its default wasn't found (estimated).
 pub const PAGE_GUIDE_COLUMN: usize = 72;
 
-/// One question to Claude. With a schema, returns the structured answer; otherwise the text.
-pub fn ask(prompt: &str, system: &str, schema: Option<&Value>) -> Result<Value, String> {
+/// The arguments of `claude` for one question: print mode, JSON out, no tools, no session kept,
+/// no MCP server, only the project's settings, the app's system prompt, then the schema and the
+/// model when there are some (Claude Code's own model passes no `--model`).
+pub fn claude_args(system: &str, schema: Option<&Value>, model: ClaudeModel) -> Vec<String> {
+    let mut args: Vec<String> = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "project", "--append-system-prompt", system]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    if let Some(s) = schema {
+        args.extend(["--json-schema".to_string(), s.to_string()]);
+    }
+    if let Some(alias) = model.alias() {
+        args.extend(["--model".to_string(), alias.to_string()]);
+    }
+    args
+}
+
+/// One question to Claude, with the model chosen in Settings. With a schema, returns the
+/// structured answer; otherwise the text. Blocks: call it from a thread.
+pub fn ask(prompt: &str, system: &str, schema: Option<&Value>, model: ClaudeModel) -> Result<Value, String> {
     let exe = find_claude().ok_or(format!(
         "{CANNOT_FIND_CLAUDE}. Install Claude Code (claude.com/claude-code), then run `claude` once in Terminal and sign in with your subscription."
     ))?;
     let mut cmd = Command::new(exe);
-    cmd.args([
-        "-p",
-        "--output-format",
-        "json",
-        "--tools",
-        "",
-        "--no-session-persistence",
-        "--strict-mcp-config",
-        "--setting-sources",
-        "project",
-        "--append-system-prompt",
-        system,
-    ]);
-    if let Some(s) = schema {
-        cmd.args(["--json-schema", &s.to_string()]);
-    }
+    cmd.args(claude_args(system, schema, model));
     // Use the subscription sign-in: hide any API key so Claude Code can't fall back to it.
     for k in ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX"] {
         cmd.env_remove(k);
@@ -77,17 +81,14 @@ pub fn ask(prompt: &str, system: &str, schema: Option<&Value>) -> Result<Value, 
     }
     let out = child.wait_with_output().map_err(|e| format!("Claude Code stopped: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let v: Value = match serde_json::from_str(stdout.trim()) {
-        Ok(v) => v,
-        Err(_) => {
-            let err = String::from_utf8_lossy(&out.stderr);
-            let msg = format!("{} {}", stdout.trim(), err.trim());
-            return Err(friendly(&msg));
-        }
+    let Some(v) = read_reply(&stdout) else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let msg = format!("{} {}", stdout.trim(), err.trim());
+        return Err(friendly(&msg, model));
     };
     if v.get("is_error").and_then(Value::as_bool).unwrap_or(false) {
         let msg = v.get("result").and_then(Value::as_str).unwrap_or("Claude couldn't answer").to_string();
-        return Err(friendly(&msg));
+        return Err(friendly(&msg, model));
     }
     if schema.is_some() {
         if let Some(s) = v.get("structured_output").filter(|s| !s.is_null()) {
@@ -100,9 +101,31 @@ pub fn ask(prompt: &str, system: &str, schema: Option<&Value>) -> Result<Value, 
     Ok(v.get("result").cloned().unwrap_or(Value::String(String::new())))
 }
 
-fn friendly(msg: &str) -> String {
+/// Claude Code's JSON reply. Some errors print a line before it (an unknown model prints
+/// `[claude-code:unrecognized_model] {…}` first), so the last line that is a JSON object counts too.
+fn read_reply(stdout: &str) -> Option<Value> {
+    let is_reply = |v: &Value| v.get("type").is_some() || v.get("result").is_some();
+    serde_json::from_str::<Value>(stdout.trim())
+        .ok()
+        .filter(is_reply)
+        .or_else(|| stdout.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok()).find(is_reply))
+}
+
+/// Claude Code's error in words the person can act on.
+fn friendly(msg: &str, model: ClaudeModel) -> String {
     let m = msg.to_lowercase();
-    if m.contains("login") || m.contains("log in") || m.contains("not authenticated") || m.contains("invalid api key") || m.contains("oauth") {
+    // Claude Code 2.1: "There's an issue with the selected model (nosuchmodel). It may not exist or
+    // you may not have access to it. Run --model to pick a different model."
+    let model_refused = m.contains("unrecognized_model")
+        || m.contains("issue with the selected model")
+        || (m.contains("model") && ["may not exist", "not found", "not have access", "not available", "invalid model"].iter().any(|w| m.contains(w)));
+    if model_refused {
+        let name = match model {
+            ClaudeModel::Default => named_model(msg).map(|n| format!("“{n}”")).unwrap_or_else(|| "it picks by default".into()),
+            m => format!("“{}”", m.label()),
+        };
+        format!("Claude Code can't use the model {name}: it may not exist, or your subscription may not include it. Pick another model in Settings (⌘,), section Claude.")
+    } else if m.contains("login") || m.contains("log in") || m.contains("not authenticated") || m.contains("invalid api key") || m.contains("oauth") {
         "Claude Code isn't signed in. Open Terminal, run `claude`, and sign in with your Claude subscription.".into()
     } else if m.contains("usage limit") || m.contains("rate limit") {
         "Your Claude subscription has reached its usage limit for now. Try again later.".into()
@@ -110,6 +133,12 @@ fn friendly(msg: &str) -> String {
         let short: String = msg.trim().chars().take(300).collect();
         format!("Claude couldn't answer: {short}")
     }
+}
+
+/// The model named in "…the selected model (name)…".
+fn named_model(msg: &str) -> Option<&str> {
+    let rest = &msg[msg.find("model (")? + "model (".len()..];
+    Some(&rest[..rest.find(')')?]).filter(|n| !n.is_empty())
 }
 
 // ------------------------------------------------------------------ branch clean-up
@@ -312,7 +341,8 @@ pub fn read_advice(v: &Value, facts: &[BranchFacts]) -> (Vec<Advice>, String) {
 /// The original lets Claude read the repository itself; here Claude has no tools, so the
 /// diff is added after it the way the original's OpenAI prompt does ("Below is my git diff",
 /// sub_1004a7d4c).
-pub fn commit_message_prompt(diff: &str, amend: bool, low: usize, high: usize, wrap: usize) -> String {
+/// `language` is the rule of `language_rule`, added after the original's.
+pub fn commit_message_prompt(diff: &str, amend: bool, low: usize, high: usize, wrap: usize, language: &str) -> String {
     let what = if amend { "staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)" } else { "staged changes" };
     format!(
         "Generate commit message for {what}.\n\
@@ -320,8 +350,42 @@ pub fn commit_message_prompt(diff: &str, amend: bool, low: usize, high: usize, w
          - Start directly with the subject line (no preamble).\n\
          - The header must be less than {low} (soft limit) and {high} (hard limit).\n\
          - Hard wrap lines at {wrap} characters.\n\
-         - Don't use the 'generated' footer.\n\nBelow is my git diff:\n\n```\n{diff}\n```"
+         - Don't use the 'generated' footer.\n{language}\nBelow is my git diff:\n\n```\n{diff}\n```"
     )
+}
+
+/// How many commit subjects of the current branch the automatic language reads.
+pub const LANGUAGE_SAMPLE: usize = 20;
+
+/// The subjects of the current branch's last `LANGUAGE_SAMPLE` commits, newest first; none in a
+/// repository without commits.
+pub fn recent_subjects(repo: &Repo) -> Vec<String> {
+    repo.git(&["log", &format!("-{LANGUAGE_SAMPLE}"), "--format=%s", "HEAD", "--"])
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// The commit-message rule for the language chosen in Settings. Automatic asks for the language
+/// of the branch's recent subjects, listed after it, or English when there are none.
+pub fn language_rule(language: CommitLanguage, recent: &[String]) -> String {
+    match language {
+        CommitLanguage::English => "- Write the commit message in English.\n".into(),
+        CommitLanguage::French => "- Write the commit message in French.\n".into(),
+        CommitLanguage::Auto if recent.is_empty() => "- Write the commit message in English.\n".into(),
+        CommitLanguage::Auto => {
+            let mut s = "- Write the commit message in the language most of the recent commit subjects below are written in.\n\n\
+                         Recent commit subjects on this branch:\n"
+                .to_string();
+            for r in recent.iter().take(LANGUAGE_SAMPLE) {
+                s.push_str(&format!("- {r}\n"));
+            }
+            s
+        }
+    }
 }
 
 /// The original splits Claude's text at the first line break: subject before it, description
@@ -371,13 +435,98 @@ mod tests {
 
     #[test]
     fn commit_message_rules() {
-        let p = commit_message_prompt("DIFF", false, 50, 70, 72);
+        let p = commit_message_prompt("DIFF", false, 50, 70, 72, "");
         assert!(p.starts_with("Generate commit message for staged changes.\n- Only respond with the commit message."));
-        assert!(p.contains("- The header must be less than 50 (soft limit) and 70 (hard limit).\n- Hard wrap lines at 72 characters.\n- Don't use the 'generated' footer."));
-        assert!(commit_message_prompt("D", true, 50, 70, 72).contains("staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)"));
+        assert!(p.contains("- The header must be less than 50 (soft limit) and 70 (hard limit).\n- Hard wrap lines at 72 characters.\n- Don't use the 'generated' footer.\n\nBelow is my git diff:"));
+        assert!(commit_message_prompt("D", true, 50, 70, 72, "").contains("staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)"));
         assert_eq!(split_message("\nAdd login\n\nBecause users asked.\n"), ("Add login".to_string(), "Because users asked.".to_string()));
         assert_eq!(split_message("Fix typo"), ("Fix typo".to_string(), String::new()));
         assert_eq!(FORK_CLAUDE_PATHS, ["/opt/homebrew/bin/claude", "~/.local/bin/claude"]);
+    }
+
+    #[test]
+    fn the_model_is_passed_only_when_one_is_chosen() {
+        let base = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "project", "--append-system-prompt", "SYS"];
+        assert_eq!(claude_args("SYS", None, ClaudeModel::Default), base);
+        for (m, alias) in [(ClaudeModel::Haiku, "haiku"), (ClaudeModel::Sonnet, "sonnet"), (ClaudeModel::Opus, "opus"), (ClaudeModel::Fable, "fable")] {
+            let a = claude_args("SYS", None, m);
+            assert_eq!(a[..base.len()], base, "{m:?}");
+            assert_eq!(a[base.len()..], ["--model", alias], "{m:?}");
+        }
+        // The schema comes before the model, and both are kept.
+        let a = claude_args("SYS", Some(&json!({"type": "object"})), ClaudeModel::Opus);
+        assert_eq!(a[base.len()..], ["--json-schema", r#"{"type":"object"}"#, "--model", "opus"]);
+        assert!(!claude_args("SYS", Some(&json!({})), ClaudeModel::Default).contains(&"--model".to_string()));
+    }
+
+    #[test]
+    fn the_commit_language_reaches_the_prompt() {
+        let recent = vec!["Ajoute la connexion".to_string(), "Corrige le délai".to_string()];
+        let rule = |l| commit_message_prompt("DIFF", false, 50, 70, 72, &language_rule(l, &recent));
+        let en = rule(CommitLanguage::English);
+        assert!(en.contains("- Don't use the 'generated' footer.\n- Write the commit message in English.\n\nBelow is my git diff:"), "{en}");
+        assert!(!en.contains("Ajoute la connexion"), "a fixed language sends no subjects");
+        let fr = rule(CommitLanguage::French);
+        assert!(fr.contains("- Write the commit message in French.\n"));
+        let auto = rule(CommitLanguage::Auto);
+        assert!(auto.contains("- Write the commit message in the language most of the recent commit subjects below are written in."));
+        assert!(auto.contains("Recent commit subjects on this branch:\n- Ajoute la connexion\n- Corrige le délai\n\nBelow is my git diff:"), "{auto}");
+        // No commit yet: English.
+        assert_eq!(language_rule(CommitLanguage::Auto, &[]), "- Write the commit message in English.\n");
+        // Never more than the sample.
+        let many: Vec<String> = (0..30).map(|i| format!("subject {i}")).collect();
+        let r = language_rule(CommitLanguage::Auto, &many);
+        assert_eq!(r.matches("\n- subject ").count(), LANGUAGE_SAMPLE);
+        assert!(r.contains("subject 19") && !r.contains("subject 20"));
+    }
+
+    #[test]
+    fn recent_subjects_reads_the_current_branch_newest_first() {
+        let dir = std::env::temp_dir().join(format!("fourchette-subjects-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = |a: &[&str]| crate::git::run_in(&dir, a).unwrap();
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.name", "T"]);
+        g(&["config", "user.email", "t@example.com"]);
+        let repo = crate::git::Repo::open(&dir).unwrap();
+        assert!(recent_subjects(&repo).is_empty(), "no commit yet");
+        for i in 0..25 {
+            g(&["commit", "-q", "--allow-empty", "-m", &format!("commit {i}")]);
+        }
+        g(&["checkout", "-q", "-b", "other", "HEAD~5"]);
+        g(&["commit", "-q", "--allow-empty", "-m", "on other"]);
+        let s = recent_subjects(&repo);
+        assert_eq!(s.len(), LANGUAGE_SAMPLE);
+        assert_eq!(s[0], "on other");
+        assert_eq!(s[1], "commit 19", "the current branch only");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_refused_model_says_which_and_where_to_change_it() {
+        // What Claude Code 2.1.310 answers to `claude -p --model nosuchmodel`.
+        let said = "There's an issue with the selected model (nosuchmodel). It may not exist or you may not have access to it. Run --model to pick a different model.";
+        let m = friendly(said, ClaudeModel::Opus);
+        assert!(m.contains("“Opus”") && m.contains("Settings (⌘,), section Claude"), "{m}");
+        assert!(!m.contains("--model"), "no command line advice: {m}");
+        // With Claude Code's own model, the name comes from its message.
+        assert!(friendly(said, ClaudeModel::Default).contains("“nosuchmodel”"));
+        assert!(friendly("[claude-code:unrecognized_model] {}", ClaudeModel::Default).contains("the model it picks by default"));
+        // Other errors keep their own message.
+        assert!(friendly("Invalid API key · Please run /login", ClaudeModel::Haiku).contains("isn't signed in"));
+        assert!(friendly("Claude AI usage limit reached", ClaudeModel::Haiku).contains("usage limit"));
+        assert!(friendly("boom", ClaudeModel::Haiku).starts_with("Claude couldn't answer: boom"));
+    }
+
+    #[test]
+    fn the_reply_is_read_past_a_line_printed_before_it() {
+        let reply = r#"{"type":"result","is_error":true,"result":"There's an issue with the selected model (x)."}"#;
+        assert_eq!(read_reply(reply).unwrap()["is_error"], true);
+        let v = read_reply(&format!("[claude-code:unrecognized_model] {{\"model\":\"x\"}}\n{reply}\n")).unwrap();
+        assert_eq!(v["result"], "There's an issue with the selected model (x).");
+        assert!(read_reply("not json at all").is_none());
+        assert!(read_reply(r#"{"model":"x"}"#).is_none(), "only Claude Code's reply counts");
     }
 
     #[test]
@@ -435,7 +584,7 @@ mod live {
         assert_eq!(base, "main");
         let facts = branch_facts(&repo, &base);
         assert_eq!(facts.len(), 2);
-        let v = ask(&cleanup_prompt(&base, &facts), SYSTEM, Some(&cleanup_schema())).expect("Claude answered");
+        let v = ask(&cleanup_prompt(&base, &facts), SYSTEM, Some(&cleanup_schema()), ClaudeModel::Default).expect("Claude answered");
         let (adv, summary) = read_advice(&v, &facts);
         println!("summary: {summary}");
         for a in &adv {
@@ -457,7 +606,7 @@ mod live_commit {
     #[ignore]
     fn live_commit_message() {
         let diff = "diff --git a/login.rs b/login.rs\n--- a/login.rs\n+++ b/login.rs\n@@ -1,3 +1,4 @@\n fn login() {\n-    let timeout = 5;\n+    // slow networks need more time\n+    let timeout = 30;\n }\n";
-        let v = ask(&commit_message_prompt(diff, false, 50, 70, 72), SYSTEM, None).expect("Claude answered");
+        let v = ask(&commit_message_prompt(diff, false, 50, 70, 72, &language_rule(CommitLanguage::French, &[])), SYSTEM, None, ClaudeModel::Haiku).expect("Claude answered");
         let (s, b) = split_message(v.as_str().unwrap());
         println!("subject: {s}\nbody: {b}");
         assert!(!s.is_empty() && s.chars().count() <= 70);
