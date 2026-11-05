@@ -806,53 +806,20 @@ impl Tab {
     fn file_list(&self, ui: &mut Ui, staged: bool, list_h: f32, cmds: &mut Vec<Cmd>) {
         let files = if staged { self.status.staged.clone() } else { self.status.unstaged.clone() };
         let current = self.diff.as_ref().map(|d| d.title.clone());
+        let collapsed: std::collections::HashSet<String> = self.collapsed_dirs.iter().filter(|(s, _)| *s == staged).map(|(_, p)| p.clone()).collect();
         egui::Frame::new().fill(theme::c().sidebar).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(4)).show(ui, |ui| {
             egui::ScrollArea::vertical().id_salt(if staged { "staged" } else { "unstaged" }).max_height(list_h).min_scrolled_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
-                for f in &files {
-                    let (resp, btn) = file_row(ui, f, current.as_deref() == Some(f.path.as_str()), Some(if staged { "Unstage" } else { "Stage" }));
-                    let stage = Cmd::Git { label: format!("Staged {}", f.path), args: vec!["add".into(), "-A".into(), "--".into(), f.path.clone()], network: false };
-                    let unstage = Cmd::Git { label: format!("Unstaged {}", f.path), args: vec!["reset".into(), "-q".into(), "--".into(), f.path.clone()], network: false };
-                    if btn {
-                        cmds.push(if staged { unstage } else { stage });
-                    } else if resp.clicked() {
-                        cmds.push(Cmd::Diff(DiffReq::Worktree { path: f.path.clone(), staged, untracked: f.code == '?' }));
+                if self.files_tree {
+                    for row in crate::filetree::rows(&files, &collapsed) {
+                        match row {
+                            crate::filetree::Row::File { file, depth } => file_item(ui, file, &files, staged, current.as_deref(), Some(depth), cmds),
+                            crate::filetree::Row::Dir { name, path, depth, open, count } => dir_item(ui, (&name, &path, count), depth, open, staged, cmds),
+                        }
                     }
-                    resp.context_menu(|ui| {
-                        crate::ui::menu_rows(ui);
-                        if f.code == 'U' {
-                            if ui.button("Resolve with Claude…").clicked() {
-                                cmds.push(Cmd::AiResolve(vec![f.path.clone()]));
-                            }
-                            if files.iter().filter(|g| g.code == 'U').count() > 1 && ui.button("Resolve all conflicts with Claude…").clicked() {
-                                cmds.push(Cmd::AiResolve(Vec::new()));
-                            }
-                            ui.separator();
-                        }
-                        if !staged {
-                            if ui.button("Stage").clicked() {
-                                cmds.push(Cmd::Git { label: format!("Staged {}", f.path), args: vec!["add".into(), "-A".into(), "--".into(), f.path.clone()], network: false });
-                            }
-                            if ui.button(RichText::new("Discard changes…").color(theme::c().deleted)).clicked() {
-                                if f.code == '?' {
-                                    // Like the original, a new file goes to the Trash instead of being erased.
-                                    cmds.push(Cmd::Discard { path: f.path.clone(), untracked: true });
-                                } else {
-                                    cmds.push(Cmd::Dialog(Dialog::Confirm {
-                                        title: "Discard changes".into(),
-                                        message: format!("Do you want to discard the changes in “{}”?", f.path),
-                                        label: format!("Discarded {}", f.path),
-                                        args: vec!["checkout".into(), "--".into(), f.path.clone()],
-                                        network: false,
-                                    }));
-                                }
-                            }
-                        } else if ui.button("Unstage").clicked() {
-                            cmds.push(Cmd::Git { label: format!("Unstaged {}", f.path), args: vec!["reset".into(), "-q".into(), "--".into(), f.path.clone()], network: false });
-                        }
-                        if ui.button("Copy path").clicked() {
-                            cmds.push(Cmd::Copy(f.path.clone()));
-                        }
-                    });
+                } else {
+                    for f in &files {
+                        file_item(ui, f, &files, staged, current.as_deref(), None, cmds);
+                    }
                 }
                 if files.is_empty() {
                     ui.add_space(4.0);
@@ -896,6 +863,10 @@ impl Tab {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Unstaged files  {}", self.status.unstaged.len())).size(theme::FS_SECONDARY).color(theme::c().dim));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // Drawn first, so it sits at the right edge, after Stage all.
+                if let Some(on) = crate::ui::files_view_switch(ui, self.files_tree) {
+                    cmds.push(Cmd::SetFilesTree(on));
+                }
                 if ui.add_enabled(!self.status.unstaged.is_empty(), egui::Button::new(RichText::new("Stage all").color(theme::c().added))).clicked() {
                     cmds.push(Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false });
                 }
@@ -2146,4 +2117,85 @@ mod panel_resize_tests {
         }
         let _ = std::fs::remove_dir_all(repo);
     }
+}
+
+/// Stages a file, or unstages it.
+fn stage_cmd(path: &str, staged: bool) -> Cmd {
+    if staged {
+        Cmd::Git { label: format!("Unstaged {path}"), args: vec!["reset".into(), "-q".into(), "--".into(), path.into()], network: false }
+    } else {
+        Cmd::Git { label: format!("Staged {path}"), args: vec!["add".into(), "-A".into(), "--".into(), path.into()], network: false }
+    }
+}
+
+/// A file of the local changes, in the List or (with `depth`) the Tree view: click opens its diff,
+/// the button stages or unstages it, the menu has the rest.
+fn file_item(ui: &mut Ui, f: &git::FileChange, files: &[git::FileChange], staged: bool, current: Option<&str>, depth: Option<usize>, cmds: &mut Vec<Cmd>) {
+    let (resp, btn) = crate::ui::file_row_at(ui, f, current == Some(f.path.as_str()), Some(if staged { "Unstage" } else { "Stage" }), depth);
+    if btn {
+        cmds.push(stage_cmd(&f.path, staged));
+    } else if resp.clicked() {
+        cmds.push(Cmd::Diff(DiffReq::Worktree { path: f.path.clone(), staged, untracked: f.code == '?' }));
+    }
+    resp.context_menu(|ui| {
+        crate::ui::menu_rows(ui);
+        if f.code == 'U' {
+            if ui.button("Resolve with Claude…").clicked() {
+                cmds.push(Cmd::AiResolve(vec![f.path.clone()]));
+            }
+            if files.iter().filter(|g| g.code == 'U').count() > 1 && ui.button("Resolve all conflicts with Claude…").clicked() {
+                cmds.push(Cmd::AiResolve(Vec::new()));
+            }
+            ui.separator();
+        }
+        if !staged {
+            if ui.button("Stage").clicked() {
+                cmds.push(stage_cmd(&f.path, false));
+            }
+            if ui.button(RichText::new("Discard changes…").color(theme::c().deleted)).clicked() {
+                if f.code == '?' {
+                    // Like the original, a new file goes to the Trash instead of being erased.
+                    cmds.push(Cmd::Discard { path: f.path.clone(), untracked: true });
+                } else {
+                    cmds.push(Cmd::Dialog(Dialog::Confirm {
+                        title: "Discard changes".into(),
+                        message: format!("Do you want to discard the changes in “{}”?", f.path),
+                        label: format!("Discarded {}", f.path),
+                        args: vec!["checkout".into(), "--".into(), f.path.clone()],
+                        network: false,
+                    }));
+                }
+            }
+        } else if ui.button("Unstage").clicked() {
+            cmds.push(stage_cmd(&f.path, true));
+        }
+        if ui.button("Copy path").clicked() {
+            cmds.push(Cmd::Copy(f.path.clone()));
+        }
+    });
+}
+
+/// A folder of the Tree view: a click folds it, the button and the menu stage or unstage all of it
+/// (no Discard on a folder).
+fn dir_item(ui: &mut Ui, (name, path, count): (&str, &str, usize), depth: usize, open: bool, staged: bool, cmds: &mut Vec<Cmd>) {
+    let action = if staged { "Unstage" } else { "Stage" };
+    let (resp, btn) = crate::ui::dir_row(ui, name, depth, open, count, action);
+    let dir_cmd = || match stage_cmd(path, staged) {
+        Cmd::Git { args, network, .. } => Cmd::Git { label: format!("{} {path}/", if staged { "Unstaged" } else { "Staged" }), args, network },
+        c => c,
+    };
+    if btn {
+        cmds.push(dir_cmd());
+    } else if resp.clicked() {
+        cmds.push(Cmd::ToggleDir(staged, path.to_string()));
+    }
+    resp.context_menu(|ui| {
+        crate::ui::menu_rows(ui);
+        if ui.button(format!("{action} folder")).clicked() {
+            cmds.push(dir_cmd());
+        }
+        if ui.button("Copy path").clicked() {
+            cmds.push(Cmd::Copy(path.to_string()));
+        }
+    });
 }

@@ -309,6 +309,16 @@ fn git(ui: &mut Ui, pane: &mut Pane<'_>) {
         }
     });
     card(ui, |c| {
+        let ctrl = c.row("Local changes", "Files grouped by folder, or one flat list", vec2(SEG_W, SEG_H), true);
+        let modes = ["List", "Tree"];
+        let picked = segmented(c.ui, ctrl, modes.len(), s.files_tree as usize, true, "files_tree", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, modes[i], theme::body(), fg);
+        });
+        if let Some(i) = picked {
+            s.files_tree = i == 1;
+        }
+    });
+    card(ui, |c| {
         let ctrl = c.row("Move the branch's issue without asking", "In progress at checkout, In review once its pull request exists", vec2(36.0, 20.0), true);
         if toggle(c.ui, ctrl, "issue_status_auto", s.issue_status_auto) {
             s.issue_status_auto = !s.issue_status_auto;

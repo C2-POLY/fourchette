@@ -632,6 +632,7 @@ mod tests {
                 "subject_low": 50,
                 "subject_high": 70,
                 "max_commits": 100_000,
+                "files_tree": false,
                 "claude_model": "default",
                 "commit_language": "auto",
                 "update_channel": "prerelease",

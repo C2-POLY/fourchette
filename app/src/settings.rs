@@ -268,6 +268,8 @@ pub struct Settings {
     pub subject_high: usize,
     /// How many commits the history loads (`settings maxCommitCount <n>` in the palette sets it too).
     pub max_commits: usize,
+    /// The local changes' file lists show folders (Tree) instead of a flat list (List).
+    pub files_tree: bool,
     /// The model of every Claude request.
     pub claude_model: ClaudeModel,
     /// The language of the commit messages Claude writes.
@@ -291,6 +293,7 @@ impl Default for Settings {
             subject_low: DEFAULT_SUBJECT_LOW,
             subject_high: DEFAULT_SUBJECT_HIGH,
             max_commits: DEFAULT_MAX_COMMITS,
+            files_tree: false,
             claude_model: ClaudeModel::Default,
             commit_language: CommitLanguage::Auto,
             update_channel: UpdateChannel::default(),
@@ -321,6 +324,7 @@ impl Settings {
             subject_low: limits.0,
             subject_high: limits.1,
             max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
+            files_tree: v["files_tree"].as_bool().unwrap_or(d.files_tree),
             claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
             commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
             update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
@@ -341,6 +345,7 @@ impl Settings {
             "subject_low": self.subject_low,
             "subject_high": self.subject_high,
             "max_commits": self.max_commits,
+            "files_tree": self.files_tree,
             "claude_model": self.claude_model.key(),
             "commit_language": self.commit_language.key(),
             "update_channel": self.update_channel.key(),
@@ -557,5 +562,13 @@ mod tests {
         assert_eq!(Settings::from_json(&json!({"ui_font": "menlo"})).ui_font, UiFont::Inter);
         // An older file without these keys gets the defaults.
         assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
+    }
+
+    #[test]
+    fn the_files_view_is_a_list_until_chosen_and_is_kept() {
+        assert!(!Settings::default().files_tree);
+        assert!(!Settings::from_json(&json!({"files_tree": "tree"})).files_tree);
+        let s = Settings { files_tree: true, ..Settings::default() };
+        assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 }

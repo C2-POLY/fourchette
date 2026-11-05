@@ -838,6 +838,13 @@ pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i6
 
 /// A changed file; returns the row response and whether its action button was clicked.
 pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str>) -> (egui::Response, bool) {
+    file_row_at(ui, f, selected, action, None)
+}
+
+/// A changed file in the Tree view: `depth` indents it and only its name shows, the folders
+/// above it give the rest.
+pub fn file_row_at(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str>, depth: Option<usize>) -> (egui::Response, bool) {
+    let indent = depth.map_or(0.0, |d| d as f32 * TREE_INDENT + 16.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected {
@@ -847,17 +854,18 @@ pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str
     }
     let y = rect.center().y;
     let col = theme::status_color(f.code);
-    let badge = Rect::from_center_size(pos2(rect.left() + 14.0, y), vec2(18.0, 17.0));
+    let badge = Rect::from_center_size(pos2(rect.left() + 14.0 + indent, y), vec2(18.0, 17.0));
     p.rect_filled(badge, CornerRadius::same(4), theme::tint(col, theme::c().bg, 0.16));
     let letter = if f.code == '?' { 'A' } else { f.code };
     p.text(badge.center(), Align2::CENTER_CENTER, letter.to_string(), FontId::monospace(theme::FS_SMALL), col);
     let (dir, file) = match f.path.rsplit_once('/') {
+        Some((_, n)) if depth.is_some() => (String::new(), n.to_string()),
         Some((d, n)) => (format!("{d}/"), n.to_string()),
         None => (String::new(), f.path.clone()),
     };
     let show_btn = action.is_some() && (resp.hovered() || selected);
     let right = rect.right() - if show_btn { 72.0 } else { 6.0 };
-    let x = rect.left() + 30.0;
+    let x = rect.left() + 30.0 + indent;
     let r = fit_text(p, pos2(x, y), Align2::LEFT_CENTER, &file, theme::body(), if selected { theme::c().strong } else { theme::c().text }, right - x);
     if r.right() + 30.0 < right {
         fit_text(p, pos2(r.right() + 6.0, y), Align2::LEFT_CENTER, &dir, theme::secondary(), theme::c().faint, right - r.right() - 6.0);
@@ -872,6 +880,90 @@ pub fn file_row(ui: &mut Ui, f: &FileChange, selected: bool, action: Option<&str
         clicked_btn = resp.clicked() && hovered;
     }
     (resp, clicked_btn)
+}
+
+/// How far each level of the Tree view moves its rows to the right.
+pub const TREE_INDENT: f32 = 14.0;
+
+/// A folder of the Tree view: chevron, folder icon, name and the number of files under it. The
+/// action (Stage or Unstage the folder) shows on hover. Returns the row and whether the action
+/// was clicked.
+pub fn dir_row(ui: &mut Ui, name: &str, depth: usize, open: bool, count: usize, action: &str) -> (egui::Response, bool) {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
+    }
+    let y = rect.center().y;
+    let x0 = rect.left() + depth as f32 * TREE_INDENT;
+    // The chevron, drawn: pointing right when folded, down when open.
+    let c = pos2(x0 + 9.0, y);
+    let pts = if open { [c + vec2(-3.5, -1.8), c + vec2(0.0, 1.8), c + vec2(3.5, -1.8)] } else { [c + vec2(-1.8, -3.5), c + vec2(1.8, 0.0), c + vec2(-1.8, 3.5)] };
+    p.add(Shape::line(pts.to_vec(), Stroke::new(1.4_f32, theme::c().dim)));
+    folder_icon(p, pos2(x0 + 26.0, y), theme::c().dim);
+    let show_btn = resp.hovered();
+    let right = rect.right() - if show_btn { 72.0 } else { 6.0 };
+    let x = x0 + 38.0;
+    let r = fit_text(p, pos2(x, y), Align2::LEFT_CENTER, name, theme::body(), theme::c().text, right - x);
+    if r.right() + 30.0 < right {
+        p.text(pos2(r.right() + 8.0, y), Align2::LEFT_CENTER, count.to_string(), theme::secondary(), theme::c().faint);
+    }
+    let mut clicked_btn = false;
+    if show_btn {
+        let br = Rect::from_min_max(pos2(rect.right() - 68.0, rect.top() + 3.0), pos2(rect.right() - 4.0, rect.bottom() - 3.0));
+        let hovered = ui.rect_contains_pointer(br);
+        p.rect_filled(br, CornerRadius::same(5), if hovered { theme::c().accent } else { theme::c().elevated });
+        p.rect_stroke(br, CornerRadius::same(5), Stroke::new(1.0_f32, if hovered { theme::c().accent } else { theme::c().border_strong }), StrokeKind::Inside);
+        p.text(br.center(), Align2::CENTER_CENTER, action, theme::small(), if hovered { theme::c().on_accent } else { theme::c().strong });
+        clicked_btn = resp.clicked() && hovered;
+    }
+    (resp, clicked_btn)
+}
+
+/// A small folder: a body with a tab on its top left.
+fn folder_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    let body = Rect::from_center_size(c + vec2(0.0, 1.0), vec2(13.0, 9.0));
+    let tab = Rect::from_min_size(body.left_top() - vec2(0.0, 2.0), vec2(5.5, 2.5));
+    p.rect_stroke(tab, CornerRadius::same(1), Stroke::new(1.2_f32, col), StrokeKind::Inside);
+    p.rect_filled(body, CornerRadius::same(2), theme::tint(col, theme::c().bg, 0.35));
+    p.rect_stroke(body, CornerRadius::same(2), Stroke::new(1.2_f32, col), StrokeKind::Inside);
+}
+
+/// The List / Tree switch above the local changes: two drawn icons, the chosen one highlighted.
+/// Returns the new choice when a half is clicked (`true` for Tree).
+pub fn files_view_switch(ui: &mut Ui, tree: bool) -> Option<bool> {
+    let (rect, _) = ui.allocate_exact_size(vec2(52.0, 20.0), Sense::hover());
+    let k = theme::c();
+    ui.painter().rect(rect, CornerRadius::same(6), k.input, Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+    let mut out = None;
+    for (i, label) in ["List", "Tree"].into_iter().enumerate() {
+        let r = Rect::from_min_size(pos2(rect.left() + i as f32 * 26.0, rect.top()), vec2(26.0, 20.0)).shrink(2.0);
+        let on = tree == (i == 1);
+        let resp = ui.interact(r, ui.id().with(("files_view", i)), Sense::click()).on_hover_text(format!("{label} view"));
+        let p = ui.painter();
+        if on {
+            p.rect_filled(r, CornerRadius::same(4), k.select);
+        } else if resp.hovered() {
+            p.rect_filled(r, CornerRadius::same(4), k.hover);
+        }
+        let col = if on { k.strong } else { k.dim };
+        let c = r.center();
+        let st = Stroke::new(1.3_f32, col);
+        if i == 0 {
+            for dy in [-3.5_f32, 0.0, 3.5] {
+                p.line_segment([c + vec2(-4.5, dy), c + vec2(4.5, dy)], st);
+            }
+        } else {
+            for (dx, dy, len) in [(-4.5_f32, -3.5_f32, 9.0_f32), (-1.5, 0.0, 6.0), (-1.5, 3.5, 6.0)] {
+                p.line_segment([c + vec2(dx, dy), c + vec2(dx + len, dy)], st);
+            }
+            p.line_segment([c + vec2(-4.5, -3.5), c + vec2(-4.5, 3.5)], st);
+        }
+        if resp.clicked() && !on {
+            out = Some(i == 1);
+        }
+    }
+    out
 }
 
 /// Checks out a remote branch: its local branch when there is one, else a new tracking branch

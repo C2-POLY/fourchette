@@ -33,6 +33,10 @@ pub struct Tab {
     pub(super) search: String,
     pub(super) filter: String,
     pub(super) collapsed: HashSet<String>,
+    /// The folders folded in the Tree view of the local changes, with whether it is the staged list.
+    pub(super) collapsed_dirs: HashSet<(bool, String)>,
+    /// The local changes show a tree (the settings' `files_tree`, copied each frame).
+    pub(super) files_tree: bool,
     pub(super) busy: Option<(String, Receiver<JobResult>, bool)>,
     pub(super) last_status: Instant,
     pub(super) last_fetch: Instant,
@@ -134,6 +138,8 @@ impl Tab {
             search: String::new(),
             filter: String::new(),
             collapsed: HashSet::new(),
+            collapsed_dirs: HashSet::new(),
+            files_tree: false,
             busy: None,
             last_status: Instant::now(),
             last_fetch: Instant::now(),
@@ -234,6 +240,7 @@ impl Tab {
     /// commit limit reads the history again.
     fn apply_settings(&mut self, s: crate::settings::Settings) {
         self.subject_limits = (s.subject_low, s.subject_high);
+        self.files_tree = s.files_tree;
         self.claude_model = s.claude_model;
         self.commit_language = s.commit_language;
         if self.diff_context != s.diff_context {
@@ -609,6 +616,11 @@ impl Tab {
                     Err(e) => self.notify(e, true),
                 }
             }
+            Cmd::ToggleDir(staged, path) => {
+                if !self.collapsed_dirs.remove(&(staged, path.clone())) {
+                    self.collapsed_dirs.insert((staged, path));
+                }
+            }
             // App-wide: `App::run` handles them and never passes them here.
             Cmd::OpenDialog
             | Cmd::Open(_)
@@ -620,6 +632,7 @@ impl Tab {
             | Cmd::ToggleDetails
             | Cmd::Settings
             | Cmd::SetSettings(_)
+            | Cmd::SetFilesTree(_)
             | Cmd::Pull
             | Cmd::PullDialog
             | Cmd::ApplyStash(_)
