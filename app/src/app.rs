@@ -12,6 +12,7 @@ mod settings;
 mod tab;
 mod tabs;
 mod updater;
+mod view_tabs;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
