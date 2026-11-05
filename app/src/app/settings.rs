@@ -536,7 +536,7 @@ fn checked_ago(secs: i64) -> String {
 /// The update channel, the installed version and the last check, with "Check now".
 fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
     use crate::modal::Kind;
-    use crate::update::{Version, COMMIT};
+    use crate::update::{commit, Version};
     let s = &mut *pane.settings;
     let u = pane.update;
     card(ui, |c| {
@@ -552,7 +552,7 @@ fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
     let status = u.status();
     card(ui, |c| {
         let current = Version::current();
-        let built = if COMMIT.is_empty() { "The version installed".to_string() } else { format!("Built from {}", short(COMMIT)) };
+        let built = match commit() { Some(c) => format!("Built from {}", short(c)), None => "The version installed".to_string() };
         let can = u.can_check();
         let ctrl = c.row(&format!("Fourchette {current}"), &built, vec2(120.0, 30.0), true);
         if button_at(c.ui, ctrl, "update_check_now", "Check now", Kind::Plain, can && status != CheckStatus::Checking) {

@@ -27,7 +27,7 @@ cargo test
 # Live and slow tests: they call Claude Code and GitHub for real, and install an update from a disk image made on the spot
 cargo test -- --ignored --nocapture
 
-# Lints: a change adds no warning to the 5 that main has (dead code in git.rs twice, three style hints in palette.rs, git.rs and library.rs)
+# Lints: no warning at all, so any new one stands out
 cargo clippy
 
 # Screenshot of the sample project (run from a folder that is not a repository, such as /tmp)
