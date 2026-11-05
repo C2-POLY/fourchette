@@ -2,6 +2,7 @@
 use crate::app::{short, Cmd, Dialog};
 use crate::git::{self, FileChange, GitRef, RefKind};
 use crate::graph::Row;
+use crate::pulls::{Ci as PrCi, Pull, State as PrState};
 use crate::theme;
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
 
@@ -61,6 +62,62 @@ pub fn ref_colors(r: &GitRef, lane: Color32, bg: Color32) -> (Color32, Option<Co
         RefKind::Remote => (bg, Some(theme::tint(lane, bg, 0.4)), text),
         _ if r.is_head => (theme::tint(lane, bg, 0.3), Some(theme::tint(lane, bg, 0.6)), theme::readable(lane, 0.55)),
         _ => (theme::tint(lane, bg, 0.18), None, text),
+    }
+}
+
+/// The width of a pull request badge: its icon, and its CI dot when it has checks.
+pub fn pr_badge_width(pr: &Pull) -> f32 {
+    if pr.ci.is_some() {
+        21.0
+    } else {
+        11.0
+    }
+}
+
+/// A pull request badge whose left edge is at `left` and centre line at `y`: the pull request
+/// icon (two branches joined by an arrow) in the colour of its state, then a dot in the colour
+/// of its checks, a ring while they run.
+pub fn pr_badge(p: &egui::Painter, left: f32, y: f32, pr: &Pull) {
+    let t = theme::c();
+    let col = match pr.state {
+        PrState::Draft => t.dim,
+        PrState::Open => t.added,
+        // The project's "blue": the accent is too close to the merged purple in some variants.
+        PrState::Approved => theme::lane_color(0),
+        PrState::ChangesRequested => theme::lane_color(3),
+        PrState::Merged => t.renamed,
+        PrState::Closed => t.deleted,
+    };
+    let s = Stroke::new(1.3_f32, col);
+    let (x0, x1, r) = (left + 1.8, left + 9.0, 1.6);
+    let (top, bottom) = (y - 3.8, y + 3.8);
+    p.circle_stroke(pos2(x0, top), r, s);
+    p.circle_stroke(pos2(x0, bottom), r, s);
+    p.line_segment([pos2(x0, top + r), pos2(x0, bottom - r)], s);
+    p.circle_stroke(pos2(x1, bottom), r, s);
+    if pr.state == PrState::Merged {
+        // Merged: the right branch joins the left one.
+        p.line_segment([pos2(x1, bottom - r), pos2(x1, y - 0.6)], s);
+        p.line_segment([pos2(x1, y - 0.6), pos2(x0 + 0.6, top + r)], s);
+    } else {
+        // The arrow from the right branch back to the left one.
+        let (ax, ay) = (x0 + 3.6, top);
+        p.add(Shape::line(vec![pos2(x1, bottom - r), pos2(x1, ay), pos2(ax, ay)], s));
+        p.add(Shape::line(vec![pos2(ax + 1.5, ay - 1.5), pos2(ax, ay), pos2(ax + 1.5, ay + 1.5)], s));
+    }
+    let c = pos2(left + 17.5, y);
+    match pr.ci {
+        Some(PrCi::Success) => {
+            p.circle_filled(c, 3.2, t.added);
+        }
+        Some(PrCi::Failure) => {
+            p.circle_filled(c, 3.2, t.deleted);
+        }
+        Some(PrCi::Pending) => {
+            p.circle_stroke(c, 2.7, Stroke::new(1.3_f32, t.modified));
+            p.circle_filled(c, 1.1, t.modified);
+        }
+        None => {}
     }
 }
 
@@ -298,6 +355,13 @@ fn icon_glyph(kind: &str) -> &'static str {
 }
 
 pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, selected: bool, color: Option<Color32>, current: bool) -> egui::Response {
+    side_item_reserve(ui, kind, text, count, selected, color, current, 0.0)
+}
+
+/// A sidebar row whose text stops `reserve` points earlier on the right, for a badge drawn
+/// there (`side_trailing` gives where).
+#[allow(clippy::too_many_arguments)]
+pub fn side_item_reserve(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, selected: bool, color: Option<Color32>, current: bool, reserve: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected || current {
@@ -318,7 +382,7 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
         x += 20.0;
     }
     let tc = if selected || current { theme::c().strong } else { theme::c().text };
-    let right = rect.right() - if count.is_some() || current { 34.0 } else { 8.0 };
+    let right = side_trailing(rect, count.is_some() || current) - reserve;
     fit_text(p, pos2(x, y), Align2::LEFT_CENTER, text, theme::body(), tc, right - x);
     if current {
         check_mark(p, pos2(rect.right() - 14.0, y), theme::c().added);
@@ -328,6 +392,11 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
         }
     }
     resp
+}
+
+/// Where a sidebar row's text ends on the right: before its count or check mark, if it has one.
+pub fn side_trailing(rect: Rect, marked: bool) -> f32 {
+    rect.right() - if marked { 34.0 } else { 8.0 }
 }
 
 /// A foldable group inside a section (a remote, a project column): chevron, name, count.
@@ -349,7 +418,7 @@ pub fn faint_hint(text: impl Into<String>) -> RichText {
     RichText::new(text).color(theme::c().faint)
 }
 
-pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) -> egui::Response {
+pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32, reserve: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if resp.hovered() {
@@ -358,7 +427,7 @@ pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) ->
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
     p.circle_filled(pos2(x + 3.0, y), 3.0, color);
-    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, rect.right() - 8.0 - (x + 15.0));
+    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, side_trailing(rect, false) - reserve - (x + 15.0));
     resp
 }
 

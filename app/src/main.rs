@@ -16,6 +16,7 @@ mod pr_draft;
 mod preview;
 mod push;
 mod pull;
+mod pulls;
 mod resolve;
 mod settings;
 mod theme;

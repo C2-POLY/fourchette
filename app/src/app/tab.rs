@@ -66,6 +66,8 @@ pub struct Tab {
     pub(super) operation: Option<crate::operation::InProgress>,
     /// The branch's issue on the project, and the offer to move it.
     pub(super) issue: super::issue::IssueFlow,
+    /// The repository's pull requests and their CI, shown as badges on the branches.
+    pub(super) pulls: project::PullsState,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -93,6 +95,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.pr_draft_poll();
         t.resolve_poll();
         t.project_poll();
+        t.pulls_poll();
         t.issue_poll(settings.issue_status_auto);
         if timers {
             t.timers(ctx, settings);
@@ -153,6 +156,7 @@ impl Tab {
             notice: None,
             operation: None,
             issue: Default::default(),
+            pulls: Default::default(),
         }
     }
 
@@ -198,6 +202,7 @@ impl Tab {
         };
         self.worktrees = vec![wt("graph-colours", Some("feature/graph-colours"), false), wt("search-fix", Some("feature/search"), false), wt("old-try", None, true)];
         self.project = project::ProjectState { board: Some(std::sync::Arc::new(crate::github::sample())), ..Default::default() };
+        self.pulls = project::PullsState { pulls: Some(std::sync::Arc::new(crate::pulls::sample())), loading: None };
         self.after_load();
         self.sel = Sel::Commit(0);
         self.details_layout = DetailsLayout::default();
@@ -806,7 +811,12 @@ impl Tab {
             None => None,
         };
         if let Some((res, quiet)) = done {
+            // A fetch or a pull may bring news of the pull requests too.
+            let fetched = self.busy.as_ref().is_some_and(|(label, _, _)| label.starts_with("Fetch") || label.starts_with("Pull"));
             self.busy = None;
+            if fetched && res.is_ok() {
+                self.pulls_load();
+            }
             self.reload();
             let snap = self.pending_undo.take();
             self.record(snap);

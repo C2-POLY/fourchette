@@ -203,7 +203,13 @@ impl Tab {
             if self.section(ui, "Branches", locals.len()) {
                 let cur = self.branch.clone().unwrap_or_default();
                 for b in &locals {
-                    let resp = side_item(ui, "branch", &b.name, None, false, Some(self.ref_color(&b.target)), b.is_head);
+                    let pr = self.pull_of(b).cloned();
+                    let reserve = pr.as_ref().map(|p| pr_badge_width(p) + 8.0).unwrap_or(0.0);
+                    let mut resp = side_item_reserve(ui, "branch", &b.name, None, false, Some(self.ref_color(&b.target)), b.is_head, reserve);
+                    if let Some(p) = &pr {
+                        pr_badge(ui.painter(), side_trailing(resp.rect, b.is_head) - pr_badge_width(p), resp.rect.center().y, p);
+                        resp = resp.on_hover_text(p.describe());
+                    }
                     if resp.clicked() {
                         cmds.push(Cmd::SelectHash(b.target.clone()));
                     }
@@ -239,7 +245,13 @@ impl Tab {
                     }
                     for r in &items {
                         let name = r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name);
-                        let resp = side_item_indent(ui, name, self.ref_color(&r.target), 14.0);
+                        let pr = self.pull_of(r).cloned();
+                        let reserve = pr.as_ref().map(|p| pr_badge_width(p) + 8.0).unwrap_or(0.0);
+                        let mut resp = side_item_indent(ui, name, self.ref_color(&r.target), 14.0, reserve);
+                        if let Some(p) = &pr {
+                            pr_badge(ui.painter(), side_trailing(resp.rect, false) - pr_badge_width(p), resp.rect.center().y, p);
+                            resp = resp.on_hover_text(p.describe());
+                        }
                         if resp.clicked() {
                             cmds.push(Cmd::SelectHash(r.target.clone()));
                         }
@@ -451,7 +463,10 @@ impl Tab {
                     for (k, r) in refs.iter().enumerate() {
                         let (fill, stroke, text) = ref_colors(r, lane_col, bg);
                         let galley = p.layout_no_wrap(ref_label(r), theme::small(), text);
-                        let w = galley.size().x + 14.0;
+                        // A pull request badge sits inside the label, after its name.
+                        let pull = self.pull_of(r);
+                        let bw = pull.map(|q| pr_badge_width(q) + 5.0).unwrap_or(0.0);
+                        let w = galley.size().x + 14.0 + bw;
                         if x + w > max_x && k > 0 {
                             let mg = p.layout_no_wrap(format!("+{}", refs.len() - k), theme::small(), theme::c().dim);
                             let mr = Rect::from_min_size(pos2(x, y - 9.0), vec2(mg.size().x + 10.0, 18.0));
@@ -467,8 +482,11 @@ impl Tab {
                             p.rect_stroke(pr, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
                         }
                         // A label wider than its pill ends with "…" inside it, never cut at the edge.
-                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0) } else { galley };
+                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0 - bw) } else { galley };
                         p.with_clip_rect(pr.shrink(1.0)).galley(pos2(pr.left() + 7.0, y - galley.size().y / 2.0), galley, text);
+                        if let Some(q) = pull {
+                            pr_badge(&p.with_clip_rect(pr.shrink(1.0)), pr.right() - 7.0 - pr_badge_width(q), y, q);
+                        }
                         x = pr.right() + theme::REF_GAP;
                     }
                     p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
@@ -485,6 +503,9 @@ impl Tab {
                         resp.clone().on_hover_ui_at_pointer(|ui| {
                             for r in refs {
                                 ui.label(ref_label(r));
+                                if let Some(q) = self.pull_of(r) {
+                                    ui.label(RichText::new(q.describe()).small().color(theme::c().dim));
+                                }
                             }
                         });
                     }

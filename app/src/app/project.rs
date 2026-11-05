@@ -20,6 +20,14 @@ pub struct ProjectState {
     pub writes: Option<(Sender<Write>, Receiver<Written>)>,
 }
 
+/// The repository's pull requests, read in the background. A failed read (no `gh`, not signed
+/// in, offline) keeps what was there and says nothing: the badges are a bonus.
+#[derive(Default)]
+pub struct PullsState {
+    pub pulls: Option<Arc<crate::pulls::Pulls>>,
+    pub loading: Option<Receiver<Result<crate::pulls::Pulls, String>>>,
+}
+
 /// The colour of a GitHub colour name ("BLUE"), as used by project options and issue types,
 /// in the mode on screen.
 pub(super) fn named_color(name: &str) -> Option<Color32> {
@@ -64,6 +72,7 @@ impl App {
             return;
         }
         let t = &mut self.tabs[self.active];
+        t.pulls_load();
         let preferred = t.repo.as_ref().and_then(|r| self.library.get(&r.root)).and_then(|e| e.project.clone());
         t.project_load(preferred);
     }
@@ -94,6 +103,49 @@ impl Tab {
             let _ = tx.send(github::load(&slug, preferred.as_deref()));
         });
         self.project.loading = Some(rx);
+    }
+
+    /// Reads this repository's pull requests in the background, unless a read is under way.
+    /// Outside GitHub there are none.
+    pub(super) fn pulls_load(&mut self) {
+        let Some(r) = &self.repo else { return };
+        if self.pulls.loading.is_some() {
+            return;
+        }
+        let remote = r.default_remote();
+        let url = remote.as_ref().and_then(|rem| r.git(&["remote", "get-url", rem]).ok()).unwrap_or_default();
+        let (Some(slug), Some(remote)) = (github::slug(&url), remote) else {
+            self.pulls = PullsState::default();
+            return;
+        };
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::pulls::load(&slug, &remote));
+        });
+        self.pulls.loading = Some(rx);
+    }
+
+    pub(super) fn pulls_poll(&mut self) {
+        let Some(rx) = &self.pulls.loading else { return };
+        match rx.try_recv() {
+            Ok(Ok(p)) => {
+                self.pulls.pulls = Some(Arc::new(p));
+                self.pulls.loading = None;
+            }
+            Ok(Err(_)) | Err(std::sync::mpsc::TryRecvError::Disconnected) => self.pulls.loading = None,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
+    /// The pull request a branch label shows: a local branch's, or a remote branch's on the
+    /// remote the pull requests were read from. Tags have none.
+    pub(super) fn pull_of(&self, r: &GitRef) -> Option<&crate::pulls::Pull> {
+        let p = self.pulls.pulls.as_deref()?;
+        match r.kind {
+            RefKind::Local => p.for_branch(&r.name),
+            RefKind::Remote => p.for_remote(&r.name),
+            _ => None,
+        }
     }
 
     pub(super) fn project_poll(&mut self) {
