@@ -1,11 +1,9 @@
 //! A calm, high-contrast look in the spirit of Linear: quiet surfaces, subtle borders,
 //! one accent colour and a four-size type scale, in a dark and a light version.
-//! Four variants (Classic, Gold, Neon, Forest) each tint the surfaces and pick their own accent,
-//! in both versions; the branch colours stay the same in all of them.
-//! The views read the colours of the variant and mode on screen through `c()`.
+//! The views read the colours of the mode on screen through `c()`.
 use egui::{Color32, CornerRadius, FontId, Shadow, Stroke, TextStyle, Theme, ThemePreference, Visuals};
 use crate::settings::{CodeFont, UiFont};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Branch palette: the original program's 9 colours (see MECHANICS.md, sub_1001e0440).
 pub const PALETTE: [Color32; 9] = [
@@ -147,208 +145,25 @@ pub const LIGHT: Colors = Colors {
     shadow: 45,
 };
 
-/// Gold, dark: night-brown surfaces and an amber accent.
-pub const GOLD_DARK: Colors = Colors {
-    sidebar: Color32::from_rgb(0x10, 0x0d, 0x09),
-    bg: Color32::from_rgb(0x16, 0x12, 0x0d),
-    elevated: Color32::from_rgb(0x1f, 0x19, 0x12),
-    input: Color32::from_rgb(0x1b, 0x16, 0x0f),
-    hover: Color32::from_rgb(0x22, 0x1b, 0x12),
-    select: Color32::from_rgb(0x30, 0x26, 0x1a),
-    border: Color32::from_rgb(0x2a, 0x23, 0x18),
-    border_strong: Color32::from_rgb(0x3a, 0x30, 0x21),
-    widget_hover: Color32::from_rgb(0x2c, 0x24, 0x18),
-    widget_hover_border: Color32::from_rgb(0x4c, 0x3f, 0x2a),
-    widget_active: Color32::from_rgb(0x36, 0x2c, 0x1e),
-    widget_active_border: Color32::from_rgb(0x58, 0x49, 0x31),
-    text: Color32::from_rgb(0xec, 0xe4, 0xd5),
-    strong: Color32::from_rgb(0xfb, 0xf7, 0xee),
-    dim: Color32::from_rgb(0xb3, 0xa6, 0x8f),
-    faint: Color32::from_rgb(0x85, 0x78, 0x61),
-    accent: Color32::from_rgb(0xb0, 0x7a, 0x14),
-    accent_text: Color32::from_rgb(0xe8, 0xbb, 0x55),
-    accent_soft: Color32::from_rgb(0x3a, 0x2c, 0x12),
-    on_accent: Color32::from_rgb(0xff, 0xf8, 0xec),
-    added: Color32::from_rgb(0x4c, 0xb7, 0x82),
-    modified: Color32::from_rgb(0xe2, 0xb3, 0x40),
-    deleted: Color32::from_rgb(0xeb, 0x57, 0x57),
-    renamed: Color32::from_rgb(0xa9, 0x9c, 0xf0),
-    diff_added_text: Color32::from_rgb(0xc8, 0xf0, 0xd8),
-    diff_deleted_text: Color32::from_rgb(0xf8, 0xd0, 0xd0),
-    shadow: 150,
-};
-
-/// Gold, light: cream surfaces and a deep amber accent.
-pub const GOLD_LIGHT: Colors = Colors {
-    sidebar: Color32::from_rgb(0xf7, 0xf1, 0xe6),
-    bg: Color32::from_rgb(0xff, 0xfd, 0xf8),
-    elevated: Color32::from_rgb(0xff, 0xfd, 0xf8),
-    input: Color32::from_rgb(0xff, 0xff, 0xff),
-    hover: Color32::from_rgb(0xf3, 0xeb, 0xdc),
-    select: Color32::from_rgb(0xf3, 0xe3, 0xc0),
-    border: Color32::from_rgb(0xeb, 0xe1, 0xcd),
-    border_strong: Color32::from_rgb(0xd9, 0xcb, 0xae),
-    widget_hover: Color32::from_rgb(0xf6, 0xef, 0xe1),
-    widget_hover_border: Color32::from_rgb(0xcd, 0xbc, 0x99),
-    widget_active: Color32::from_rgb(0xee, 0xe3, 0xcc),
-    widget_active_border: Color32::from_rgb(0xbf, 0xac, 0x86),
-    text: Color32::from_rgb(0x2b, 0x24, 0x19),
-    strong: Color32::from_rgb(0x13, 0x0e, 0x07),
-    dim: Color32::from_rgb(0x69, 0x5c, 0x47),
-    faint: Color32::from_rgb(0x9a, 0x8b, 0x72),
-    accent: Color32::from_rgb(0xa8, 0x73, 0x0f),
-    accent_text: Color32::from_rgb(0x8a, 0x5c, 0x0b),
-    accent_soft: Color32::from_rgb(0xfb, 0xee, 0xcd),
-    on_accent: Color32::from_rgb(0xff, 0xfd, 0xf8),
-    added: Color32::from_rgb(0x1f, 0x93, 0x5c),
-    modified: Color32::from_rgb(0xa8, 0x6f, 0x05),
-    deleted: Color32::from_rgb(0xd0, 0x3b, 0x3b),
-    renamed: Color32::from_rgb(0x6a, 0x5a, 0xd4),
-    diff_added_text: Color32::from_rgb(0x15, 0x52, 0x33),
-    diff_deleted_text: Color32::from_rgb(0x7f, 0x1d, 0x1d),
-    shadow: 45,
-};
-
-/// Neon, dark: night-violet surfaces and a magenta accent, synthwave style.
-pub const NEON_DARK: Colors = Colors {
-    sidebar: Color32::from_rgb(0x0d, 0x09, 0x16),
-    bg: Color32::from_rgb(0x13, 0x0d, 0x1f),
-    elevated: Color32::from_rgb(0x1c, 0x14, 0x30),
-    input: Color32::from_rgb(0x18, 0x11, 0x29),
-    hover: Color32::from_rgb(0x1f, 0x16, 0x34),
-    select: Color32::from_rgb(0x2d, 0x1b, 0x48),
-    border: Color32::from_rgb(0x2a, 0x1f, 0x40),
-    border_strong: Color32::from_rgb(0x3b, 0x2c, 0x57),
-    widget_hover: Color32::from_rgb(0x2a, 0x1e, 0x43),
-    widget_hover_border: Color32::from_rgb(0x56, 0x41, 0x7c),
-    widget_active: Color32::from_rgb(0x33, 0x24, 0x4f),
-    widget_active_border: Color32::from_rgb(0x64, 0x4a, 0x8e),
-    text: Color32::from_rgb(0xec, 0xe4, 0xfa),
-    strong: Color32::from_rgb(0xfd, 0xf9, 0xff),
-    dim: Color32::from_rgb(0xae, 0x9f, 0xcd),
-    faint: Color32::from_rgb(0x7e, 0x70, 0x9d),
-    accent: Color32::from_rgb(0xd6, 0x33, 0x8f),
-    accent_text: Color32::from_rgb(0xff, 0x7c, 0xcb),
-    accent_soft: Color32::from_rgb(0x3d, 0x17, 0x40),
-    on_accent: Color32::from_rgb(0xfd, 0xf9, 0xff),
-    added: Color32::from_rgb(0x3f, 0xd6, 0xa8),
-    modified: Color32::from_rgb(0xf2, 0xc1, 0x4e),
-    deleted: Color32::from_rgb(0xff, 0x5c, 0x7a),
-    renamed: Color32::from_rgb(0x6f, 0xc3, 0xff),
-    diff_added_text: Color32::from_rgb(0xc4, 0xf7, 0xe6),
-    diff_deleted_text: Color32::from_rgb(0xff, 0xd3, 0xdc),
-    shadow: 160,
-};
-
-/// Neon, light: lilac-white surfaces and a magenta accent.
-pub const NEON_LIGHT: Colors = Colors {
-    sidebar: Color32::from_rgb(0xf7, 0xf2, 0xfc),
-    bg: Color32::from_rgb(0xfe, 0xfc, 0xff),
-    elevated: Color32::from_rgb(0xff, 0xff, 0xff),
-    input: Color32::from_rgb(0xff, 0xff, 0xff),
-    hover: Color32::from_rgb(0xf1, 0xe9, 0xfa),
-    select: Color32::from_rgb(0xf6, 0xdc, 0xef),
-    border: Color32::from_rgb(0xe9, 0xe0, 0xf4),
-    border_strong: Color32::from_rgb(0xd8, 0xca, 0xe9),
-    widget_hover: Color32::from_rgb(0xf6, 0xef, 0xfc),
-    widget_hover_border: Color32::from_rgb(0xc4, 0xb2, 0xdc),
-    widget_active: Color32::from_rgb(0xec, 0xe2, 0xf7),
-    widget_active_border: Color32::from_rgb(0xb5, 0xa1, 0xd2),
-    text: Color32::from_rgb(0x2a, 0x22, 0x36),
-    strong: Color32::from_rgb(0x12, 0x0c, 0x1c),
-    dim: Color32::from_rgb(0x62, 0x55, 0x77),
-    faint: Color32::from_rgb(0x95, 0x8b, 0xa7),
-    accent: Color32::from_rgb(0xcc, 0x2a, 0x87),
-    accent_text: Color32::from_rgb(0xae, 0x1f, 0x72),
-    accent_soft: Color32::from_rgb(0xfd, 0xe5, 0xf3),
-    on_accent: Color32::from_rgb(0xff, 0xff, 0xff),
-    added: Color32::from_rgb(0x0f, 0x9a, 0x73),
-    modified: Color32::from_rgb(0xa8, 0x6f, 0x05),
-    deleted: Color32::from_rgb(0xd6, 0x30, 0x4f),
-    renamed: Color32::from_rgb(0x2f, 0x6f, 0xd0),
-    diff_added_text: Color32::from_rgb(0x0f, 0x4f, 0x3c),
-    diff_deleted_text: Color32::from_rgb(0x7f, 0x1d, 0x33),
-    shadow: 45,
-};
-
-/// Forest, dark: deep green surfaces, a leaf-green accent and copper warnings.
-pub const FOREST_DARK: Colors = Colors {
-    sidebar: Color32::from_rgb(0x09, 0x0f, 0x0c),
-    bg: Color32::from_rgb(0x0e, 0x15, 0x11),
-    elevated: Color32::from_rgb(0x15, 0x1f, 0x19),
-    input: Color32::from_rgb(0x12, 0x1b, 0x16),
-    hover: Color32::from_rgb(0x17, 0x23, 0x1c),
-    select: Color32::from_rgb(0x1f, 0x31, 0x27),
-    border: Color32::from_rgb(0x1f, 0x2b, 0x24),
-    border_strong: Color32::from_rgb(0x2b, 0x3b, 0x32),
-    widget_hover: Color32::from_rgb(0x1f, 0x2c, 0x24),
-    widget_hover_border: Color32::from_rgb(0x3b, 0x50, 0x43),
-    widget_active: Color32::from_rgb(0x26, 0x36, 0x2c),
-    widget_active_border: Color32::from_rgb(0x46, 0x5d, 0x4f),
-    text: Color32::from_rgb(0xe0, 0xe9, 0xe2),
-    strong: Color32::from_rgb(0xf5, 0xfa, 0xf6),
-    dim: Color32::from_rgb(0x9f, 0xb1, 0xa5),
-    faint: Color32::from_rgb(0x71, 0x85, 0x79),
-    accent: Color32::from_rgb(0x2f, 0x8a, 0x56),
-    accent_text: Color32::from_rgb(0x7f, 0xd4, 0xa0),
-    accent_soft: Color32::from_rgb(0x16, 0x33, 0x22),
-    on_accent: Color32::from_rgb(0xf5, 0xfa, 0xf6),
-    added: Color32::from_rgb(0x5c, 0xc9, 0x8e),
-    modified: Color32::from_rgb(0xd9, 0x98, 0x4a),
-    deleted: Color32::from_rgb(0xe5, 0x60, 0x5a),
-    renamed: Color32::from_rgb(0x8e, 0xa6, 0xf0),
-    diff_added_text: Color32::from_rgb(0xcd, 0xf2, 0xdc),
-    diff_deleted_text: Color32::from_rgb(0xf8, 0xd3, 0xcf),
-    shadow: 150,
-};
-
-/// Forest, light: sage-white surfaces and a pine-green accent.
-pub const FOREST_LIGHT: Colors = Colors {
-    sidebar: Color32::from_rgb(0xf1, 0xf5, 0xf1),
-    bg: Color32::from_rgb(0xfc, 0xfe, 0xfc),
-    elevated: Color32::from_rgb(0xff, 0xff, 0xff),
-    input: Color32::from_rgb(0xff, 0xff, 0xff),
-    hover: Color32::from_rgb(0xe8, 0xef, 0xe9),
-    select: Color32::from_rgb(0xd9, 0xea, 0xdd),
-    border: Color32::from_rgb(0xde, 0xe6, 0xe0),
-    border_strong: Color32::from_rgb(0xca, 0xd7, 0xcd),
-    widget_hover: Color32::from_rgb(0xee, 0xf4, 0xef),
-    widget_hover_border: Color32::from_rgb(0xb4, 0xc5, 0xb8),
-    widget_active: Color32::from_rgb(0xe2, 0xeb, 0xe4),
-    widget_active_border: Color32::from_rgb(0xa4, 0xb7, 0xa9),
-    text: Color32::from_rgb(0x1f, 0x2a, 0x23),
-    strong: Color32::from_rgb(0x0b, 0x12, 0x0e),
-    dim: Color32::from_rgb(0x53, 0x64, 0x59),
-    faint: Color32::from_rgb(0x86, 0x97, 0x8b),
-    accent: Color32::from_rgb(0x2a, 0x7d, 0x4e),
-    accent_text: Color32::from_rgb(0x1f, 0x6b, 0x42),
-    accent_soft: Color32::from_rgb(0xe0, 0xf2, 0xe6),
-    on_accent: Color32::from_rgb(0xff, 0xff, 0xff),
-    added: Color32::from_rgb(0x1d, 0x8a, 0x55),
-    modified: Color32::from_rgb(0xb0, 0x65, 0x0f),
-    deleted: Color32::from_rgb(0xd0, 0x3b, 0x3b),
-    renamed: Color32::from_rgb(0x4f, 0x63, 0xc9),
-    diff_added_text: Color32::from_rgb(0x14, 0x52, 0x32),
-    diff_deleted_text: Color32::from_rgb(0x7f, 0x1d, 0x1d),
-    shadow: 45,
-};
-
 static LIGHT_ON_SCREEN: AtomicBool = AtomicBool::new(false);
-static VARIANT_ON_SCREEN: AtomicU8 = AtomicU8::new(0);
 
 /// True while the window is drawn in the light mode.
 pub fn is_light() -> bool {
     LIGHT_ON_SCREEN.load(Ordering::Relaxed)
 }
 
-/// The colours of the variant and mode on screen.
+/// The colours of the mode on screen.
 pub fn c() -> &'static Colors {
-    variant().colors(is_light())
+    colors(is_light())
 }
 
-/// The variant on screen.
-pub fn variant() -> Variant {
-    Variant::ALL[VARIANT_ON_SCREEN.load(Ordering::Relaxed) as usize % Variant::ALL.len()]
+/// The colours of the dark or the light mode.
+pub fn colors(light: bool) -> &'static Colors {
+    if light {
+        &LIGHT
+    } else {
+        &DARK
+    }
 }
 
 /// Follows the mode egui draws this frame (it changes with macOS in System mode).
@@ -404,72 +219,6 @@ impl Appearance {
             Appearance::Dark => ThemePreference::Dark,
             Appearance::Light => ThemePreference::Light,
         }
-    }
-}
-
-/// A fun look for the whole app: its colours, in a dark and a light version, and its icon.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Variant {
-    /// The silver fork and the indigo accent.
-    #[default]
-    Classic,
-    Gold,
-    Neon,
-    Forest,
-}
-
-impl Variant {
-    pub const ALL: [Variant; 4] = [Variant::Classic, Variant::Gold, Variant::Neon, Variant::Forest];
-
-    /// How it is written in repos.json.
-    pub fn key(self) -> &'static str {
-        match self {
-            Variant::Classic => "classic",
-            Variant::Gold => "gold",
-            Variant::Neon => "neon",
-            Variant::Forest => "forest",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Variant> {
-        Variant::ALL.into_iter().find(|v| v.key() == s.trim().to_lowercase())
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Variant::Classic => "Classic",
-            Variant::Gold => "Gold",
-            Variant::Neon => "Neon",
-            Variant::Forest => "Forest",
-        }
-    }
-
-    /// A few words for the palette.
-    pub fn blurb(self) -> &'static str {
-        match self {
-            Variant::Classic => "silver fork, indigo",
-            Variant::Gold => "golden fork, amber",
-            Variant::Neon => "glowing fork, magenta",
-            Variant::Forest => "copper fork, green",
-        }
-    }
-
-    pub fn colors(self, light: bool) -> &'static Colors {
-        match (self, light) {
-            (Variant::Classic, false) => &DARK,
-            (Variant::Classic, true) => &LIGHT,
-            (Variant::Gold, false) => &GOLD_DARK,
-            (Variant::Gold, true) => &GOLD_LIGHT,
-            (Variant::Neon, false) => &NEON_DARK,
-            (Variant::Neon, true) => &NEON_LIGHT,
-            (Variant::Forest, false) => &FOREST_DARK,
-            (Variant::Forest, true) => &FOREST_LIGHT,
-        }
-    }
-
-    /// `FOURCHETTE_VARIANT=<key>` shows a variant for a screenshot without saving it.
-    pub fn from_env_or(saved: Variant) -> Variant {
-        std::env::var("FOURCHETTE_VARIANT").ok().and_then(|v| Variant::parse(&v)).unwrap_or(saved)
     }
 }
 
@@ -652,9 +401,10 @@ pub fn set_fonts(ctx: &egui::Context, ui: UiFont, code: CodeFont) {
     ctx.set_fonts(fonts_for(ui, code, &read_system_font));
 }
 
-/// Sets up both modes once, then shows the variant and mode the person chose.
-pub fn apply(ctx: &egui::Context, appearance: Appearance, variant: Variant) {
-    set_variant(ctx, variant);
+/// Sets up both modes once, then shows the mode the person chose.
+pub fn apply(ctx: &egui::Context, appearance: Appearance) {
+    ctx.set_visuals_of(Theme::Dark, visuals(&DARK, true));
+    ctx.set_visuals_of(Theme::Light, visuals(&LIGHT, false));
     ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(8.0, 4.0);
         s.spacing.button_padding = egui::vec2(10.0, 4.0);
@@ -670,13 +420,6 @@ pub fn apply(ctx: &egui::Context, appearance: Appearance, variant: Variant) {
         .into();
     });
     set_appearance(ctx, appearance);
-}
-
-/// Installs the dark and light colours of a variant; the window repaints in it at once.
-pub fn set_variant(ctx: &egui::Context, variant: Variant) {
-    VARIANT_ON_SCREEN.store(variant as u8, Ordering::Relaxed);
-    ctx.set_visuals_of(Theme::Dark, visuals(variant.colors(false), true));
-    ctx.set_visuals_of(Theme::Light, visuals(variant.colors(true), false));
 }
 
 pub fn set_appearance(ctx: &egui::Context, appearance: Appearance) {
@@ -733,16 +476,6 @@ mod tests {
         assert_eq!(Appearance::System.next(), Appearance::Dark);
     }
 
-    #[test]
-    fn variant_round_trips() {
-        for v in Variant::ALL {
-            assert_eq!(Variant::parse(v.key()), Some(v));
-        }
-        assert_eq!(Variant::parse(" Neon "), Some(Variant::Neon));
-        assert_eq!(Variant::parse("sepia"), None);
-        assert_eq!(Variant::default(), Variant::Classic);
-    }
-
     /// WCAG contrast ratio of two colours.
     fn contrast(a: Color32, b: Color32) -> f32 {
         let lum = |c: Color32| {
@@ -761,20 +494,18 @@ mod tests {
     }
 
     #[test]
-    fn every_variant_is_readable_in_both_modes() {
-        for v in Variant::ALL {
-            for light in [false, true] {
-                let k = v.colors(light);
-                let what = format!("{} {}", v.label(), if light { "light" } else { "dark" });
-                for (name, bg) in [("bg", k.bg), ("sidebar", k.sidebar), ("select", k.select)] {
-                    assert!(contrast(k.text, bg) >= 7.0, "{what}: text on {name} {:.1}", contrast(k.text, bg));
-                    assert!(contrast(k.dim, bg) >= 4.5, "{what}: dim on {name} {:.1}", contrast(k.dim, bg));
-                }
-                assert!(contrast(k.accent_text, k.bg) >= 4.5, "{what}: accent text {:.1}", contrast(k.accent_text, k.bg));
-                assert!(contrast(k.on_accent, k.accent) >= 3.0, "{what}: button text {:.1}", contrast(k.on_accent, k.accent));
-                for (name, col) in [("added", k.added), ("modified", k.modified), ("deleted", k.deleted)] {
-                    assert!(contrast(col, k.bg) >= 3.0, "{what}: {name} {:.1}", contrast(col, k.bg));
-                }
+    fn both_modes_are_readable() {
+        for light in [false, true] {
+            let k = colors(light);
+            let what = if light { "light" } else { "dark" };
+            for (name, bg) in [("bg", k.bg), ("sidebar", k.sidebar), ("select", k.select)] {
+                assert!(contrast(k.text, bg) >= 7.0, "{what}: text on {name} {:.1}", contrast(k.text, bg));
+                assert!(contrast(k.dim, bg) >= 4.5, "{what}: dim on {name} {:.1}", contrast(k.dim, bg));
+            }
+            assert!(contrast(k.accent_text, k.bg) >= 4.5, "{what}: accent text {:.1}", contrast(k.accent_text, k.bg));
+            assert!(contrast(k.on_accent, k.accent) >= 3.0, "{what}: button text {:.1}", contrast(k.on_accent, k.accent));
+            for (name, col) in [("added", k.added), ("modified", k.modified), ("deleted", k.deleted)] {
+                assert!(contrast(col, k.bg) >= 3.0, "{what}: {name} {:.1}", contrast(col, k.bg));
             }
         }
     }

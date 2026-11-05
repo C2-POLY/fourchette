@@ -613,7 +613,6 @@ impl Tab {
             | Cmd::SetAppearance(_)
             | Cmd::SetDetails(_)
             | Cmd::ToggleDetails
-            | Cmd::SetVariant(_)
             | Cmd::Settings
             | Cmd::SetSettings(_)
             | Cmd::Pull

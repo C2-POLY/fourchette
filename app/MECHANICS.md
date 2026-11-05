@@ -93,13 +93,14 @@ in the Settings window. The exact git command Pull runs was not located.
 The Settings window (⌘, or "Settings…" in the palette, Esc to close) is laid out like macOS System
 Settings (issue #52): a sidebar of sections with drawn icons (Appearance, Fetch, Git; Up and Down move
 between them) and, on the right, the section's settings in rounded cards. Appearance holds the mode
-(System, Dark, Light) and the variants as preview tiles; Fetch the automatic fetch (on/off and its
+(System, Dark, Light) and the interface and code fonts; Fetch the automatic fetch (on/off and its
 interval). Choices apply at once and are kept in repos.json, all in a `"settings"` object
-(`"appearance"`, `"variant"`, `"auto_fetch"`, `"fetch_minutes"`). A file written before issue #52,
-with `"appearance"` and `"variant"` at the top level, is still read (the `"settings"` place wins
-when both hold a valid value) and is rewritten in the new layout at the next save. A missing or
-invalid key falls back to its default (System, Classic, on, 10 minutes) without touching the
-repository list.
+(`"appearance"`, `"auto_fetch"`, `"fetch_minutes"`, …). A file written before issue #52, with
+`"appearance"` at the top level, is still read (the `"settings"` place wins when both hold a valid
+value) and is rewritten in the new layout at the next save. A missing or invalid key falls back to
+its default (System, on, 10 minutes) without touching the repository list. The `"variant"` key of
+files written while the colour variants existed (issue #14, removed by #125) is ignored and dropped at the
+next save.
 
 The Git section (issue #18) holds Fork's pull sheet and stash defaults, all off by default:
 Pull merges or rebases (`"pull_rebase"`), "Stash and reapply" puts uncommitted changes aside
@@ -337,11 +338,7 @@ Linear. These are design choices, not values from the original:
 * Appearance (issue #11): System (follows macOS, the default), Dark or Light, chosen in the
   Settings window, the palette or with the status bar button and kept in repos.json (`"settings"."appearance"`). The light mode
   uses white surfaces and deepens the branch colours by 20% so they stay readable.
-* Variants (issue #14, a design choice, not a measured value): Classic (the look above, silver
-  fork), Gold (night-brown surfaces, amber accent, golden fork), Neon (night-violet surfaces,
-  magenta accent, glowing pink and cyan fork) and Forest (deep green surfaces, green accent, copper
-  fork). Each has a dark and a light palette, so Appearance works with all of them; the branch
-  colours are the same in all. Chosen in the Settings window or the palette ("Variant: …"), kept in
-  repos.json (`"settings"."variant"`, Classic by default), and the Dock icon changes at once.
+* One look only (issue #125): the colour variants of issue #14 (Gold, Neon, Forest) were removed;
+  the app keeps the colours above in both modes and the silver fork icon.
 * Colour id: a new colour is given each time a new branch line starts (*estimated*: the original
   stores a colour byte per lane; how it picks it was not fully followed).

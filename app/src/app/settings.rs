@@ -5,7 +5,7 @@
 use super::*;
 use super::updater::{now_secs, CheckStatus, UpdateState};
 use crate::settings::{count_label, minutes_label, ClaudeModel, CodeFont, CommitLanguage, Settings, UiFont, UpdateChannel, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
-use crate::theme::{Appearance, Colors, Variant};
+use crate::theme::{Appearance, Colors};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
 
@@ -29,13 +29,11 @@ const LANG_W: f32 = 240.0;
 const CHANNEL_W: f32 = 220.0;
 const SEG_H: f32 = 28.0;
 const FONT_W: f32 = 200.0;
-const TILE_H: f32 = 64.0;
 const RADIUS: u8 = crate::modal::RADIUS;
 
 /// What a section draws with: the choices on screen, and where changes go.
 pub(super) struct Pane<'a> {
     appearance: Appearance,
-    variant: Variant,
     settings: &'a mut Settings,
     cmds: &'a mut Vec<Cmd>,
     /// The update checks, for the Updates section.
@@ -119,7 +117,7 @@ fn sidebar_item(ui: &mut Ui, s: &Section, selected: bool) -> egui::Response {
 }
 
 /// The fill of a card: the window's colour with a touch of the text colour, like macOS's grouped
-/// boxes, so it reads in both modes and every variant.
+/// boxes, so it reads in both modes.
 fn card_fill(k: &Colors) -> Color32 {
     theme::tint(k.strong, k.elevated, if theme::is_light() { 0.03 } else { 0.035 })
 }
@@ -219,80 +217,6 @@ fn toggle(ui: &mut Ui, rect: Rect, id: &str, on: bool) -> bool {
     resp.clicked()
 }
 
-/// A tiny window in a variant's colours (those of the mode on screen): sidebar, history rows with
-/// their graph, a selected row and a button in the accent.
-fn variant_preview(p: &Painter, r: Rect, k: &Colors) {
-    let rad = 8u8;
-    p.rect_filled(r, CornerRadius::same(rad), k.bg);
-    let side = Rect::from_min_size(r.min, vec2((r.width() * 0.3).round(), r.height()));
-    p.rect_filled(side, CornerRadius { nw: rad, sw: rad, ne: 0, se: 0 }, k.sidebar);
-    p.vline(side.right(), r.y_range(), Stroke::new(1.0_f32, k.border));
-    // The window buttons, then three sidebar rows, the second one selected.
-    for (i, c) in [Color32::from_rgb(0xff, 0x5f, 0x57), Color32::from_rgb(0xfe, 0xbc, 0x2e), Color32::from_rgb(0x28, 0xc8, 0x40)].into_iter().enumerate() {
-        p.circle_filled(pos2(side.left() + 7.0 + i as f32 * 5.0, r.top() + 7.0), 1.6, c);
-    }
-    for i in 0..3 {
-        let y = r.top() + 22.0 + i as f32 * 11.0;
-        if i == 1 {
-            p.rect_filled(Rect::from_min_max(pos2(side.left() + 3.0, y - 4.5), pos2(side.right() - 3.0, y + 4.5)), CornerRadius::same(2), k.select);
-        }
-        let w = (side.width() - 12.0) * [0.7, 0.85, 0.55][i];
-        p.rect_filled(Rect::from_min_size(pos2(side.left() + 6.0, y - 1.25), vec2(w, 2.5)), CornerRadius::same(1), if i == 1 { k.text } else { k.faint });
-    }
-    // History: a branch joining the main lane, a line of text per commit, the second one selected.
-    let main = Rect::from_min_max(pos2(side.right() + 1.0, r.top()), r.max);
-    let lane = |i: usize| main.left() + 9.0 + i as f32 * 7.0;
-    let ys: [f32; 4] = std::array::from_fn(|i| r.top() + 11.0 + i as f32 * 11.0);
-    p.rect_filled(Rect::from_min_max(pos2(main.left(), ys[1] - 5.0), pos2(main.right(), ys[1] + 5.0)), CornerRadius::ZERO, k.select);
-    let (main_lane, branch) = (theme::lane_color(0), theme::lane_color(1));
-    p.line_segment([pos2(lane(0), ys[1]), pos2(lane(0), r.bottom())], Stroke::new(1.5_f32, main_lane));
-    p.line_segment([pos2(lane(1), ys[0]), pos2(lane(1), ys[1] + 4.0)], Stroke::new(1.5_f32, branch));
-    p.line_segment([pos2(lane(1), ys[1] + 4.0), pos2(lane(0), ys[2])], Stroke::new(1.5_f32, branch));
-    p.circle_filled(pos2(lane(1), ys[0]), 2.4, branch);
-    for y in &ys[1..] {
-        p.circle_filled(pos2(lane(0), *y), 2.4, main_lane);
-    }
-    let x0 = lane(2) + 2.0;
-    for (i, y) in ys.iter().enumerate() {
-        let w = (main.right() - x0 - 8.0) * [0.8, 0.62, 0.7, 0.45][i];
-        p.rect_filled(Rect::from_min_size(pos2(x0, y - 1.25), vec2(w, 2.5)), CornerRadius::same(1), if i == 1 { k.strong } else { k.dim });
-    }
-    // A primary button in the accent, bottom right.
-    let btn = Rect::from_min_size(pos2(main.right() - 26.0, r.bottom() - 12.0), vec2(20.0, 7.0));
-    p.rect_filled(btn, CornerRadius::same(3), k.accent);
-    p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
-}
-
-/// The four variants as tiles: a preview and the name below, the one on screen ringed with the
-/// accent. Returns the tile clicked.
-fn variant_tiles(c: &mut Card, current: Variant) -> Option<Variant> {
-    let r = c.strip(8.0 + TILE_H + 32.0, false);
-    let k = theme::c();
-    let n = Variant::ALL.len() as f32;
-    let gap = 16.0;
-    let w = ((r.width() - gap * (n - 1.0)) / n).floor();
-    let mut picked = None;
-    for (i, v) in Variant::ALL.into_iter().enumerate() {
-        let tile = Rect::from_min_size(pos2(r.left() + i as f32 * (w + gap), r.top() + 8.0), vec2(w, TILE_H));
-        let hit = Rect::from_min_max(tile.min, pos2(tile.right(), tile.bottom() + 24.0));
-        let resp = c.ui.interact(hit, c.ui.id().with(("variant", i)), Sense::click()).on_hover_text(format!("{} · {}", v.label(), v.blurb()));
-        let p = c.ui.painter();
-        variant_preview(p, tile, v.colors(theme::is_light()));
-        let on = v == current;
-        if on {
-            p.rect_stroke(tile.expand(3.0), CornerRadius::same(11), Stroke::new(2.0_f32, k.accent), StrokeKind::Inside);
-        } else if resp.hovered() {
-            p.rect_stroke(tile.expand(3.0), CornerRadius::same(11), Stroke::new(2.0_f32, k.widget_hover_border), StrokeKind::Inside);
-        }
-        let col = if on { k.strong } else if resp.hovered() { k.text } else { k.dim };
-        p.text(pos2(tile.center().x, tile.bottom() + 16.0), Align2::CENTER_CENTER, v.label(), theme::body(), col);
-        if resp.clicked() {
-            picked = Some(v);
-        }
-    }
-    picked
-}
-
 /// A compact drop-down in `rect` listing `options` by label; returns the one picked.
 fn font_picker<T: Copy + PartialEq>(ui: &mut Ui, rect: Rect, id: &str, current: T, options: &[T], label: fn(T) -> &'static str) -> Option<T> {
     let mut picked = None;
@@ -338,14 +262,6 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
         let ctrl = c.row("Code font", "Diffs, hashes and file contents", vec2(FONT_W, SEG_H), true);
         if let Some(f) = font_picker(c.ui, ctrl, "code_font", s.code_font, &CodeFont::ALL, CodeFont::label) {
             s.code_font = f;
-        }
-    });
-    card(ui, |c| {
-        c.row("Variant", "The colours of the whole app, and its Dock icon", Vec2::ZERO, true);
-        if let Some(v) = variant_tiles(c, pane.variant) {
-            if v != pane.variant {
-                pane.cmds.push(Cmd::SetVariant(v));
-            }
         }
     });
 }
@@ -659,7 +575,7 @@ impl App {
             let mut bui = ui.new_child(UiBuilder::new().id_salt(("settings_body", sec.key)).max_rect(body).layout(Layout::top_down(Align::Min)));
             egui::ScrollArea::vertical().id_salt(("settings_scroll", sec.key)).auto_shrink([false, false]).show(&mut bui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let mut pane = Pane { appearance: self.library.appearance, variant: theme::variant(), settings: &mut s, cmds, update: &self.update };
+                let mut pane = Pane { appearance: self.library.appearance, settings: &mut s, cmds, update: &self.update };
                 (sec.body)(ui, &mut pane);
             });
             // Footer, as in every dialog: a hairline, a darker strip and the hint.

@@ -1,6 +1,6 @@
 //! The person's settings, chosen in the Settings window (Cmd+,) and kept in repos.json under
-//! `"settings"`, next to the appearance and the variant (which `Library` keeps apart, since the
-//! palette and the status bar change them too). A missing or invalid value falls back to its default.
+//! `"settings"`, next to the appearance (which `Library` keeps apart, since the palette and the
+//! status bar change it too). A missing or invalid value falls back to its default.
 use serde_json::{json, Value};
 
 /// "fetchRemotesAutomatically" default true (sub_10031b7cc).
