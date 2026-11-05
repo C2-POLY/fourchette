@@ -5,7 +5,7 @@ use crate::library::{DetailsLayout, DetailsPlace};
 use crate::menu;
 use crate::sidebar;
 use crate::ui::*;
-use egui::{pos2, vec2, Align, Align2, Color32, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
+use egui::{pos2, vec2, Align, Align2, Color32, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, Ui};
 
 /// The bottom details panel's smallest height.
 /// How far a folder's branches are indented in the sidebar.
@@ -422,9 +422,10 @@ impl Tab {
     fn refs_width(&self, ui: &Ui, full_w: f32) -> f32 {
         let mut need: f32 = if self.status.is_empty() { 0.0 } else { 96.0 };
         for refs in self.by_target.values() {
-            if let Some(r) = refs.first() {
-                let w = ui.painter().layout_no_wrap(ref_label(r), theme::small(), theme::c().text).size().x + 16.0;
-                need = need.max(w + 16.0 + if refs.len() > 1 { 28.0 } else { 0.0 });
+            let pills = ref_pills(refs);
+            if let Some(f) = pills.first() {
+                let w = f.width(ui.painter(), badge_w(self.pill_pull(f)));
+                need = need.max(w + 16.0 + if pills.len() > 1 { 28.0 } else { 0.0 });
             }
         }
         need.clamp(72.0, if full_w > 900.0 { 210.0 } else { 150.0 })
@@ -507,55 +508,54 @@ impl Tab {
                     p.rect_filled(Rect::from_min_size(rect.min, vec2(2.0, rect.height())), CornerRadius::ZERO, lane_col);
                 }
 
-                // Branch / tag labels, joined to the commit by a thin line.
+                // Branch / tag pills, joined to the commit by a thin line.
                 if let Some(refs) = self.by_target.get(&c.hash) {
+                    let all = ref_pills(refs);
                     let mut x = rect.left() + 10.0;
                     let max_x = gx - 4.0;
-                    let mut pills: Vec<(Rect, &GitRef)> = Vec::new();
-                    for (k, r) in refs.iter().enumerate() {
-                        let (fill, stroke, text) = ref_colors(r, lane_col, bg);
-                        let galley = p.layout_no_wrap(ref_label(r), theme::small(), text);
-                        // A pull request badge sits inside the label, after its name.
-                        let pull = self.pull_of(r);
-                        let bw = pull.map(|q| pr_badge_width(q) + 5.0).unwrap_or(0.0);
-                        let w = galley.size().x + 14.0 + bw;
+                    let mut shown: Vec<(Rect, &GitRef)> = Vec::new();
+                    for (k, pill) in all.iter().enumerate() {
+                        // A pull request badge sits inside the pill, after its name.
+                        let pull = self.pill_pull(pill);
+                        let w = pill.width(&p, badge_w(pull));
                         if x + w > max_x && k > 0 {
-                            let mg = p.layout_no_wrap(format!("+{}", refs.len() - k), theme::small(), theme::c().dim);
+                            let mg = p.layout_no_wrap(format!("+{}", all.len() - k), theme::small(), theme::c().dim);
                             let mr = Rect::from_min_size(pos2(x, y - 9.0), vec2(mg.size().x + 10.0, 18.0));
                             p.rect_filled(mr, CornerRadius::same(4), theme::c().elevated);
                             p.galley(pos2(mr.left() + 5.0, y - mg.size().y / 2.0), mg, theme::c().dim);
                             x = mr.right() + theme::REF_GAP;
                             break;
                         }
+                        // A pill wider than the room left ends its name with "…", never cut at the edge.
                         let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min(max_x - x), 18.0));
-                        pills.push((pr, r));
-                        p.rect_filled(pr, CornerRadius::same(4), fill);
-                        if let Some(s) = stroke {
-                            p.rect_stroke(pr, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
-                        }
-                        // A label wider than its pill ends with "…" inside it, never cut at the edge.
-                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0 - bw) } else { galley };
-                        p.with_clip_rect(pr.shrink(1.0)).galley(pos2(pr.left() + 7.0, y - galley.size().y / 2.0), galley, text);
-                        if let Some(q) = pull {
-                            pr_badge(&p.with_clip_rect(pr.shrink(1.0)), pr.right() - 7.0 - pr_badge_width(q), y, q);
-                        }
+                        draw_ref_pill(&p, pr, pill, lane_col, bg, pull);
+                        shown.push((pr, pill.main));
                         x = pr.right() + theme::REF_GAP;
                     }
                     p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
-                    // A double-click on a label checks its branch out.
+                    // A double-click on a pill checks its branch out: the local one of a merged pill.
                     if resp.double_clicked() {
                         if let Some(q) = ui.input(|i| i.pointer.interact_pos()) {
-                            if let Some((_, r)) = pills.iter().find(|(pr, _)| pr.contains(q)) {
+                            if let Some((_, r)) = shown.iter().find(|(pr, _)| pr.contains(q)) {
                                 cmds.extend(label_checkout(r));
                             }
                         }
                     }
-                    // Hovering the labels lists every ref of the commit in full, the hidden ones included.
+                    // Hovering the pills lists every one of the commit in full, the hidden ones included.
                     if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x < gx) {
                         resp.clone().on_hover_ui_at_pointer(|ui| {
-                            for r in refs {
-                                ui.label(ref_label(r));
-                                if let Some(q) = self.pull_of(r) {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+                            let tip_bg = ui.visuals().window_fill;
+                            for pill in &all {
+                                let pull = self.pill_pull(pill);
+                                ui.horizontal(|ui| {
+                                    let (r, _) = ui.allocate_exact_size(vec2(pill.width(ui.painter(), badge_w(pull)), 18.0), Sense::hover());
+                                    draw_ref_pill(ui.painter(), r, pill, lane_col, tip_bg, pull);
+                                    if let Some(remote) = pill.remote {
+                                        ui.label(RichText::new(&remote.name).small().color(theme::c().dim));
+                                    }
+                                });
+                                if let Some(q) = pull {
                                     ui.label(RichText::new(q.describe()).small().color(theme::c().dim));
                                 }
                             }

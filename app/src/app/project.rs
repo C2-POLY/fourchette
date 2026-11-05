@@ -148,6 +148,11 @@ impl Tab {
         }
     }
 
+    /// The pull request of a history pill: its local branch's, else its remote branch's.
+    pub(super) fn pill_pull(&self, pill: &crate::ui::RefPill) -> Option<&crate::pulls::Pull> {
+        self.pull_of(pill.main).or_else(|| pill.remote.and_then(|r| self.pull_of(r)))
+    }
+
     pub(super) fn project_poll(&mut self) {
         self.project_written();
         let Some(rx) = &self.project.loading else { return };
