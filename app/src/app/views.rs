@@ -1835,18 +1835,27 @@ impl eframe::App for App {
                             cmds.push(Cmd::SetAppearance(a.next()));
                         }
                         let d = t.details_layout;
-                        let tip = if d.hidden { format!("Details panel: Hidden — ⌘J to show it ({})", d.place.label().to_lowercase()) } else { format!("Details panel: {} — ⌘J to hide", d.label()) };
+                        let tip = if d.hidden {
+                            format!("Details panel: Hidden — click to show it ({}), right-click for more", d.place.label().to_lowercase())
+                        } else {
+                            format!("Details panel: {} — click to move it to the {}, right-click for more", d.label(), d.clicked().place.label().to_lowercase())
+                        };
                         let btn = details_button(ui, d).on_hover_text(tip);
-                        egui::Popup::menu(&btn).align(egui::RectAlign::TOP_END).show(|ui| {
-                            ui.set_min_width(180.0);
+                        if btn.clicked() {
+                            cmds.push(Cmd::SetDetails(d.clicked()));
+                        }
+                        btn.context_menu(|ui| {
+                            crate::ui::menu_rows(ui);
                             ui.label(RichText::new("Details panel").size(theme::FS_SMALL).color(theme::c().faint));
                             for place in DetailsPlace::ALL {
                                 if ui.add(egui::Button::selectable(!d.hidden && d.place == place, place.label())).clicked() {
                                     cmds.push(Cmd::SetDetails(DetailsLayout::shown(place)));
+                                    ui.close();
                                 }
                             }
                             if ui.add(egui::Button::selectable(d.hidden, "Hidden").right_text(RichText::new("⌘J").color(theme::c().faint))).clicked() {
                                 cmds.push(Cmd::SetDetails(d.hide()));
+                                ui.close();
                             }
                         });
                         ui.add_space(4.0);
