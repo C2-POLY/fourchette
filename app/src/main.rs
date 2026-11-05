@@ -19,6 +19,7 @@ mod pull;
 mod pulls;
 mod resolve;
 mod settings;
+mod sidebar;
 mod theme;
 mod titlebar;
 mod ui;
