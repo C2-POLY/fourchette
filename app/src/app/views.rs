@@ -1294,6 +1294,96 @@ impl Tab {
                 }
                 out.primary || out.close
             }
+            Some(Dialog::Pull { pull, mode, stash, dirty }) => {
+                // The original's PullWindowController: the remote branch, "Rebase instead of
+                // merge", "Stash and reapply local changes", "Pull". Here the mode is a switch and
+                // the result shows on the same animated graph as the Check out dialog.
+                use crate::preview;
+                use crate::pull::Mode;
+                let src = pull.source().name();
+                let hint = vec![Hint::Key(Cap::Text("Enter")), Hint::Text("pulls".into()), Hint::Key(Cap::Text("⌘Z")), Hint::Text("takes the pull back, the fetch stays".into())];
+                let mut picked = None;
+                let out = Modal::new("pull", Width::Large, "pull", vec![text("Pull into"), pill(pull.branch.as_str())])
+                    .status(vec![text("from"), remote(src.as_str()), text(pull.counts_text())])
+                    .hint(hint)
+                    .primary("Pull", false, true)
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        let w = Width::Large.px() - 2.0 * modal::PAD;
+                        // The remote branch on the left, Merge or Rebase on the right.
+                        let (row, _) = ui.allocate_exact_size(vec2(w, 28.0), Sense::hover());
+                        let mut left = ui.new_child(egui::UiBuilder::new().id_salt("pull_from").max_rect(row).layout(Layout::left_to_right(Align::Center)));
+                        left.spacing_mut().item_spacing.x = 8.0;
+                        modal::caption(&mut left, "From");
+                        egui::ComboBox::from_id_salt("pull_source").width(300.0).height(320.0).selected_text(RichText::new(src.as_str()).font(theme::mono()).color(k.text)).show_ui(&mut left, |ui| {
+                            for (i, s) in pull.sources.iter().enumerate() {
+                                if ui.selectable_label(i == pull.sel, RichText::new(s.name()).font(theme::mono())).clicked() {
+                                    picked = Some(i);
+                                }
+                            }
+                        });
+                        let mut right = ui.new_child(egui::UiBuilder::new().id_salt("pull_mode").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                        right.spacing_mut().item_spacing.x = 8.0;
+                        let names: Vec<&str> = Mode::ALL.iter().map(|m| m.short()).collect();
+                        let cur = Mode::ALL.iter().position(|m| m == mode).unwrap_or(0);
+                        if let Some(i) = modal::segmented(&mut right, &names, cur, &[]) {
+                            *mode = Mode::ALL[i];
+                        }
+                        modal::caption(&mut right, if pull.fast_forward() { "When it has diverged" } else { "Join with" });
+                        ui.add_space(12.0);
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = w - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            // The result's title, Now / After on its right.
+                            let view_id = egui::Id::new("pull_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("pull_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &pull.title(*mode), egui::FontId::proportional(theme::FS_TITLE), k.strong, title_w);
+                            // The graph, between two rules.
+                            let preview = pull.preview(*mode);
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(10.0);
+                            preview::show(ui, egui::Id::new("pull_preview"), &preview, after);
+                            ui.add_space(10.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The sentence, in a room as tall as the longest one.
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let room = pull.sentences().into_iter().map(|t| ui.painter().layout(t, font.clone(), k.dim, w).size().y).fold(0.0, f32::max);
+                            let sentence = if after { pull.explain(*mode) } else { pull.summary() };
+                            ui.allocate_ui_with_layout(vec2(w, room), Layout::top_down(Align::Min), |ui| {
+                                ui.set_min_size(vec2(w, room));
+                                ui.label(RichText::new(sentence).color(k.dim));
+                            });
+                        });
+                        if *dirty {
+                            ui.add_space(12.0);
+                            let side = if changed == 1 { "1 file".to_string() } else { format!("{changed} files") };
+                            modal::check_row(ui, stash, "Stash and reapply local changes", Some(&side));
+                        }
+                    });
+                // Another remote branch: count again (the sample project keeps its counts).
+                if let Some(i) = picked.filter(|i| *i != pull.sel) {
+                    pull.sel = i;
+                    if let Some(r) = &self.repo {
+                        pull.counts = crate::pull::count(r, &pull.source().name());
+                    }
+                }
+                if out.primary {
+                    cmds.push(Cmd::PullFrom { source: pull.source().clone(), args: pull.args(*mode, *stash && *dirty) });
+                }
+                out.primary || out.close
+            }
         };
         if close {
             self.dialog = None;
@@ -1428,7 +1518,7 @@ impl App {
             Id::Commit => Cmd::Commit,
             Id::Fetch => Cmd::Fetch { all: false, quiet: false },
             Id::FetchAll => Cmd::Fetch { all: true, quiet: false },
-            Id::Pull => Cmd::Pull,
+            Id::Pull => Cmd::PullDialog,
             Id::Push => Cmd::Push,
             Id::Stash => Cmd::stash(),
             Id::PopStash => Cmd::pop_stash(),

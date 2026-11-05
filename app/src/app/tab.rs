@@ -354,16 +354,56 @@ impl Tab {
             self.notify("The current branch has no upstream branch to pull from.", true);
             return;
         };
+        let args = git::pull_args(&up.0, &up.1, s.pull_rebase, s.pull_autostash);
+        self.pull_with(ctx, crate::pull::Source { remote: up.0, branch: up.1 }, args);
+    }
+
+    /// Runs `git <args>`, a pull from `source`, in the background. The snapshot keeps the
+    /// uncommitted changes too, so one Undo takes the whole pull back (the fetch stays).
+    pub(super) fn pull_with(&mut self, ctx: &egui::Context, source: crate::pull::Source, args: Vec<String>) {
         if self.busy.is_none() {
             self.pending_undo = self.repo.as_ref().map(|r| Snapshot { dirty: r.stash_create(), ..r.snapshot("Pull", false, false) });
         }
-        let args = git::pull_args(&up.0, &up.1, s.pull_rebase, s.pull_autostash);
-        self.spawn(&format!("Pull from '{}'", up.0), false, ctx, move |root| {
+        self.spawn(&format!("Pull from '{}'", source.remote), false, ctx, move |root| {
             let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
             let res = git::exec(root, &a).map(|(o, e)| format!("{o}{e}"));
             let repo = Repo { root: root.to_path_buf() };
-            git::pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), &up.0, &up.1)
+            git::pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), &source.remote, &source.branch)
         });
+    }
+
+    /// Repository › Pull…: the Pull dialog on the current branch, its upstream chosen, Merge or
+    /// Rebase and the stash as Settings › Git says, with fresh local changes and counts.
+    pub(super) fn pull_dialog(&mut self, s: crate::settings::Settings) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        let Some(branch) = r.current_branch() else {
+            self.notify("Check out a branch to pull into first.", true);
+            return;
+        };
+        let sources = crate::pull::sources(&self.refs, &crate::pull::remotes(r));
+        let Some(mut pull) = crate::pull::Pull::new(&branch, r.upstream(), sources, r.default_remote().as_deref()) else {
+            self.notify("This repository has no remote branch to pull from.", true);
+            return;
+        };
+        pull.counts = crate::pull::count(r, &pull.source().name());
+        self.refresh_status();
+        let mode = crate::pull::Mode::from_setting(s.pull_rebase);
+        self.dialog = Some(Dialog::Pull { pull, mode, stash: s.pull_autostash, dirty: !self.status.is_empty() });
+    }
+
+    /// FOURCHETTE_DIALOG=pull: the Pull dialog on the sample project's `develop`, 2 commits ahead
+    /// of origin/develop and 3 behind.
+    pub(super) fn pull_sample(&mut self, s: crate::settings::Settings) {
+        let branch = self.branch.clone().unwrap_or_else(|| "develop".into());
+        let up = Some(("origin".to_string(), branch.clone()));
+        if let Some(mut pull) = crate::pull::Pull::new(&branch, up, crate::pull::sources(&self.refs, &[]), Some("origin")) {
+            pull.counts = Some((2, 3));
+            let mode = crate::pull::Mode::from_setting(s.pull_rebase);
+            self.dialog = Some(Dialog::Pull { pull, mode, stash: true, dirty: !self.status.is_empty() });
+        }
     }
 
     fn after_load(&mut self) {
@@ -432,6 +472,7 @@ impl Tab {
             Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
             Cmd::AskMerge { name, remote } => self.ask_merge(&name, remote),
             Cmd::Merge { merge, way } => self.merge(&merge, way),
+            Cmd::PullFrom { source, args } => self.pull_with(ctx, source, args),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
@@ -527,6 +568,7 @@ impl Tab {
             | Cmd::Settings
             | Cmd::SetSettings(_)
             | Cmd::Pull
+            | Cmd::PullDialog
             | Cmd::ApplyStash(_)
             | Cmd::SetCommitLimit(_)
             | Cmd::Switcher

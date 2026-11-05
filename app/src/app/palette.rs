@@ -62,6 +62,7 @@ impl App {
             v.push(item("Commands", "Fetch all remotes", "", Cmd::Fetch { all: true, quiet: false }));
             let pull = if self.library.settings.pull_rebase { "rebase onto the upstream branch" } else { "merge the upstream branch" };
             v.push(item("Commands", "Pull", pull, Cmd::Pull));
+            v.push(item("Commands", "Pull…", "choose the remote branch, merge or rebase", Cmd::PullDialog));
             v.push(item("Commands", "Push", "send your commits", Cmd::Push));
             v.push(item(
                 "Commands",

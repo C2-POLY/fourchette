@@ -12,6 +12,7 @@ mod menu;
 mod merge;
 mod modal;
 mod preview;
+mod pull;
 mod settings;
 mod theme;
 mod titlebar;
