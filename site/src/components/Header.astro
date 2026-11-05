@@ -1,0 +1,54 @@
+---
+import { type Lang, t, pagePath, asset, repo } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  page: string;
+}
+
+const { lang, page } = Astro.props;
+const s = t(lang);
+const home = pagePath(lang);
+const other: Lang = lang === 'en' ? 'fr' : 'en';
+---
+
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href={home}>
+      <img src={asset('favicon.png')} alt="" width="26" height="26" />
+      <span>Fourchette</span>
+    </a>
+    <nav aria-label={s.a11y.mainNav}>
+      <a class="nav-link" href={`${home}#features`}>{s.nav.features}</a>
+      <a class="nav-link" href={`${home}#teams`}>{s.nav.teams}</a>
+      <a class="nav-link" href={`${home}#build`}>{s.nav.build}</a>
+      <a class="nav-link" href={repo}>{s.nav.github}</a>
+    </nav>
+    <div class="tools">
+      <a class="lang" href={pagePath(other, page === '404.html' ? '' : page)} hreflang={other} lang={other} aria-label={s.a11y.language}>
+        {other.toUpperCase()}
+      </a>
+      <button class="theme" type="button" aria-label={s.a11y.theme} title={s.a11y.theme}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
+          <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<script>
+  // The toggle flips the theme on screen and remembers it; the system's
+  // choice applies until it is used.
+  const button = document.querySelector<HTMLButtonElement>('.theme');
+  button?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const now = root.getAttribute('data-theme') ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    const next = now === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try {
+      localStorage.setItem('fourchette-theme', next);
+    } catch {}
+  });
+</script>

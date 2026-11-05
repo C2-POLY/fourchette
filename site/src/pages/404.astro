@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import { t, pagePath } from '../i18n';
+
+// One page for both languages: GitHub Pages serves 404.html for any missing path.
+const s = t('en');
+---
+
+<Base lang="en" page="404.html" title="Page not found: Fourchette" description={s.meta.description}>
+  <section class="section notfound">
+    <div class="wrap">
+      <h1>Page not found</h1>
+      <p class="lead">This page doesn’t exist. · Cette page n’existe pas.</p>
+      <div class="actions center">
+        <a class="button primary" href={pagePath('en')}>Home</a>
+        <a class="button" href={pagePath('fr')}>Accueil</a>
+      </div>
+    </div>
+  </section>
+</Base>
