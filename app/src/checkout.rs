@@ -15,6 +15,27 @@ pub enum SyncAction {
     JustCheckout,
 }
 
+/// How Merge joins the upstream: a merge commit (a fast-forward when the branch has nothing of
+/// its own), or one squashed commit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum MergeStyle {
+    #[default]
+    Commit,
+    Squash,
+}
+
+impl MergeStyle {
+    pub const ALL: [MergeStyle; 2] = [MergeStyle::Commit, MergeStyle::Squash];
+
+    /// Its name on the Merge card.
+    pub fn short(self) -> &'static str {
+        match self {
+            MergeStyle::Commit => "Merge commit",
+            MergeStyle::Squash => "Squash",
+        }
+    }
+}
+
 /// A local branch behind its upstream, as the last fetch saw it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Sync {
@@ -26,17 +47,20 @@ pub struct Sync {
     pub behind: usize,
 }
 
-/// What a checkout does: run at once, or ask first in the Check out dialog.
+/// What a checkout does: run at once; check out and fast-forward at once (a branch only behind,
+/// where every choice would come to that); or ask first in the Check out dialog (one that has
+/// diverged).
 #[derive(Debug, PartialEq, Eq)]
 pub enum Plan {
     Now { label: String, args: Vec<String> },
+    FastForward(Sync),
     Ask(Sync),
 }
 
 /// The checkout of `name`, a local branch or (`remote`) a remote one such as "origin/main". A
 /// remote branch with no local one is checked out with `--track`; one whose local branch exists
-/// checks out that local branch. A local branch behind its upstream, or diverged from it, asks;
-/// an up-to-date one, one without an upstream (or with one gone), the current one, and one checked
+/// checks out that local branch. A local branch only behind its upstream is fast-forwarded to it;
+/// one diverged from it asks; an up-to-date one, one without an upstream (or with one gone), the current one, and one checked
 /// out in another worktree (Git refuses it, and says why) are checked out at once, as before.
 pub fn plan(name: &str, remote: bool, refs: &[GitRef], worktrees: &[Worktree]) -> Plan {
     let local = if remote { name.split_once('/').map(|x| x.1).unwrap_or(name) } else { name };
@@ -47,7 +71,14 @@ pub fn plan(name: &str, remote: bool, refs: &[GitRef], worktrees: &[Worktree]) -
     let elsewhere = !b.is_head && worktrees.iter().any(|w| w.branch.as_deref() == Some(local));
     let up = refs.iter().filter(|r| !b.upstream.is_empty() && r.name == b.upstream).min_by_key(|r| r.kind != RefKind::Remote);
     match up {
-        Some(up) if b.behind > 0 && !b.is_head && !elsewhere => Plan::Ask(Sync { branch: local.to_string(), upstream: b.upstream.clone(), upstream_ref: up.full.clone(), ahead: b.ahead, behind: b.behind }),
+        Some(up) if b.behind > 0 && !b.is_head && !elsewhere => {
+            let s = Sync { branch: local.to_string(), upstream: b.upstream.clone(), upstream_ref: up.full.clone(), ahead: b.ahead, behind: b.behind };
+            if s.diverged() {
+                Plan::Ask(s)
+            } else {
+                Plan::FastForward(s)
+            }
+        }
         _ => now(&["checkout", local]),
     }
 }
@@ -85,7 +116,7 @@ impl Sync {
         }
     }
 
-    /// Where the branch stands, at the top of the dialog's explanation.
+    /// Where the branch stands: the dialog's sentence in its "Now" view.
     pub fn summary(&self) -> String {
         if self.diverged() {
             format!("{} and {} have diverged: {} here, {} there.", self.branch, self.upstream, commits(self.ahead), commits(self.behind))
@@ -104,11 +135,14 @@ impl Sync {
     }
 
     /// A choice as the dialog words it.
-    pub fn text(&self, a: SyncAction) -> String {
+    pub fn text(&self, a: SyncAction, m: MergeStyle) -> String {
         let (b, up) = (&self.branch, &self.upstream);
         match a {
             SyncAction::FastForward => format!("Fast-forward to {up}"),
-            SyncAction::Merge => format!("Merge {up} into {b}"),
+            SyncAction::Merge => match m {
+                MergeStyle::Commit => format!("Merge {up} into {b}"),
+                MergeStyle::Squash => format!("Squash {up} into {b}"),
+            },
             SyncAction::Rebase => format!("Rebase {b} onto {up}"),
             SyncAction::Reset => format!("Reset {b} to {up}"),
             SyncAction::JustCheckout => "Just check out".into(),
@@ -151,9 +185,15 @@ impl Sync {
     }
 
     /// What a choice does to the branch, in a sentence or two, beside the cards.
-    pub fn explain(&self, a: SyncAction) -> String {
+    pub fn explain(&self, a: SyncAction, m: MergeStyle) -> String {
         let (b, up) = (&self.branch, &self.upstream);
         let (mine, theirs) = (commits(self.ahead), commits(self.behind));
+        let they = if self.behind == 1 { "lands" } else { "land" };
+        match (a, m, self.diverged()) {
+            (SyncAction::Merge, MergeStyle::Squash, true) => return format!("The {theirs} of {up} {they} on {b} as one new commit with a single parent. The history shows no merge."),
+            (SyncAction::Merge, MergeStyle::Squash, false) => return format!("The {theirs} of {up} {they} on {b} as one new commit instead of a fast-forward. The history shows no merge."),
+            _ => {}
+        }
         match (a, self.diverged()) {
             (SyncAction::FastForward, _) => format!("{b} slides up to {up}. No new commit, nothing rewritten."),
             (SyncAction::Merge, true) => format!("A new merge commit on {b} joins its {mine} with the {theirs} of {up}. Nothing is rewritten."),
@@ -175,11 +215,14 @@ impl Sync {
     }
 
     /// The name of the whole sequence in the Undo menu.
-    pub fn label(&self, a: SyncAction) -> String {
+    pub fn label(&self, a: SyncAction, m: MergeStyle) -> String {
         let b = &self.branch;
         match a {
             SyncAction::FastForward => format!("Check out {b} and fast-forward"),
-            SyncAction::Merge => format!("Check out {b} and merge"),
+            SyncAction::Merge => match m {
+                MergeStyle::Squash => format!("Check out {b} and squash"),
+                _ => format!("Check out {b} and merge"),
+            },
             SyncAction::Rebase => format!("Check out {b} and rebase"),
             SyncAction::Reset => format!("Check out {b} and reset"),
             SyncAction::JustCheckout => format!("Check out {b}"),
@@ -187,10 +230,11 @@ impl Sync {
     }
 
     /// What the toast says once it went through.
-    fn done(&self, a: SyncAction) -> String {
+    fn done(&self, a: SyncAction, m: MergeStyle) -> String {
         let (b, up) = (&self.branch, &self.upstream);
         match a {
             SyncAction::FastForward => format!("Switched to {b} and fast-forwarded it to {up}"),
+            SyncAction::Merge if m == MergeStyle::Squash => format!("Switched to {b} and squashed {up} into it"),
             SyncAction::Merge => format!("Switched to {b} and merged {up} into it"),
             SyncAction::Rebase => format!("Switched to {b} and rebased it onto {up}"),
             SyncAction::Reset => format!("Switched to {b} and reset it to {up}"),
@@ -201,12 +245,15 @@ impl Sync {
     /// Git's arguments for the step after the checkout; none for "Just check out". Merge names
     /// the upstream by its short name, which is what its commit message says. Reset uses `--keep`,
     /// which refuses rather than throw away uncommitted changes.
-    pub fn args(&self, a: SyncAction) -> Option<Vec<String>> {
+    pub fn args(&self, a: SyncAction, m: MergeStyle) -> Option<Vec<String>> {
         let v = |a: &[&str]| Some(a.iter().map(|s| s.to_string()).collect());
         let up = self.upstream_ref.as_str();
         match a {
             SyncAction::FastForward => Some(git::fast_forward_args(&self.branch, up, true)),
-            SyncAction::Merge => v(&["merge", "--no-edit", &self.upstream]),
+            SyncAction::Merge => match m {
+                MergeStyle::Commit => v(&["merge", "--no-edit", &self.upstream]),
+                MergeStyle::Squash => v(&["merge", "--squash", &self.upstream]),
+            },
             SyncAction::Rebase => v(&["rebase", up]),
             SyncAction::Reset => v(&["reset", "--keep", up]),
             SyncAction::JustCheckout => None,
@@ -232,12 +279,13 @@ fn refused(e: String, stashed: bool) -> String {
 /// aside and back when `stash`:
 ///
 /// `[stash push -u]`, `checkout <branch> --`, then `merge --ff-only <upstream>` | `merge --no-edit
-/// <upstream>` | `rebase <upstream>` | `reset --keep <upstream>` | nothing, then `[stash pop]`.
+/// <upstream>` (`--no-ff` too, or `--squash` then `commit`) | `rebase <upstream>` | `reset --keep
+/// <upstream>` | nothing, then `[stash pop]`.
 ///
 /// A refusal (local changes in the way) goes back to the branch it started on, with the changes,
 /// so nothing has changed. A merge or rebase stopped on conflicts stays where Git stopped, the
 /// changes left in the stash list; so do changes whose reapply conflicts.
-pub fn run(repo: &Repo, s: &Sync, a: SyncAction, stash: bool) -> Result<String, String> {
+pub fn run(repo: &Repo, s: &Sync, a: SyncAction, m: MergeStyle, stash: bool) -> Result<String, String> {
     let back: Vec<String> = match repo.current_branch() {
         Some(b) => vec!["checkout".into(), "-q".into(), b, "--".into()],
         None => vec!["checkout".into(), "-q".into(), "--detach".into(), repo.git(&["rev-parse", "HEAD"])?.trim().to_string()],
@@ -261,9 +309,13 @@ pub fn run(repo: &Repo, s: &Sync, a: SyncAction, stash: bool) -> Result<String, 
     if let Err(e) = repo.git(&["checkout", "-q", &s.branch, "--"]) {
         return Err(undo(e));
     }
-    if let Some(args) = s.args(a) {
+    let squash = a == SyncAction::Merge && m == MergeStyle::Squash;
+    let mut done = s.done(a, m);
+    if let Some(args) = s.args(a, m) {
         if let Err(e) = repo.git(&args.iter().map(|x| x.as_str()).collect::<Vec<_>>()) {
-            let Some(op) = repo.operation() else { return Err(undo(e)) };
+            // A squash stopped on conflicts leaves no MERGE_HEAD, only conflicted files.
+            let op = repo.operation().or_else(|| (squash && !repo.conflicted_files().is_empty()).then(|| "squash".to_string()));
+            let Some(op) = op else { return Err(undo(e)) };
             let mut msg = format!(
                 "Switched to {}, but the {op} stopped on conflicts in {}. Resolve them in a terminal, or Undo (⌘Z) to go back to before the checkout.",
                 s.branch,
@@ -274,18 +326,25 @@ pub fn run(repo: &Repo, s: &Sync, a: SyncAction, stash: bool) -> Result<String, 
             }
             return Err(msg);
         }
+        // A squash only stages the upstream's changes: commit them, when there are any.
+        if squash {
+            if repo.git(&["diff", "--cached", "--quiet"]).is_ok() {
+                done = format!("Switched to {}; nothing to squash, it already has the changes of {}", s.branch, s.upstream);
+            } else if let Err(e) = repo.git(&["commit", "-q", "--no-edit", "-m", &format!("Squash {} into {}", s.upstream, s.branch)]) {
+                return Err(format!("Switched to {} and squashed {} into the index, but the commit failed: {e}. Undo (⌘Z) goes back to before the checkout.", s.branch, s.upstream));
+            }
+        }
     }
     if stashed {
         if let Err(e) = repo.git(&["stash", "pop", "-q"]) {
             let files = repo.conflicted_files();
             let why = if files.is_empty() { e } else { format!("they conflict with it in {}", git::file_list(&files)) };
             return Err(format!(
-                "{}, but your local changes couldn't be put back: {why}. They are safe in the stash list; Undo (⌘Z) goes back to before the checkout.",
-                s.done(a)
+                "{done}, but your local changes couldn't be put back: {why}. They are safe in the stash list; Undo (⌘Z) goes back to before the checkout."
             ));
         }
     }
-    Ok(s.done(a))
+    Ok(done)
 }
 
 #[cfg(test)]
@@ -326,11 +385,13 @@ mod tests {
             remote("origin/uptodate"),
             remote("origin/new"),
         ];
-        let ask = |b: &str, ahead, behind| Plan::Ask(Sync { branch: b.into(), upstream: format!("origin/{b}"), upstream_ref: format!("refs/remotes/origin/{b}"), ahead, behind });
-        assert_eq!(plan("behind", false, &refs, &[]), ask("behind", 0, 3));
-        assert_eq!(plan("diverged", false, &refs, &[]), ask("diverged", 2, 1));
-        // From the remote branch: its local branch, asked about the same way.
-        assert_eq!(plan("origin/behind", true, &refs, &[]), ask("behind", 0, 3));
+        let sync = |b: &str, ahead, behind| Sync { branch: b.into(), upstream: format!("origin/{b}"), upstream_ref: format!("refs/remotes/origin/{b}"), ahead, behind };
+        // Only behind: every choice would be a fast-forward, so it is done without asking.
+        assert_eq!(plan("behind", false, &refs, &[]), Plan::FastForward(sync("behind", 0, 3)));
+        assert_eq!(plan("diverged", false, &refs, &[]), Plan::Ask(sync("diverged", 2, 1)));
+        // From the remote branch: its local branch, the same way.
+        assert_eq!(plan("origin/behind", true, &refs, &[]), Plan::FastForward(sync("behind", 0, 3)));
+        assert_eq!(plan("origin/diverged", true, &refs, &[]), Plan::Ask(sync("diverged", 2, 1)));
         // At once: ahead, up to date, no upstream, an upstream not among the refs, the current one.
         assert_eq!(plan("ahead", false, &refs, &[]), now(&["checkout", "ahead"]));
         assert_eq!(plan("uptodate", false, &refs, &[]), now(&["checkout", "uptodate"]));
@@ -362,20 +423,32 @@ mod tests {
         assert_eq!(diverged.unavailable(FastForward).as_deref(), Some("Not possible: main has commits of its own"));
         assert_eq!(Sync::cards().iter().filter(|a| diverged.unavailable(**a).is_none()).copied().collect::<Vec<_>>(), diverged.actions());
         assert_eq!(diverged.hint(Reset), "Match origin/main exactly");
-        assert_eq!(diverged.explain(Merge), "A new merge commit on main joins its 1 commit with the 3 commits of origin/main. Nothing is rewritten.");
-        assert_eq!(behind.explain(JustCheckout), "You switch to main as it is, 3 commits behind.");
-        let args = |a| diverged.args(a).map(|v| v.join(" "));
+        assert_eq!(diverged.explain(Merge, MergeStyle::Commit), "A new merge commit on main joins its 1 commit with the 3 commits of origin/main. Nothing is rewritten.");
+        assert_eq!(behind.explain(JustCheckout, MergeStyle::Commit), "You switch to main as it is, 3 commits behind.");
+        let args = |a| diverged.args(a, MergeStyle::Commit).map(|v| v.join(" "));
         assert_eq!(args(FastForward).as_deref(), Some("merge --ff-only refs/remotes/origin/main"));
         assert_eq!(args(Merge).as_deref(), Some("merge --no-edit origin/main"));
         assert_eq!(args(Rebase).as_deref(), Some("rebase refs/remotes/origin/main"));
         assert_eq!(args(Reset).as_deref(), Some("reset --keep refs/remotes/origin/main"), "never --hard");
         assert_eq!(args(JustCheckout), None);
     }
+
+    #[test]
+    fn merge_styles_have_their_own_git_words() {
+        let behind = Sync { branch: "main".into(), upstream: "origin/main".into(), upstream_ref: "refs/remotes/origin/main".into(), ahead: 0, behind: 3 };
+        let args = |m| behind.args(SyncAction::Merge, m).unwrap().join(" ");
+        assert_eq!(args(MergeStyle::Commit), "merge --no-edit origin/main");
+        assert_eq!(args(MergeStyle::Squash), "merge --squash origin/main");
+        assert_eq!(behind.text(SyncAction::Merge, MergeStyle::Squash), "Squash origin/main into main");
+        assert_eq!(behind.label(SyncAction::Merge, MergeStyle::Squash), "Check out main and squash");
+        // Other actions ignore the style.
+        assert_eq!(behind.args(SyncAction::Rebase, MergeStyle::Squash), behind.args(SyncAction::Rebase, MergeStyle::Commit));
+    }
 }
 
 /// The sequences on real repositories, and Undo taking each back in one step.
 #[cfg(test)]
-mod repo_tests {
+pub(crate) mod repo_tests {
     use super::*;
     use crate::git::run_in;
     use crate::undo::Snapshot;
@@ -383,7 +456,7 @@ mod repo_tests {
 
     /// A clone `a` on `side`, where `main` has a commit of its own (g.txt) and `origin/main` one
     /// more (line 4 "B" in f.txt): `main` has diverged, and `behind` (at the base) is 1 behind.
-    fn fixture(name: &str) -> (PathBuf, Repo) {
+    pub(crate) fn fixture(name: &str) -> (PathBuf, Repo) {
         let base = std::env::temp_dir().join(format!("fourchette-checkout-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
@@ -416,10 +489,15 @@ mod repo_tests {
 
     /// What `Tab::checkout_sync` does: the plan from the refs, one snapshot, the sequence, `record`.
     fn checkout(repo: &Repo, branch: &str, a: SyncAction, stash: bool) -> (Snapshot, Result<String, String>) {
-        let Plan::Ask(s) = plan(branch, false, &repo.refs(), &repo.worktrees()) else { panic!("{branch} should ask") };
+        checkout_with(repo, branch, a, MergeStyle::Commit, stash)
+    }
+
+    fn checkout_with(repo: &Repo, branch: &str, a: SyncAction, m: MergeStyle, stash: bool) -> (Snapshot, Result<String, String>) {
+        // A branch only behind is fast-forwarded without asking; `run` does every action all the same.
+        let (Plan::Ask(s) | Plan::FastForward(s)) = plan(branch, false, &repo.refs(), &repo.worktrees()) else { panic!("{branch} should sync") };
         assert!(s.actions().contains(&a), "{a:?} not offered for {branch}");
-        let mut snap = Snapshot { dirty: repo.stash_create(), ..repo.snapshot(&s.label(a), false, false) };
-        let res = run(repo, &s, a, stash);
+        let mut snap = Snapshot { dirty: repo.stash_create(), ..repo.snapshot(&s.label(a, m), false, false) };
+        let res = run(repo, &s, a, m, stash);
         repo.after(&mut snap);
         (snap, res)
     }
@@ -548,6 +626,43 @@ mod repo_tests {
         assert_eq!(repo.state().refs, before.refs, "no branch moved");
         repo.undo(&snap).unwrap();
         assert_eq!(repo.state(), before);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The parents of HEAD.
+    fn parents(repo: &Repo) -> Vec<String> {
+        repo.git(&["rev-list", "--parents", "-n", "1", "HEAD"]).unwrap().split_whitespace().skip(1).map(String::from).collect()
+    }
+
+    #[test]
+    fn squash_makes_one_single_parent_commit_and_undo_takes_it_back() {
+        let (base, repo) = fixture("squash");
+        let before = repo.state();
+        // Diverged: one commit on top of the branch's own, with the upstream's change, no merge.
+        let main = sha(&repo, "main");
+        let (snap, res) = checkout_with(&repo, "main", SyncAction::Merge, MergeStyle::Squash, false);
+        assert_eq!(res, Ok("Switched to main and squashed origin/main into it".into()));
+        assert_eq!(log(&repo), "Squash origin/main into main\nlocal commit\nbase\n");
+        assert_eq!(parents(&repo), [main]);
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nB\n");
+        assert_eq!(repo.operation(), None);
+        repo.undo(&snap).unwrap();
+        assert_eq!(repo.state(), before);
+
+        // Only behind: a new commit instead of a fast-forward, the stash taken along and back.
+        std::fs::write(repo.root.join("g2.txt"), "dirty\n").unwrap();
+        let before = repo.state();
+        let old = sha(&repo, "behind");
+        let (snap, res) = checkout_with(&repo, "behind", SyncAction::Merge, MergeStyle::Squash, true);
+        res.unwrap();
+        assert_eq!(repo.current_branch().as_deref(), Some("behind"));
+        assert_eq!(parents(&repo), [old]);
+        assert_ne!(sha(&repo, "behind"), sha(&repo, "origin/main"), "not a fast-forward");
+        assert_eq!(read(&repo, "f.txt"), "1\n2\n3\nB\n");
+        assert_eq!(read(&repo, "g2.txt"), "dirty\n");
+        repo.undo(&snap).unwrap();
+        assert_eq!(repo.state(), before);
+        assert_eq!(read(&repo, "g2.txt"), "dirty\n");
         let _ = std::fs::remove_dir_all(&base);
     }
 

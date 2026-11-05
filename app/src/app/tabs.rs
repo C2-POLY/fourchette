@@ -350,7 +350,7 @@ mod tests {
     }
 
     fn toast(a: &App) -> Option<&str> {
-        a.toast.as_ref().map(|t| t.0.as_str())
+        a.toast.as_ref().map(|t| t.msg.as_str())
     }
 
     #[test]

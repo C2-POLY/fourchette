@@ -307,8 +307,9 @@ pub fn card<R>(ui: &mut Ui, radius: u8, margin: Margin, add: impl FnOnce(&mut Ui
 }
 
 /// A toast at the bottom of the window: a green tick or a red cross, then the message. It rises
-/// into place as it appears; `age` is its age in seconds.
-pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64) {
+/// into place as it appears; `age` is its age in seconds. With `undo` (the share of its time left),
+/// a second line says Cmd+Z takes it back, and a bar along its foot shrinks as the time runs out.
+pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option<f32>) {
     let k = theme::c();
     let t = eased(age * 1.4);
     if t < 1.0 {
@@ -316,9 +317,10 @@ pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64) {
     }
     egui::Area::new(Id::new("toast")).order(egui::Order::Tooltip).interactable(false).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
         ui.multiply_opacity(t);
-        card(ui, 10, Margin { left: 12, right: 16, top: 9, bottom: 9 }, |ui| {
+        let bottom = if undo.is_some() { 12 } else { 9 };
+        let r = card(ui, 10, Margin { left: 12, right: 16, top: 9, bottom }, |ui| {
             ui.set_max_width(560.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
                 let (r, _) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
                 let col = if error { k.deleted } else { k.added };
@@ -331,9 +333,28 @@ pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64) {
                 } else {
                     crate::ui::check_mark(p, r.center() + vec2(0.0, 0.5), col);
                 }
-                ui.add(egui::Label::new(egui::RichText::new(msg).color(k.strong)).wrap());
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 6.0;
+                    ui.add(egui::Label::new(egui::RichText::new(msg).color(k.strong)).wrap());
+                    if undo.is_some() {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            ui.label(egui::RichText::new("Not what you wanted?").font(theme::secondary()).color(k.dim));
+                            keycap(ui, Cap::Text("⌘Z"));
+                            ui.label(egui::RichText::new("undoes it").font(theme::secondary()).color(k.dim));
+                        });
+                    }
+                });
             });
         });
+        if let Some(left) = undo {
+            // The time left: a thin bar along the foot, inside the corners, shrinking to the left.
+            let rect = r.response.rect;
+            let track = Rect::from_min_max(pos2(rect.left() + 12.0, rect.bottom() - 6.0), pos2(rect.right() - 12.0, rect.bottom() - 4.0));
+            let p = ui.painter();
+            p.rect_filled(track, CornerRadius::same(1), k.border);
+            p.rect_filled(Rect::from_min_size(track.min, vec2(track.width() * left.clamp(0.0, 1.0), track.height())), CornerRadius::same(1), k.accent);
+        }
     });
 }
 
@@ -575,6 +596,90 @@ pub fn choice(ui: &mut Ui, title: &str, line: &str, key: Option<usize>, selected
     } else {
         resp
     }
+}
+
+/// One choice of a list, `h` points tall, flat like a row of the sidebar: a radio dot, its name and
+/// its number key. The selected one on the accent's soft colour (its name red when `danger`), a
+/// disabled one dimmed, saying why in a tooltip. Rows the same height as a graph's rows line up
+/// with it.
+pub fn list_row(ui: &mut Ui, title: &str, key: Option<usize>, selected: bool, danger: bool, disabled: Option<&str>, h: f32) -> Response {
+    let k = theme::c();
+    let w = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, h), if disabled.is_some() { Sense::hover() } else { Sense::click() });
+    let mut p = ui.painter().clone();
+    if disabled.is_some() {
+        p.multiply_opacity(0.45);
+    }
+    let col = if danger { k.deleted } else { k.accent };
+    let hot = disabled.is_none() && resp.hovered();
+    let row = rect.shrink2(vec2(0.0, 1.0));
+    if selected {
+        p.rect_filled(row, CornerRadius::same(7), theme::tint(col, k.bg, 0.16));
+    } else if hot {
+        p.rect_filled(row, CornerRadius::same(7), k.hover);
+    }
+    let dot = pos2(rect.left() + 18.0, rect.center().y);
+    if selected {
+        p.circle_filled(dot, 7.0, col);
+        p.circle_filled(dot, 4.0, theme::tint(col, k.bg, 0.16));
+    } else {
+        p.circle_stroke(dot, 6.0, Stroke::new(1.5_f32, k.faint));
+    }
+    let tc = if danger { k.deleted } else if selected { k.strong } else { k.dim };
+    let mut right = rect.right() - 10.0;
+    if let Some(n) = key {
+        let g = p.layout_no_wrap(n.to_string(), theme::small(), k.faint);
+        let kr = Rect::from_center_size(pos2(rect.right() - 18.0, dot.y), vec2(g.size().x + 10.0, 16.0));
+        p.rect_stroke(kr, CornerRadius::same(4), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+        p.galley(kr.center() - g.size() / 2.0, g, k.faint);
+        right = kr.left() - 6.0;
+    }
+    crate::ui::fit_text(&p, pos2(rect.left() + 34.0, dot.y), Align2::LEFT_CENTER, title, theme::body(), tc, right - rect.left() - 34.0);
+    match disabled {
+        None => resp.on_hover_cursor(egui::CursorIcon::PointingHand),
+        Some(why) => resp.on_hover_text(why),
+    }
+}
+
+/// A row of options of which one is on, like a segmented control. `why[i]`: why option `i` is
+/// greyed out, shown when hovered. Returns the option clicked.
+pub fn segmented(ui: &mut Ui, options: &[&str], selected: usize, why: &[Option<String>]) -> Option<usize> {
+    let k = theme::c();
+    // Smaller and tighter when the room is short.
+    let fit = |size: f32, pad: f32| -> Vec<f32> { options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), FontId::proportional(size), k.text).size().x + pad).collect() };
+    let room = ui.available_width();
+    let (mut size, mut widths) = (12.0, fit(12.0, 16.0));
+    while widths.iter().sum::<f32>() + 6.0 > room && size > 10.0 {
+        size -= 0.5;
+        widths = fit(size, 10.0);
+    }
+    let font = FontId::proportional(size);
+    let total = widths.iter().sum::<f32>() + 6.0;
+    let (rect, _) = ui.allocate_exact_size(vec2(total, 24.0), Sense::hover());
+    ui.painter().rect(rect, CornerRadius::same(6), k.input, Stroke::new(1.0_f32, k.border), StrokeKind::Inside);
+    let mut x = rect.left() + 3.0;
+    let mut clicked = None;
+    for (i, o) in options.iter().enumerate() {
+        let cell = Rect::from_min_size(pos2(x, rect.top() + 3.0), vec2(widths[i], 18.0));
+        x += widths[i];
+        let off = why.get(i).and_then(|w| w.as_deref());
+        let r = ui.interact(cell, ui.id().with(("segmented", options.join("|"), i)), if off.is_some() { Sense::hover() } else { Sense::click() });
+        let r = match off {
+            Some(w) => r.on_hover_text(w),
+            None => r.on_hover_cursor(egui::CursorIcon::PointingHand),
+        };
+        if i == selected {
+            ui.painter().rect_filled(cell, CornerRadius::same(4), k.select);
+        } else if r.hovered() && off.is_none() {
+            ui.painter().rect_filled(cell, CornerRadius::same(4), k.hover);
+        }
+        let col = if off.is_some() { k.faint.gamma_multiply(0.6) } else if i == selected { k.text } else { k.faint };
+        ui.painter().text(cell.center(), Align2::CENTER_CENTER, o, font.clone(), col);
+        if r.clicked() {
+            clicked = Some(i);
+        }
+    }
+    clicked
 }
 
 /// The choice `delta` steps from `cur`, going round and skipping disabled ones.

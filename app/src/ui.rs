@@ -100,7 +100,7 @@ mod tests {
         match c {
             Some(Cmd::Checkout { name, remote }) => match crate::checkout::plan(&name, remote, refs, &[]) {
                 crate::checkout::Plan::Now { args, .. } => Some(args),
-                crate::checkout::Plan::Ask(_) => panic!("asks"),
+                crate::checkout::Plan::Ask(_) | crate::checkout::Plan::FastForward(_) => panic!("syncs"),
             },
             Some(_) => panic!("not a checkout"),
             None => None,
