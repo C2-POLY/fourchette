@@ -609,6 +609,7 @@ mod tests {
                 "max_commits": 100_000,
                 "claude_model": "default",
                 "commit_language": "auto",
+                "update_channel": "prerelease",
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");

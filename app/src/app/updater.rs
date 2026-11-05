@@ -1,11 +1,27 @@
-//! Updates (issue #80): the check in the background, the toolbar's pill and the update dialog.
-//! The work itself is in `crate::update`; this side only polls its channels each frame.
+//! Updates (issues #80 and #97): the check in the background, on the channel chosen in Settings,
+//! the toolbar's pill and the update dialog. The work itself is in `crate::update`; this side only
+//! polls its channels each frame and keeps the last check's outcome for the Settings section.
 use super::*;
+use crate::settings::UpdateChannel;
 use crate::update::{self, Progress, Release, Version};
 use egui::{vec2, CornerRadius, Margin, RichText, Sense, Stroke};
 use std::sync::mpsc::TryRecvError;
 
 type CheckResult = Result<Option<Release>, String>;
+
+/// Where the checks stand, as the Settings section shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CheckStatus {
+    /// Under `cargo run` and in screenshots: the app never checks.
+    Off,
+    Never,
+    Checking,
+    UpToDate,
+    /// A newer release, the one the pill offers.
+    Available(Version),
+    /// The last check failed (no network, a rate limit…), with its error.
+    Failed(String),
+}
 
 #[derive(Default)]
 pub struct UpdateState {
@@ -13,8 +29,13 @@ pub struct UpdateState {
     bundle: Option<PathBuf>,
     /// The newer release found, shown as the toolbar's pill.
     pub available: Option<Release>,
-    checking: Option<Receiver<CheckResult>>,
+    /// The check running, and the channel it was started on.
+    checking: Option<(UpdateChannel, Receiver<CheckResult>)>,
     next_check: Option<Instant>,
+    /// The last finished check: Ok when it got an answer, the error otherwise. None before the first.
+    last: Option<Result<(), String>>,
+    /// When the last check finished, in seconds since 1970.
+    pub checked_at: Option<i64>,
     /// The update dialog is open.
     pub dialog: bool,
     installing: Option<Receiver<Progress>>,
@@ -46,20 +67,65 @@ impl UpdateState {
     fn busy(&self) -> bool {
         self.installing.is_some()
     }
+
+    /// Checks run: the app runs from its .app bundle.
+    pub fn can_check(&self) -> bool {
+        self.bundle.is_some()
+    }
+
+    pub fn status(&self) -> CheckStatus {
+        if self.checking.is_some() {
+            return CheckStatus::Checking;
+        }
+        if let Some(Err(e)) = &self.last {
+            return CheckStatus::Failed(e.clone());
+        }
+        match (&self.available, &self.last) {
+            (Some(r), _) => CheckStatus::Available(r.version),
+            (None, _) if !self.can_check() => CheckStatus::Off,
+            (None, Some(_)) => CheckStatus::UpToDate,
+            (None, None) => CheckStatus::Never,
+        }
+    }
+
+    /// Settings' "Check now", or a new channel: the next frame starts a check on `channel`,
+    /// unless one is already running on it. One running on another channel is dropped when it
+    /// answers, and this one starts then.
+    pub fn check_now(&mut self, channel: UpdateChannel) {
+        let running = self.checking.as_ref().is_some_and(|(on, _)| *on == channel);
+        if self.can_check() && !running {
+            self.next_check = Some(Instant::now());
+        }
+    }
+}
+
+pub(super) fn now_secs() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 impl App {
     /// Each frame: starts the check when it is due, and takes what the check and the install sent.
     pub(super) fn update_poll(&mut self, ctx: &egui::Context) {
+        let chosen = self.library.settings.update_channel;
         let u = &mut self.update;
-        if let Some(rx) = &u.checking {
+        if let Some((on, rx)) = &u.checking {
+            let on = *on;
             match rx.try_recv() {
+                // An answer for the channel left in the meantime: the check on the new one starts below.
+                Ok(_) if on != chosen => u.checking = None,
                 Ok(res) => {
                     u.checking = None;
-                    // No network, a rate limit…: nothing to show, the next check will tell.
-                    if let (Ok(found), false) = (res, u.busy()) {
-                        u.dialog &= found.is_some();
-                        u.available = found;
+                    u.checked_at = Some(now_secs());
+                    match res {
+                        // The pill keeps what it offered; the next check will tell.
+                        Err(e) => u.last = Some(Err(e)),
+                        Ok(found) => {
+                            u.last = Some(Ok(()));
+                            if !u.busy() {
+                                u.dialog &= found.is_some();
+                                u.available = found;
+                            }
+                        }
                     }
                 }
                 Err(TryRecvError::Disconnected) => u.checking = None,
@@ -73,10 +139,10 @@ impl App {
                 let (tx, rx) = channel();
                 let ctx = ctx.clone();
                 std::thread::spawn(move || {
-                    let _ = tx.send(update::check());
+                    let _ = tx.send(update::check(chosen));
                     ctx.request_repaint();
                 });
-                u.checking = Some(rx);
+                u.checking = Some((chosen, rx));
             }
             // A frame when the next check is due, even if nothing else happens on screen.
             if let Some(next) = u.next_check {
