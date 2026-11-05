@@ -142,6 +142,9 @@ impl Tab {
             let board = Arc::make_mut(b);
             let name = board.items.iter().find(|i| i.id == u.item).map(|i| i.number.map(|n| format!("#{n}")).unwrap_or_else(|| format!("“{}”", i.title))).unwrap_or_else(|| "the card".into());
             board.revert(&u);
+            if self.issue.offer.as_ref().is_some_and(|o| o.item == u.item) {
+                self.issue.offer = None;
+            }
             self.notify(format!("Couldn't move {name}, so it went back: {e}"), true);
         }
     }

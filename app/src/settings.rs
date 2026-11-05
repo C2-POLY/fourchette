@@ -16,6 +16,9 @@ pub const DEFAULT_PULL_AUTOSTASH: bool = false;
 /// "deleteStashAfterApply" default false: Apply keeps the stash (sub_10031b7cc).
 pub const DEFAULT_DELETE_STASH_AFTER_APPLY: bool = false;
 
+/// Moving the branch's issue on the project asks first (#37).
+pub const DEFAULT_ISSUE_STATUS_AUTO: bool = false;
+
 /// "contextSize" default (sub_10031b7cc): the lines of context around a change in a diff.
 pub const DEFAULT_DIFF_CONTEXT: u32 = 3;
 /// The context sizes the Settings window offers.
@@ -254,6 +257,9 @@ pub struct Settings {
     pub pull_autostash: bool,
     /// A stash's Apply also deletes it once applied without conflicts (`stash pop`).
     pub delete_stash_after_apply: bool,
+    /// The branch's issue moves on the project (In progress at checkout, In review once its pull
+    /// request exists) without asking; the confirmation still offers Undo.
+    pub issue_status_auto: bool,
     /// Lines of context around a change in a diff (`--unified=`).
     pub diff_context: u32,
     /// The commit subject counter turns orange above this, and Claude's soft limit.
@@ -280,6 +286,7 @@ impl Default for Settings {
             pull_rebase: DEFAULT_PULL_REBASE,
             pull_autostash: DEFAULT_PULL_AUTOSTASH,
             delete_stash_after_apply: DEFAULT_DELETE_STASH_AFTER_APPLY,
+            issue_status_auto: DEFAULT_ISSUE_STATUS_AUTO,
             diff_context: DEFAULT_DIFF_CONTEXT,
             subject_low: DEFAULT_SUBJECT_LOW,
             subject_high: DEFAULT_SUBJECT_HIGH,
@@ -309,6 +316,7 @@ impl Settings {
             pull_rebase: v["pull_rebase"].as_bool().unwrap_or(d.pull_rebase),
             pull_autostash: v["pull_autostash"].as_bool().unwrap_or(d.pull_autostash),
             delete_stash_after_apply: v["delete_stash_after_apply"].as_bool().unwrap_or(d.delete_stash_after_apply),
+            issue_status_auto: v["issue_status_auto"].as_bool().unwrap_or(d.issue_status_auto),
             diff_context: n("diff_context").filter(|c| *c <= 100).map(|c| c as u32).unwrap_or(d.diff_context),
             subject_low: limits.0,
             subject_high: limits.1,
@@ -328,6 +336,7 @@ impl Settings {
             "pull_rebase": self.pull_rebase,
             "pull_autostash": self.pull_autostash,
             "delete_stash_after_apply": self.delete_stash_after_apply,
+            "issue_status_auto": self.issue_status_auto,
             "diff_context": self.diff_context,
             "subject_low": self.subject_low,
             "subject_high": self.subject_high,
@@ -423,6 +432,19 @@ mod tests {
         // A value of the wrong type goes back to its default; the valid one next to it is kept.
         let s = Settings::from_json(&json!({"pull_rebase": "yes", "pull_autostash": 1, "delete_stash_after_apply": true}));
         assert_eq!(s, Settings { delete_stash_after_apply: true, ..Settings::default() });
+    }
+
+    #[test]
+    fn moving_the_branchs_issue_asks_by_default_and_round_trips() {
+        let d = Settings::default();
+        assert!(!d.issue_status_auto, "the app asks before moving an issue");
+        for on in [true, false] {
+            let s = Settings { issue_status_auto: on, ..d };
+            assert_eq!(Settings::from_json(&s.to_json()), s);
+        }
+        // An older file, or a value of the wrong type, asks; the valid key next to it is kept.
+        assert_eq!(Settings::from_json(&json!({"pull_rebase": true})), Settings { pull_rebase: true, ..d });
+        assert_eq!(Settings::from_json(&json!({"issue_status_auto": "yes", "pull_rebase": true})), Settings { pull_rebase: true, ..d });
     }
 
     #[test]

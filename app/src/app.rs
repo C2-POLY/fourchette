@@ -1,5 +1,6 @@
 mod assistant;
 mod board;
+mod issue;
 mod changelog;
 mod palette;
 mod pr_draft;
@@ -169,6 +170,12 @@ pub enum Cmd {
     ProjectMove(crate::github::Move),
     /// Go to the Project view, or back to the history (⌘B).
     Board,
+    /// The toolbar's issue chip: the Project view with that item's details.
+    IssueDetail(String),
+    /// The offer to move the branch's issue: Move, Not now, and the confirmation's Undo.
+    IssueMove,
+    IssueDecline,
+    IssueUndo,
     /// Tabs: pick a repository for a new tab in the switcher (⌘T, "+").
     NewTab,
     /// Open a repository in a new tab, or go to its tab when one shows it.
@@ -389,6 +396,10 @@ impl App {
         if let Some(n) = std::env::var("FOURCHETTE_BOARD_DRAG").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
             t.board.open = true;
             t.board.drag_demo = Some(n);
+        }
+        // FOURCHETTE_ISSUE=<n>[,progress|review|moved]: on a branch of issue #n, with its offer.
+        if let Ok(v) = std::env::var("FOURCHETTE_ISSUE") {
+            t.issue_sample(&v);
         }
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
@@ -611,6 +622,12 @@ impl App {
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
                 Cmd::Board => self.board_toggle(),
+                Cmd::IssueDetail(id) => {
+                    if !self.tab().board.open {
+                        self.board_toggle();
+                    }
+                    self.tab_mut().board.detail = Some(id);
+                }
                 Cmd::UpdateDialog(open) => self.update_dialog_open(open),
                 Cmd::InstallUpdate => self.update_install(ctx),
                 Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel),

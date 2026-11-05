@@ -369,7 +369,7 @@ fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
 }
 
 /// Pull's mode and the stash, Fork's "pullSheetRebase", "pullSheetStashAndReapply" and
-/// "deleteStashAfterApply" (all off by default).
+/// "deleteStashAfterApply" (all off by default), and moving the branch's issue on the project.
 fn git(ui: &mut Ui, pane: &mut Pane<'_>) {
     let s = &mut *pane.settings;
     card(ui, |c| {
@@ -390,6 +390,12 @@ fn git(ui: &mut Ui, pane: &mut Pane<'_>) {
         let ctrl = c.row("Delete stash after Apply", "Once applied without conflicts; Undo (⌘Z) brings it back", vec2(36.0, 20.0), true);
         if toggle(c.ui, ctrl, "delete_stash_after_apply", s.delete_stash_after_apply) {
             s.delete_stash_after_apply = !s.delete_stash_after_apply;
+        }
+    });
+    card(ui, |c| {
+        let ctrl = c.row("Move the branch's issue without asking", "In progress at checkout, In review once its pull request exists", vec2(36.0, 20.0), true);
+        if toggle(c.ui, ctrl, "issue_status_auto", s.issue_status_auto) {
+            s.issue_status_auto = !s.issue_status_auto;
         }
     });
 }

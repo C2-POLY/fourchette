@@ -59,6 +59,11 @@ impl Tab {
             if toolbar_pill(ui, "branch", &br).on_hover_text("Check out another branch").clicked() {
                 cmds.push(Cmd::PaletteCheckout);
             }
+            // The issue whose number is in the branch's name, from the project (#36).
+            if self.branch_issue().is_some() {
+                ui.add_space(4.0);
+                self.issue_chip(ui, cmds);
+            }
 
             ui.add_space(28.0);
             let (ahead, behind) = self.ahead_behind.unwrap_or((0, 0));
@@ -1924,6 +1929,7 @@ impl eframe::App for App {
         }));
 
         let t = self.tab_mut();
+        t.issue_offer_ui(ctx, &mut cmds);
         t.dialogs(ctx, &mut cmds);
         t.cleanup_window(ctx, &mut cmds);
         t.changelog_window(ctx);
