@@ -270,6 +270,10 @@ pub struct Settings {
     pub max_commits: usize,
     /// The local changes' file lists show folders (Tree) instead of a flat list (List).
     pub files_tree: bool,
+    /// A file's diff shows the old and the new file in two columns instead of one.
+    pub diff_split: bool,
+    /// A file's diff shows the whole file with the changes highlighted, not only their context.
+    pub diff_whole: bool,
     /// The model of every Claude request.
     pub claude_model: ClaudeModel,
     /// The language of the commit messages Claude writes.
@@ -294,6 +298,8 @@ impl Default for Settings {
             subject_high: DEFAULT_SUBJECT_HIGH,
             max_commits: DEFAULT_MAX_COMMITS,
             files_tree: false,
+            diff_split: false,
+            diff_whole: false,
             claude_model: ClaudeModel::Default,
             commit_language: CommitLanguage::Auto,
             update_channel: UpdateChannel::default(),
@@ -325,6 +331,8 @@ impl Settings {
             subject_high: limits.1,
             max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
             files_tree: v["files_tree"].as_bool().unwrap_or(d.files_tree),
+            diff_split: v["diff_split"].as_bool().unwrap_or(d.diff_split),
+            diff_whole: v["diff_whole"].as_bool().unwrap_or(d.diff_whole),
             claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
             commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
             update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
@@ -346,6 +354,8 @@ impl Settings {
             "subject_high": self.subject_high,
             "max_commits": self.max_commits,
             "files_tree": self.files_tree,
+            "diff_split": self.diff_split,
+            "diff_whole": self.diff_whole,
             "claude_model": self.claude_model.key(),
             "commit_language": self.commit_language.key(),
             "update_channel": self.update_channel.key(),
@@ -569,6 +579,16 @@ mod tests {
         assert!(!Settings::default().files_tree);
         assert!(!Settings::from_json(&json!({"files_tree": "tree"})).files_tree);
         let s = Settings { files_tree: true, ..Settings::default() };
+        assert_eq!(Settings::from_json(&s.to_json()), s);
+    }
+
+    #[test]
+    fn the_diff_is_unified_and_cut_to_its_context_until_chosen_and_is_kept() {
+        let d = Settings::default();
+        assert!(!d.diff_split && !d.diff_whole);
+        let bad = Settings::from_json(&json!({"diff_split": "yes", "diff_whole": 1}));
+        assert!(!bad.diff_split && !bad.diff_whole);
+        let s = Settings { diff_split: true, diff_whole: true, ..d };
         assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 }

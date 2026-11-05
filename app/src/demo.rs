@@ -139,8 +139,16 @@ pub fn details(c: &Commit) -> CommitDetails {
     }
 }
 
-pub fn diff(path: &str) -> String {
+pub fn diff(path: &str, whole: bool) -> String {
+    // The changed lines, with the file's own lines around them when the whole file is asked for.
+    let before: String = if whole {
+        (1..12).map(|i| format!(" // line {i} of the file\n")).collect()
+    } else {
+        String::new()
+    };
+    let after: String = if whole { (22..30).map(|i| format!(" // line {i} of the file\n")).collect() } else { String::new() };
+    let (start, old_len, new_len) = if whole { (1, 25, 28) } else { (12, 9, 12) };
     format!(
-        "diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -12,9 +12,12 @@ pub fn draw_lanes(rows: &[Row]) {{\n     let width = lane_width();\n-    let colour = GREY;\n+    // Each branch line gets its own colour.\n+    let colour = palette(row.colour);\n+    let curve = 5.0;\n     for edge in &row.edges {{\n-        draw_line(edge.from, edge.to, colour);\n+        draw_curve(edge.from, edge.to, colour, curve);\n     }}\n+    draw_node(row.lane, colour);\n }}\n"
+        "diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -{start},{old_len} +{start},{new_len} @@ pub fn draw_lanes(rows: &[Row]) {{\n{before}     let width = lane_width();\n-    let colour = GREY;\n+    // Each branch line gets its own colour.\n+    let colour = palette(row.colour);\n+    let curve = 5.0;\n     for edge in &row.edges {{\n-        draw_line(edge.from, edge.to, colour);\n+        draw_curve(edge.from, edge.to, colour, curve);\n     }}\n+    draw_node(row.lane, colour);\n }}\n{after}"
     )
 }

@@ -3,6 +3,7 @@ mod app;
 mod changelog;
 mod checkout;
 mod demo;
+mod diff;
 mod filetree;
 mod git;
 mod github;
