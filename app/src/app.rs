@@ -1,5 +1,6 @@
 mod assistant;
 mod board;
+mod changelog;
 mod palette;
 mod project;
 mod repos;
@@ -111,6 +112,8 @@ pub enum Cmd {
     AiCommitMessage,
     AiExplain(String),
     AiDeleteSelected,
+    /// Claude writes the changelog, for the audience chosen in its window.
+    AiChangelog,
     /// Worktrees.
     AskDeleteBranch(String),
     DeleteBranch { name: String, force: bool, also_worktree: bool },
@@ -275,6 +278,11 @@ impl App {
         // FOURCHETTE_TABS=<n> shows the sample project in n tabs, so the strip shows.
         if let Some(n) = std::env::var("FOURCHETTE_TABS").ok().and_then(|v| v.trim().parse::<usize>().ok()) {
             app.sample_tabs(n);
+        }
+        // FOURCHETTE_CHANGELOG=<developers|product|leadership|users> shows the changelog window.
+        if let Ok(v) = std::env::var("FOURCHETTE_CHANGELOG") {
+            let a = crate::changelog::Audience::ALL.into_iter().find(|a| a.label().to_lowercase().starts_with(&v.to_lowercase())).unwrap_or_default();
+            app.tab_mut().changelog_sample(a);
         }
         if let Ok(v) = std::env::var("FOURCHETTE_CLEANUP_PREVIEW") {
             let a = |name: &str, action: &str, reason: &str, merged: bool| crate::ai::Advice {
