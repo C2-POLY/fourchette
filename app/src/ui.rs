@@ -330,44 +330,22 @@ pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, sele
     resp
 }
 
-/// A foldable group inside a section (a remote, a project column): chevron, name, count.
-pub fn group_row(ui: &mut Ui, text: &str, count: usize, open: bool) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
-    let p = ui.painter();
-    if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
-    }
-    let y = rect.center().y;
-    chevron(p, pos2(rect.left() + 14.0, y), open, theme::c().faint);
-    fit_text(p, pos2(rect.left() + 26.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, rect.width() - 60.0);
-    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
-    resp
-}
-
 /// Placeholder text of a field, in the tertiary colour.
 pub fn faint_hint(text: impl Into<String>) -> RichText {
     RichText::new(text).color(theme::c().faint)
 }
 
-pub fn side_item_indent(ui: &mut Ui, text: &str, color: Color32, indent: f32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
-    let p = ui.painter();
-    if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
-    }
-    let y = rect.center().y;
-    let x = rect.left() + 10.0 + indent;
-    p.circle_filled(pos2(x + 3.0, y), 3.0, color);
-    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, text, theme::body(), theme::c().text, rect.right() - 8.0 - (x + 15.0));
-    resp
-}
-
-pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool) -> egui::Response {
+pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool, icon: Option<fn(&egui::Painter, Pos2, Color32)>) -> egui::Response {
     ui.add_space(6.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     let p = ui.painter();
     let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
-    let r = p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, title, theme::secondary(), col);
+    let mut x = rect.left() + 10.0;
+    if let Some(draw) = icon {
+        draw(p, pos2(x + 7.0, rect.center().y), col);
+        x += 21.0;
+    }
+    let r = p.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, title, theme::secondary(), col);
     // Like Linear: the chevron sits after the title, shown when hovered or folded.
     if resp.hovered() || !open {
         chevron(p, pos2(r.right() + 9.0, rect.center().y), open, theme::c().faint);

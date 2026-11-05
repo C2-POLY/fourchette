@@ -68,6 +68,26 @@ pub fn build() -> Demo {
         ahead: 0,
         behind: 0,
     };
+    // (upstream, ahead, behind) of the sample's local branches.
+    let track = |name: &str| match name {
+        "develop" => ("origin/develop", 3, 0),
+        "feature/graph-colours" => ("origin/feature/graph-colours", 0, 0),
+        "main" => ("origin/main", 0, 2),
+        "feature/search" => ("origin/feature/search", 0, 0),
+        "hotfix/login-timeout" => ("origin/hotfix/login-timeout", 0, 0),
+        _ => ("", 0, 0),
+    };
+    let r = |name: &str, kind: RefKind, id: usize, head: bool| {
+        let local = kind == RefKind::Local;
+        let mut g = r(name, kind, id, head);
+        if local {
+            let (u, a, b) = track(name);
+            g.upstream = u.into();
+            g.ahead = a;
+            g.behind = b;
+        }
+        g
+    };
     let refs = vec![
         r("develop", RefKind::Local, 30, true),
         r("origin/develop", RefKind::Remote, 27, false),
@@ -81,6 +101,10 @@ pub fn build() -> Demo {
         r("feature/search", RefKind::Local, 19, false),
         r("feature/remember-the-last-opened-repository-per-window", RefKind::Local, 17, false),
         r("upstream/main", RefKind::Remote, 18, false),
+        r("origin/feature/search", RefKind::Remote, 19, false),
+        r("origin/feature/dark-mode", RefKind::Remote, 22, false),
+        r("origin/hotfix/login-timeout", RefKind::Remote, 24, false),
+        r("origin/release/2.3", RefKind::Remote, 21, false),
     ];
     let stashes = vec![Stash { name: "stash@{0}".into(), message: "WIP on develop: try a lighter toolbar".into() }];
     let status = Status {

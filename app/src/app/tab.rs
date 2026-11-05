@@ -58,6 +58,8 @@ pub struct Tab {
     pub(super) pr_draft: Option<super::pr_draft::PrDraftView>,
     pub(super) resolve: Option<super::resolve::ResolveView>,
     pub(super) worktrees: Vec<crate::worktree::Worktree>,
+    /// The remotes and their URLs, for the sidebar's Remote section.
+    pub(super) remotes: Vec<(String, String)>,
     /// Where the details panel sits in this repository.
     pub(super) details_layout: DetailsLayout,
     /// The tab's latest message for the person; `App` moves it to the window's toast.
@@ -149,6 +151,7 @@ impl Tab {
             pr_draft: None,
             resolve: None,
             worktrees: Vec::new(),
+            remotes: Vec::new(),
             details_layout: DetailsLayout::default(),
             notice: None,
             operation: None,
@@ -184,6 +187,7 @@ impl Tab {
         self.repo = None;
         self.commits = d.commits;
         self.refs = d.refs;
+        self.remotes = vec![("origin".into(), "https://github.com/example/sample-project.git".into()), ("upstream".into(), "git@github.com:acme/sample-project.git".into())];
         self.stashes = d.stashes;
         self.status = d.status;
         self.branch = Some("develop".into());
@@ -248,6 +252,7 @@ impl Tab {
         self.commits = r.commits(self.commit_limit);
         self.worktrees = r.worktrees();
         self.refs = r.refs();
+        self.remotes = r.remotes();
         self.stashes = r.stashes();
         self.status = r.status();
         self.branch = r.current_branch();

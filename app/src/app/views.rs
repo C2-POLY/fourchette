@@ -3,10 +3,13 @@ use super::*;
 use crate::git::FileChange;
 use crate::library::{DetailsLayout, DetailsPlace};
 use crate::menu;
+use crate::sidebar;
 use crate::ui::*;
-use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
+use egui::{pos2, vec2, Align, Align2, Color32, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui};
 
 /// The bottom details panel's smallest height.
+/// How far a folder's branches are indented in the sidebar.
+const FOLDER_STEP: f32 = 26.0;
 const DETAILS_BOTTOM_MIN_H: f32 = 160.0;
 /// Below this width the bottom panel keeps the one-column layout of the right panel.
 const WIDE_DETAILS_MIN_W: f32 = 640.0;
@@ -165,9 +168,9 @@ impl Tab {
 
     // ---------------------------------------------------------------- sidebar
 
-    pub(super) fn section(&mut self, ui: &mut Ui, title: &str, count: usize) -> bool {
+    pub(super) fn section(&mut self, ui: &mut Ui, title: &str, count: usize, icon: Option<fn(&egui::Painter, Pos2, Color32)>) -> bool {
         let open = !self.collapsed.contains(title);
-        if section_header(ui, title, count, open).clicked() {
+        if section_header(ui, title, count, open, icon).clicked() {
             if open {
                 self.collapsed.insert(title.to_string());
             } else {
@@ -175,6 +178,65 @@ impl Tab {
             }
         }
         open
+    }
+
+    /// A folder row of a branch list, folded or not as `self.collapsed` remembers; a filter opens it.
+    fn folder(&mut self, ui: &mut Ui, key: &str, name: &str, count: usize, indent: f32, filtering: bool) -> bool {
+        let open = filtering || !self.collapsed.contains(key);
+        if sidebar::folder_row(ui, name, count, open, indent).clicked() && !filtering {
+            if open {
+                self.collapsed.insert(key.to_string());
+            } else {
+                self.collapsed.remove(key);
+            }
+        }
+        open
+    }
+
+    /// A local branch of the sidebar, shown as `label`, with what it tracks.
+    #[allow(clippy::too_many_arguments)]
+    fn local_branch(&self, ui: &mut Ui, b: &GitRef, label: &str, indent: f32, cur: &str, remotes: &[String], remote_refs: &std::collections::HashSet<String>, cmds: &mut Vec<Cmd>) {
+        let gone = !b.upstream.is_empty() && !remote_refs.contains(&b.upstream);
+        let t = sidebar::Tracking { remote: sidebar::upstream_remote(&b.upstream, remotes).or(if b.upstream.is_empty() { None } else { b.upstream.split_once('/').map(|x| x.0) }), gone, ahead: b.ahead, behind: b.behind };
+        let tip = if b.upstream.is_empty() {
+            format!("{} has no upstream: it exists only on this Mac", b.name)
+        } else if gone {
+            format!("Tracks {}, which no longer exists on the remote", b.upstream)
+        } else {
+            format!("Tracks {} · {} ahead, {} behind", b.upstream, b.ahead, b.behind)
+        };
+        let resp = sidebar::local_branch_row(ui, label, self.ref_color(&b.target), b.is_head, indent, &t).on_hover_text(tip);
+        if resp.clicked() {
+            cmds.push(Cmd::SelectHash(b.target.clone()));
+        }
+        if resp.double_clicked() {
+            cmds.extend(label_checkout(b));
+        }
+        resp.context_menu(|ui| branch_menu(ui, b, cur, &self.refs, &self.worktrees, cmds));
+    }
+
+    /// A branch of a remote: a link icon when a local branch tracks it, "not local" otherwise.
+    fn remote_branch(&self, ui: &mut Ui, r: &GitRef, label: &str, indent: f32, locals: &[GitRef], cmds: &mut Vec<Cmd>) {
+        let tracked = sidebar::is_tracked(&r.name, locals);
+        let resp = sidebar::remote_branch_row(ui, label, self.ref_color(&r.target), indent, tracked).on_hover_text(if tracked { format!("{} is tracked by a local branch", r.name) } else { format!("{} has no local branch", r.name) });
+        if resp.clicked() {
+            cmds.push(Cmd::SelectHash(r.target.clone()));
+        }
+        if resp.double_clicked() {
+            cmds.push(checkout_remote(r));
+        }
+        resp.context_menu(|ui| {
+            crate::ui::menu_rows(ui);
+            if ui.button("Check out").clicked() {
+                cmds.push(checkout_remote(r));
+            }
+            if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
+                cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
+            }
+            if ui.button("Copy name").clicked() {
+                cmds.push(Cmd::Copy(r.name.clone()));
+            }
+        });
     }
 
     fn sidebar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
@@ -199,23 +261,31 @@ impl Tab {
             }
             ui.add_space(6.0);
 
-            let locals: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Local && keep(&r.name)).cloned().collect();
-            if self.section(ui, "Branches", locals.len()) {
+            let filtering = !f.is_empty();
+            let remote_names: Vec<String> = self.remotes.iter().map(|r| r.0.clone()).collect();
+            let remote_set: std::collections::HashSet<String> = self.refs.iter().filter(|r| r.kind == RefKind::Remote).map(|r| r.name.clone()).collect();
+            let all_locals: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Local).cloned().collect();
+
+            let locals: Vec<GitRef> = all_locals.iter().filter(|r| keep(&r.name)).cloned().collect();
+            if self.section(ui, "Local", locals.len(), Some(sidebar::laptop_icon)) {
                 let cur = self.branch.clone().unwrap_or_default();
-                for b in &locals {
-                    let resp = side_item(ui, "branch", &b.name, None, false, Some(self.ref_color(&b.target)), b.is_head);
-                    if resp.clicked() {
-                        cmds.push(Cmd::SelectHash(b.target.clone()));
+                for e in sidebar::group_folders(&locals, |b| b.name.as_str()) {
+                    match e {
+                        sidebar::Entry::Item(b) => self.local_branch(ui, b, &b.name, 0.0, &cur, &remote_names, &remote_set, cmds),
+                        sidebar::Entry::Folder(dir, items) => {
+                            if self.folder(ui, &format!("folder:local:{dir}"), &dir, items.len(), 0.0, filtering) {
+                                for b in items {
+                                    let short = b.name.strip_prefix(&format!("{dir}/")).unwrap_or(&b.name);
+                                    self.local_branch(ui, b, short, FOLDER_STEP, &cur, &remote_names, &remote_set, cmds);
+                                }
+                            }
+                        }
                     }
-                    if resp.double_clicked() {
-                        cmds.extend(label_checkout(b));
-                    }
-                    resp.context_menu(|ui| branch_menu(ui, b, &cur, &self.refs, &self.worktrees, cmds));
                 }
             }
 
             let remotes: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Remote && keep(&r.name)).cloned().collect();
-            if self.section(ui, "Remotes", remotes.len()) {
+            if self.section(ui, "Remote", remotes.len(), Some(sidebar::cloud_icon)) {
                 let mut groups: Vec<(String, Vec<GitRef>)> = Vec::new();
                 for r in remotes {
                     let remote = r.name.split_once('/').map(|x| x.0).unwrap_or(&r.name).to_string();
@@ -225,9 +295,14 @@ impl Tab {
                     }
                 }
                 for (remote, items) in groups {
+                    let url = self.remotes.iter().find(|r| r.0 == remote).map(|r| r.1.clone()).unwrap_or_default();
                     let key = format!("remote:{remote}");
-                    let open = !self.collapsed.contains(&key);
-                    if group_row(ui, &remote, items.len(), open).clicked() {
+                    let open = filtering || !self.collapsed.contains(&key);
+                    let mut resp = sidebar::remote_row(ui, &remote, &sidebar::short_url(&url), open);
+                    if !url.is_empty() {
+                        resp = resp.on_hover_text(&url);
+                    }
+                    if resp.clicked() && !filtering {
                         if open {
                             self.collapsed.insert(key);
                         } else {
@@ -237,33 +312,25 @@ impl Tab {
                     if !open {
                         continue;
                     }
-                    for r in &items {
-                        let name = r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name);
-                        let resp = side_item_indent(ui, name, self.ref_color(&r.target), 14.0);
-                        if resp.clicked() {
-                            cmds.push(Cmd::SelectHash(r.target.clone()));
+                    for e in sidebar::group_folders(&items, |r| r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name)) {
+                        match e {
+                            sidebar::Entry::Item(r) => self.remote_branch(ui, r, r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name), FOLDER_STEP, &all_locals, cmds),
+                            sidebar::Entry::Folder(dir, children) => {
+                                if self.folder(ui, &format!("folder:{remote}:{dir}"), &dir, children.len(), FOLDER_STEP, filtering) {
+                                    for r in children {
+                                        let rest = r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name);
+                                        let label = rest.strip_prefix(&format!("{dir}/")).unwrap_or(rest);
+                                        self.remote_branch(ui, r, label, FOLDER_STEP * 2.0, &all_locals, cmds);
+                                    }
+                                }
+                            }
                         }
-                        if resp.double_clicked() {
-                            cmds.push(checkout_remote(r));
-                        }
-                        resp.context_menu(|ui| {
-                            crate::ui::menu_rows(ui);
-                            if ui.button("Check out").clicked() {
-                                cmds.push(checkout_remote(r));
-                            }
-                            if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
-                                cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
-                            }
-                            if ui.button("Copy name").clicked() {
-                                cmds.push(Cmd::Copy(r.name.clone()));
-                            }
-                        });
                     }
                 }
             }
 
             let tags: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Tag && keep(&r.name)).cloned().collect();
-            if self.section(ui, "Tags", tags.len()) {
+            if self.section(ui, "Tags", tags.len(), None) {
                 for t in &tags {
                     let resp = side_item(ui, "tag", &t.name, None, false, None, false);
                     if resp.clicked() {
@@ -290,7 +357,7 @@ impl Tab {
             // Worktrees (the original's RepositoryWorktrees / WorktreeSidebarItem). Shown whenever
             // there are linked worktrees, since Claude Code creates many of them.
             let linked: Vec<crate::worktree::Worktree> = self.worktrees.iter().filter(|w| !w.is_main && keep(&format!("{} {}", w.name(), w.branch.clone().unwrap_or_default()))).cloned().collect();
-            if !linked.is_empty() && self.section(ui, "Worktrees", linked.len()) {
+            if !linked.is_empty() && self.section(ui, "Worktrees", linked.len(), None) {
                 for w in &linked {
                     let label = match (&w.branch, w.missing) {
                         (_, true) => format!("{} (folder gone)", w.name()),
@@ -325,7 +392,7 @@ impl Tab {
             }
 
             let stashes = self.stashes.clone();
-            if self.section(ui, "Stashes", stashes.len()) {
+            if self.section(ui, "Stashes", stashes.len(), None) {
                 for s in &stashes {
                     let resp = side_item(ui, "stash", &s.message, None, false, None, false).on_hover_text(&s.name);
                     resp.context_menu(|ui| {
