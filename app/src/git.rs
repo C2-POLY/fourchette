@@ -241,7 +241,7 @@ pub(crate) fn file_list(files: &[String]) -> String {
 pub fn pull_outcome(res: Result<String, String>, operation: Option<&str>, conflicts: &[String], remote: &str, branch: &str) -> Result<String, String> {
     match (res, operation) {
         (_, Some(op)) => Err(format!(
-            "Pull stopped on conflicts in {} (a {op} is in progress). Resolve them in a terminal, or Undo (⌘Z) to go back to before the pull.",
+            "Pull stopped on conflicts in {} (a {op} is in progress). Resolve them, then Continue in the banner above the history, or Undo (⌘Z) to go back to before the pull.",
             file_list(conflicts)
         )),
         // The pull went through, but the changes put aside didn't go back cleanly: Git keeps them

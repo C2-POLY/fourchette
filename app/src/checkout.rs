@@ -317,7 +317,7 @@ pub fn run(repo: &Repo, s: &Sync, a: SyncAction, m: MergeStyle, stash: bool) -> 
             let op = repo.operation().or_else(|| (squash && !repo.conflicted_files().is_empty()).then(|| "squash".to_string()));
             let Some(op) = op else { return Err(undo(e)) };
             let mut msg = format!(
-                "Switched to {}, but the {op} stopped on conflicts in {}. Resolve them in a terminal, or Undo (⌘Z) to go back to before the checkout.",
+                "Switched to {}, but the {op} stopped on conflicts in {}. Resolve them, then Continue in the banner above the history, or Undo (⌘Z) to go back to before the checkout.",
                 s.branch,
                 git::file_list(&repo.conflicted_files())
             );

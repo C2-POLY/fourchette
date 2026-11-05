@@ -131,6 +131,22 @@ The box shows only when a fast-forward is possible (the checked-out branch has n
 own). One Undo takes the merge back; a merge stopped on conflicts is aborted (`merge --abort`), a
 squash stopped on conflicts, which leaves no `MERGE_HEAD`, with `reset --merge`.
 
+An operation stopped on conflicts (issue #104: merge, rebase, cherry-pick, revert, or `git am`)
+shows a banner over the history: "Merge in progress" (a rebase adds its step, "2/5", from
+`rebase-merge/msgnum` and `end`), what it does (the merge message's first line, "branch onto
+main", the commit picked), then "Conflicts in" and the files (a click shows the file's diff), or
+"All conflicts resolved" once none is left unstaged. Abort asks first, in Fork's words ("Do you
+want to abort the merge?" / "…the rebase?"), with a red action, then runs `git <op> --abort`;
+Continue, active only when every conflict is resolved, runs `git <op> --continue` with
+`GIT_EDITOR=true` (no editor, Git's message); Skip (rebase only) runs `--skip`. Each is one Undo
+step that brings the operation back as it was left: before it runs, the operation's files in the
+Git folder (`rebase-merge/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, the sequencer…), the index (with
+its conflict stages) and every file that differs from HEAD are copied to a temporary folder; Undo
+puts the branches and HEAD back, `reset --hard`, then the files, the index and the operation's
+files, and drops the autostash copy a finished rebase left in the stash list. It refuses when the
+branches or the files changed after the action, so nothing done since is overwritten. Git itself
+refuses `merge --abort` when a file the merge brought has unstaged edits; its message is shown.
+
 ## Screens (from the compiled layouts in Resources/*.nib)
 
 * Sidebar groups: **Branches, Remotes, Tags, Stashes** (`0x100610cc8…cf8`), a search field and a filter toggle (SidebarController.nib).
@@ -195,6 +211,8 @@ Dragging the toolbar's empty background moves the window; a double-click zooms i
   `reset --keep` refuses, Undo resets with `--hard` and re-applies them as they were, only if they
   were not edited since the pull (otherwise it refuses), and drops Git's "autostash" copy. A
   dropped stash comes back under its own message.
+  Abort, Continue and Skip of a stopped merge, rebase, cherry-pick or revert are undone by putting
+  the stopped operation back whole (conflicts and half-done resolutions included, see above).
   30 steps deep. Actions that change nothing are not recorded. Push and fetch are not undoable
   (they touch the server).
 * **Command palette** (⌘K or ⌘P): type to run any action, check out or merge any branch, open a

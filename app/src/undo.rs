@@ -44,6 +44,8 @@ pub struct Snapshot {
     pub dirty_after: Option<u64>,
     /// The operation the action left stopped on conflicts (`Repo::operation`), which Undo aborts.
     pub left: Option<String>,
+    /// An Abort, Continue or Skip: the stopped operation as it was, which Undo puts back whole.
+    pub paused: Option<crate::operation::Paused>,
 }
 
 impl Repo {
@@ -63,7 +65,7 @@ impl Repo {
 
     pub fn snapshot(&self, label: &str, soft: bool, save_worktree: bool) -> Snapshot {
         let worktree = if save_worktree { self.stash_create() } else { None };
-        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, written: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
+        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, written: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None, paused: None }
     }
 
     /// Notes, right after the action, what Undo needs to know of its result: the operation it
@@ -73,10 +75,18 @@ impl Repo {
         if s.dirty.is_some() {
             s.dirty_after = Some(self.worktree_fingerprint());
         }
+        if let Some(p) = &mut s.paused {
+            p.after = Some((self.state(), self.worktree_fingerprint()));
+        }
     }
 
     /// Put the repository back to the snapshot. Returns what was undone.
     pub fn undo(&self, s: &Snapshot) -> Result<String, String> {
+        // An Abort, Continue or Skip: the operation comes back as it was left.
+        if let Some(p) = &s.paused {
+            self.pause_restore(s, p)?;
+            return Ok(format!("Undid: {}", s.label));
+        }
         let old = &s.state;
         // A file the action wrote goes to the Trash, then one it replaced comes back.
         if let Some(path) = &s.written {

@@ -11,6 +11,7 @@ mod library;
 mod menu;
 mod merge;
 mod modal;
+mod operation;
 mod preview;
 mod push;
 mod pull;

@@ -1077,6 +1077,7 @@ impl Tab {
                 }
                 out.primary || out.close
             }
+            Some(Dialog::Abort { op }) => operation::abort_dialog(ctx, op, cmds),
             Some(Dialog::NewGroup { path, name }) => {
                 let repo = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
                 let ok = !name.trim().is_empty();
@@ -1882,6 +1883,7 @@ impl eframe::App for App {
                     });
                 });
             }
+            t.operation_banner(ui, &mut cmds);
             if t.diff.is_some() {
                 t.diff_view(ui, &mut cmds, settings_open);
             } else if t.commits.is_empty() && t.status.is_empty() {
@@ -1962,7 +1964,7 @@ fn merge_check(ui: &mut Ui, test: &crate::merge::Test, w: f32) {
                 if n > SHOWN {
                     ui.label(RichText::new(format!("and {} more", n - SHOWN)).color(k.faint));
                 }
-                ui.label(RichText::new("You can still merge, then resolve them in a terminal; ⌘Z takes it all back.").color(k.dim));
+                ui.label(RichText::new("You can still merge, then resolve them and Continue from the banner; ⌘Z takes it all back.").color(k.dim));
             });
         }
         Test::Unknown(why) => line(ui, why, k.faint, &|p, c| {
