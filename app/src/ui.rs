@@ -58,7 +58,8 @@ pub fn draw_node(p: &egui::Painter, c: Pos2, row: &Row, is_head: bool, matched: 
 pub fn ref_colors(r: &GitRef, lane: Color32, bg: Color32) -> (Color32, Option<Color32>, Color32) {
     let text = theme::readable(lane, 0.35);
     match r.kind {
-        RefKind::Tag => (theme::c().elevated, Some(theme::c().border_strong), theme::c().text),
+        // Discreet: an outline only, on the row's background.
+        RefKind::Tag => (Color32::TRANSPARENT, Some(theme::c().border_strong), theme::c().dim),
         RefKind::Remote => (bg, Some(theme::tint(lane, bg, 0.4)), text),
         _ if r.is_head => (theme::tint(lane, bg, 0.3), Some(theme::tint(lane, bg, 0.6)), theme::readable(lane, 0.55)),
         _ => (theme::tint(lane, bg, 0.18), None, text),
@@ -136,6 +137,155 @@ pub fn fit_galley(p: &egui::Painter, text: &str, font: FontId, color: Color32, m
     p.layout_job(job)
 }
 
+/// One label of the history's branch column: a local branch with its remote branch when both
+/// point at the commit, a branch only local or only remote, a tag, or a detached HEAD.
+pub struct RefPill<'a> {
+    /// The ref the pill is named after and acts on: the local branch when there is one.
+    pub main: &'a GitRef,
+    /// The remote branch merged into a local branch's pill.
+    pub remote: Option<&'a GitRef>,
+}
+
+impl RefPill<'_> {
+    pub fn text(&self) -> &str {
+        if self.main.kind == RefKind::Head {
+            "HEAD"
+        } else {
+            &self.main.name
+        }
+    }
+
+    /// The width of the icons before the name: a check for the checked-out branch, a computer
+    /// for a local branch, a cloud for a remote one, a tag for a tag.
+    fn icons_w(&self) -> f32 {
+        let n = match self.main.kind {
+            RefKind::Local => 1 + self.main.is_head as usize + self.remote.is_some() as usize,
+            RefKind::Remote | RefKind::Tag => 1,
+            RefKind::Head | RefKind::Stash => 0,
+        };
+        // A little room between the last icon and the name.
+        if n == 0 {
+            0.0
+        } else {
+            n as f32 * PILL_ICON_W + 2.0
+        }
+    }
+
+    /// The width of everything but the name: paddings, icons and `extra` (a badge).
+    pub fn chrome_w(&self, extra: f32) -> f32 {
+        PILL_PAD_L + self.icons_w() + PILL_PAD_R + extra
+    }
+
+    /// The width of the whole pill, its name in full.
+    pub fn width(&self, p: &egui::Painter, extra: f32) -> f32 {
+        p.layout_no_wrap(self.text().to_owned(), theme::small(), Color32::WHITE).size().x + self.chrome_w(extra)
+    }
+}
+
+const PILL_ICON_W: f32 = 12.0;
+const PILL_PAD_L: f32 = 5.0;
+const PILL_PAD_R: f32 = 7.0;
+
+/// The remote branch of `local` among `refs`: its upstream, or without one the only
+/// `<remote>/<name>` of the same name.
+fn remote_partner(local: &GitRef, refs: &[GitRef]) -> Option<usize> {
+    if !local.upstream.is_empty() {
+        return refs.iter().position(|q| q.kind == RefKind::Remote && q.name == local.upstream);
+    }
+    let same_name = |q: &GitRef| q.kind == RefKind::Remote && q.full.strip_prefix("refs/remotes/").and_then(|s| s.split_once('/')).is_some_and(|(_, b)| b == local.name);
+    let mut found = refs.iter().enumerate().filter(|(_, q)| same_name(q));
+    match (found.next(), found.next()) {
+        (Some((j, _)), None) => Some(j),
+        _ => None,
+    }
+}
+
+/// The pills of one commit's refs, in the order `git::refs_by_target` gives (checked-out branch
+/// first, tags last): each local branch takes its remote branch on the same commit, and the other
+/// remote branches keep a pill of their own with their remote's name.
+pub fn ref_pills(refs: &[GitRef]) -> Vec<RefPill<'_>> {
+    let mut partner = vec![None; refs.len()];
+    let mut taken = vec![false; refs.len()];
+    for (i, r) in refs.iter().enumerate() {
+        if r.kind != RefKind::Local {
+            continue;
+        }
+        if let Some(j) = remote_partner(r, refs).filter(|&j| !taken[j]) {
+            partner[i] = Some(j);
+            taken[j] = true;
+        }
+    }
+    refs.iter().enumerate().filter(|(i, r)| !taken[*i] && r.kind != RefKind::Stash).map(|(i, r)| RefPill { main: r, remote: partner[i].map(|j| &refs[j]) }).collect()
+}
+
+/// A pill in `rect`: its icons, its name (ending with "…" when it does not fit) and the pull
+/// request badge `pull` on its right. `lane` is its commit's lane colour, `bg` the colour behind it.
+pub fn draw_ref_pill(p: &egui::Painter, rect: Rect, pill: &RefPill, lane: Color32, bg: Color32, pull: Option<&Pull>) {
+    let (fill, stroke, text) = ref_colors(pill.main, lane, bg);
+    p.rect_filled(rect, CornerRadius::same(4), fill);
+    if let Some(s) = stroke {
+        p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
+    }
+    let y = rect.center().y;
+    let behind = if fill == Color32::TRANSPARENT { bg } else { fill };
+    let mut x = rect.left() + PILL_PAD_L;
+    let mut icon = |draw: &dyn Fn(&egui::Painter, Pos2)| {
+        draw(p, pos2(x + PILL_ICON_W / 2.0 - 0.5, y));
+        x += PILL_ICON_W;
+    };
+    match pill.main.kind {
+        RefKind::Local => {
+            if pill.main.is_head {
+                icon(&|p, c| head_check(p, c, text));
+            }
+            icon(&|p, c| computer_icon(p, c, text));
+            if pill.remote.is_some() {
+                icon(&|p, c| cloud_icon(p, c, text));
+            }
+        }
+        RefKind::Remote => icon(&|p, c| cloud_icon(p, c, text)),
+        RefKind::Tag => icon(&|p, c| tag_icon(p, c, text, behind)),
+        RefKind::Head | RefKind::Stash => {}
+    }
+    if x > rect.left() + PILL_PAD_L {
+        x += 2.0;
+    }
+    let bw = pull.map(|q| pr_badge_width(q) + 5.0).unwrap_or(0.0);
+    let clip = p.with_clip_rect(rect.shrink(1.0));
+    let galley = fit_galley(p, pill.text(), theme::small(), text, rect.right() - PILL_PAD_R - bw - x);
+    clip.galley(pos2(x, y - galley.size().y / 2.0), galley, text);
+    if let Some(q) = pull {
+        pr_badge(&clip, rect.right() - PILL_PAD_R - pr_badge_width(q), y, q);
+    }
+}
+
+/// The checked-out branch's check mark, smaller than `check_mark`.
+fn head_check(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.add(Shape::line(vec![c + vec2(-3.2, 0.2), c + vec2(-1.0, 2.4), c + vec2(3.2, -2.4)], Stroke::new(1.5_f32, col)));
+}
+
+/// A computer (a screen on its stand), about 9 pt wide: a local branch.
+pub fn computer_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.rect_filled(Rect::from_center_size(c + vec2(0.0, -1.3), vec2(9.0, 6.4)), CornerRadius::same(1), col);
+    p.line_segment([c + vec2(0.0, 1.8), c + vec2(0.0, 3.6)], Stroke::new(1.3_f32, col));
+    p.line_segment([c + vec2(-2.6, 4.0), c + vec2(2.6, 4.0)], Stroke::new(1.3_f32, col));
+}
+
+/// A cloud, about 10 pt wide: a remote branch.
+pub fn cloud_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.circle_filled(c + vec2(-2.5, 1.0), 2.4, col);
+    p.circle_filled(c + vec2(0.4, -0.9), 3.2, col);
+    p.circle_filled(c + vec2(3.0, 1.2), 2.2, col);
+    p.rect_filled(Rect::from_min_max(c + vec2(-2.5, 1.0), c + vec2(3.0, 3.4)), CornerRadius::ZERO, col);
+}
+
+/// A price tag with its hole, about 9 pt wide; `hole` is the colour behind it.
+pub fn tag_icon(p: &egui::Painter, c: Pos2, col: Color32, hole: Color32) {
+    let pts = [vec2(-4.3, -3.2), vec2(1.3, -3.2), vec2(4.5, 0.0), vec2(1.3, 3.2), vec2(-4.3, 3.2)];
+    p.add(Shape::convex_polygon(pts.iter().map(|&v| c + v).collect(), col, Stroke::NONE));
+    p.circle_filled(c + vec2(-2.0, 0.0), 1.1, hole);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +337,38 @@ mod tests {
 
     fn wt(branch: &str, missing: bool) -> crate::worktree::Worktree {
         crate::worktree::Worktree { path: format!("/tmp/wt/{branch}").into(), branch: Some(branch.into()), head: String::new(), is_main: false, missing, locked: false }
+    }
+
+    /// Each pill as "<name>" with "+<remote>" when a remote branch is merged into it.
+    fn pills(refs: &[GitRef]) -> Vec<String> {
+        ref_pills(refs).iter().map(|p| p.remote.map_or(p.text().to_string(), |r| format!("{}+{}", p.text(), r.name))).collect()
+    }
+
+    #[test]
+    fn a_local_branch_and_its_remote_branch_make_one_pill() {
+        // Its upstream on the same commit joins it; another remote's branch keeps its own pill.
+        let refs = git::refs_by_target(&[tracking("main", "origin/main", 0, 0, true), remote("origin/main"), remote("upstream/main"), gref("v1", RefKind::Tag, false)]);
+        assert_eq!(pills(&refs["abc"]), ["main+origin/main", "upstream/main", "v1"]);
+        // Without an upstream: the only remote branch of the same name.
+        let refs = [tracking("dev", "", 0, 0, false), remote("origin/dev"), remote("origin/feature/dev")];
+        assert_eq!(pills(&refs), ["dev+origin/dev", "origin/feature/dev"]);
+        // Two of the same name, without an upstream: neither is chosen.
+        let refs = [tracking("dev", "", 0, 0, false), remote("origin/dev"), remote("upstream/dev")];
+        assert_eq!(pills(&refs), ["dev", "origin/dev", "upstream/dev"]);
+        // Its upstream elsewhere: the remote branch of the same name stays apart.
+        let refs = [tracking("dev", "origin/other", 0, 0, false), remote("origin/dev")];
+        assert_eq!(pills(&refs), ["dev", "origin/dev"]);
+        // A remote branch joins one local branch only.
+        let refs = [tracking("a", "origin/main", 0, 0, false), tracking("b", "origin/main", 0, 0, false), remote("origin/main")];
+        assert_eq!(pills(&refs), ["a+origin/main", "b"]);
+    }
+
+    #[test]
+    fn double_click_on_a_merged_pill_checks_out_the_local_branch() {
+        let refs = [tracking("dev", "origin/dev", 0, 0, false), remote("origin/dev"), remote("origin/new")];
+        let ps = ref_pills(&refs);
+        assert_eq!(checkout_args(label_checkout(ps[0].main), &refs), Some(vec!["checkout".into(), "dev".into()]));
+        assert_eq!(checkout_args(label_checkout(ps[1].main), &refs), Some(vec!["checkout".into(), "--track".into(), "origin/new".into()]));
     }
 
     #[test]
@@ -847,4 +1029,9 @@ pub fn board_icon(p: &egui::Painter, c: egui::Pos2, color: Color32) {
             p.rect_filled(r, CornerRadius::same(1), color);
         }
     }
+}
+
+/// The room a pull request badge takes inside a pill, none without one.
+pub fn badge_w(pull: Option<&Pull>) -> f32 {
+    pull.map_or(0.0, |q| pr_badge_width(q) + 5.0)
 }
