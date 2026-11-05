@@ -65,6 +65,12 @@ pub enum Dialog {
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
     /// The original's PushWindowController: the remote branch, Force push and Push all tags.
     Push(crate::push::Push),
+    /// The original's MergeWindowController: merge a branch into the checked-out one, as a merge
+    /// commit or squashed, `no_ff` its "No fast-forward" box; `check` foresees conflicts.
+    Merge { merge: crate::merge::Merge, style: crate::checkout::MergeStyle, no_ff: bool, check: crate::merge::Check },
+    /// The original's PullWindowController: the remote branch to pull, Merge or Rebase, and
+    /// "Stash and reapply" when there are local changes (`dirty`).
+    Pull { pull: crate::pull::Pull, mode: crate::pull::Mode, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
@@ -75,9 +81,17 @@ pub enum Cmd {
     /// The Check out dialog's choice, run as one undo step.
     /// `merge`: how Merge joins the upstream (ignored by the other actions).
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool },
+    /// Open the Merge dialog for a branch (`remote`: a remote one) into the checked-out one.
+    AskMerge { name: String, remote: bool },
+    /// The Merge dialog's choice, run as one undo step.
+    Merge { merge: crate::merge::Merge, way: crate::merge::Way },
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
+    /// Repository › Pull… (⇧⌘L): open the Pull dialog.
+    PullDialog,
+    /// The Pull dialog's choice: `git pull` with these arguments, from `source`.
+    PullFrom { source: crate::pull::Source, args: Vec<String> },
     /// A stash's Apply: `stash apply`, or `stash pop` when "Delete stash after Apply" is on.
     ApplyStash(String),
     Push,
@@ -395,6 +409,11 @@ impl App {
                 sample_push(t, kind);
             }
         }
+        // FOURCHETTE_DIALOG=pull: the Pull dialog on `develop`, diverged from origin/develop.
+        if std::env::var("FOURCHETTE_DIALOG").is_ok_and(|v| v == "pull") {
+            let s = app.library.settings;
+            app.tab_mut().pull_sample(s);
+        }
         // FOURCHETTE_MENU=<x>,<y> right-clicks there, in points, to show a context menu.
         app.shot_menu = std::env::var("FOURCHETTE_MENU").ok().and_then(|v| {
             let (x, y) = v.split_once(',')?;
@@ -570,6 +589,10 @@ impl App {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);
                 }
+                Cmd::PullDialog => {
+                    let s = self.library.settings;
+                    self.tab_mut().pull_dialog(s);
+                }
                 Cmd::ApplyStash(name) => {
                     let c = Cmd::apply_stash(&name, self.library.settings.delete_stash_after_apply);
                     self.tab_mut().run(c, ctx);
@@ -612,7 +635,9 @@ impl App {
 
 /// The dialog `FOURCHETTE_DIALOG` names, filled in as on the sample project: `confirm` (delete a
 /// tag), `rebase`, `branch`, `tag`, `delete-branch` (checked out in a worktree with changes, not
-/// merged), `delete-worktree` and `group`.
+/// merged), `delete-worktree`, `group`, and `merge` (feature/search into develop, diverged, with
+/// conflicts; `merge-clean` without, `merge-ff` where a fast-forward is possible, `merge-noff` with "No fast-forward" ticked, `merge-checking`
+/// while the check runs, `merge-old` with a Git too old to check).
 fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<Dialog> {
     let wt = worktrees.iter().find(|w| !w.is_main).cloned();
     let confirm = |title: &str, message: &str, args: &[&str]| Dialog::Confirm {
@@ -633,6 +658,18 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
         }
         "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
         "group" => Dialog::NewGroup { path: PathBuf::from("/Users/me/dev/fourchette"), name: "Side projects".into() },
+        m if m.starts_with("merge") => {
+            use crate::merge::{Check, Merge, Test};
+            let (ours, theirs) = if m == "merge-ff" || m == "merge-noff" { (0, 3) } else { (2, 3) };
+            let test = match m {
+                "merge-clean" | "merge-ff" | "merge-noff" => Test::Clean,
+                "merge-checking" => Test::Checking,
+                "merge-old" => Test::Unknown("Checking for conflicts beforehand needs Git 2.38 or later.".into()),
+                _ => Test::Conflicts(vec!["src/search/index.rs".into(), "src/app.rs".into(), "Cargo.lock".into()]),
+            };
+            let merge = Merge { branch: "feature/search".into(), remote: false, head: "develop".into(), ours, theirs };
+            Dialog::Merge { merge, style: Default::default(), no_ff: m == "merge-noff", check: Check::done(test) }
+        }
         _ => return None,
     })
 }
