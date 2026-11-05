@@ -61,6 +61,8 @@ pub struct Tab {
     pub(super) details_layout: DetailsLayout,
     /// The tab's latest message for the person; `App` moves it to the window's toast.
     pub(super) notice: Option<Notice>,
+    /// A merge, rebase, cherry-pick or revert stopped on conflicts: the banner shows it.
+    pub(super) operation: Option<crate::operation::InProgress>,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -143,6 +145,7 @@ impl Tab {
             worktrees: Vec::new(),
             details_layout: DetailsLayout::default(),
             notice: None,
+            operation: None,
         }
     }
 
@@ -242,6 +245,7 @@ impl Tab {
         self.status = r.status();
         self.branch = r.current_branch();
         self.ahead_behind = r.ahead_behind();
+        self.read_operation();
         self.after_load();
         if let Some(h) = selected_hash {
             self.sel = self.index.get(&h).map(|&i| Sel::Commit(i)).unwrap_or(Sel::None);
@@ -259,6 +263,7 @@ impl Tab {
         if let Some(r) = &self.repo {
             self.status = r.status();
         }
+        self.read_operation();
         self.last_status = Instant::now();
     }
 
@@ -342,9 +347,33 @@ impl Tab {
             },
         };
         self.spawn(&format!("Push to '{remote}'"), false, ctx, move |root| {
-            let args = git::push_args(&remote, &branch, &remote_branch, set_up, false);
+            let args = git::push_args(&remote, &branch, &remote_branch, set_up, false, false);
             let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
             git::exec(root, &a).map(|(o, e)| git::push_summary(&format!("{o}{e}"), &branch, &remote))
+        });
+    }
+
+    /// Opens the Push dialog on the current branch (the sample project's too, for a look).
+    pub(super) fn ask_push(&mut self) {
+        let Some(branch) = self.branch.clone() else {
+            self.notify("Check out a branch before pushing.", true);
+            return;
+        };
+        let out = self.repo.as_ref().map(|r| r.git(&["remote"]).unwrap_or_default());
+        let remotes = crate::push::Push::remotes_of(out.as_deref(), &self.refs);
+        let default = self.repo.as_ref().and_then(|r| r.default_remote()).or_else(|| remotes.iter().find(|r| *r == "origin").cloned());
+        match crate::push::Push::new(&branch, remotes, &self.refs, default) {
+            Some(p) => self.dialog = Some(Dialog::Push(p)),
+            None => self.notify("This repository has no remote to push to.", true),
+        }
+    }
+
+    /// The Push dialog's push. Not undoable, like the toolbar's.
+    fn push_to(&mut self, p: crate::push::Push, ctx: &egui::Context) {
+        self.spawn(&p.label(), false, ctx, move |root| {
+            let args = p.args();
+            let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            git::exec(root, &a).map(|(o, e)| p.done(&format!("{o}{e}"))).map_err(|e| crate::push::refused(&e, &p.remote_ref()))
         });
     }
 
@@ -473,11 +502,14 @@ impl Tab {
                 }
             }
             Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
+            Cmd::Operation(a) => self.operation_run(a),
             Cmd::AskMerge { name, remote } => self.ask_merge(&name, remote),
             Cmd::Merge { merge, way } => self.merge(&merge, way),
             Cmd::PullFrom { source, args } => self.pull_with(ctx, source, args),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
+            Cmd::AskPush => self.ask_push(),
+            Cmd::PushTo(p) => self.push_to(p, ctx),
             Cmd::Discard { path, untracked } => {
                 let Some(r) = &self.repo else { return };
                 let mut snap = r.snapshot(&format!("Discard {path}"), false, !untracked);
@@ -846,7 +878,7 @@ mod tests {
 
     fn snapshot(label: &str) -> Snapshot {
         let state = crate::undo::State { head_branch: None, head_sha: String::new(), refs: vec![], stashes: vec![], operation: None };
-        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, written: None, resolved: vec![], worktrees: vec![], dirty: None, dirty_after: None, left: None }
+        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, written: None, resolved: vec![], worktrees: vec![], dirty: None, dirty_after: None, left: None, paused: None }
     }
 
     fn notice(t: &Tab) -> Option<(&str, bool)> {

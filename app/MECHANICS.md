@@ -78,7 +78,7 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | deleteStashAfterApply | false | Apply keeps the stash; Pop removes it. A user setting (Settings › Git): on, Apply runs `stash pop` |
 | pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit --no-rebase <remote> <branch>`). User settings (Settings › Git): Merge or Rebase (`--rebase`), and "Stash and reapply" (`--autostash`) |
 | fetchSheetFetchAllRemotes / fetchSheetFetchAllTags | false / false | Fetch one remote, no `--tags` (Option-click = all remotes) |
-| pushSheetPushAllTags | false | no `--tags` |
+| pushSheetPushAllTags | false | no `--tags`: the Push dialog's "Push all tags" starts unticked |
 | contextSize | 3 | diffs use `--unified=3`; a user setting (Settings window, "Diff and commit"), the open diff refreshes when it changes |
 | localBranchSortOrder / remoteBranchSortOrder / tagSortOrder | 2 / 2 / 1 | meaning of the numbers not followed (*not used*) |
 | repositoryManagerScanDepth | 6 | not used |
@@ -131,6 +131,22 @@ The box shows only when a fast-forward is possible (the checked-out branch has n
 own). One Undo takes the merge back; a merge stopped on conflicts is aborted (`merge --abort`), a
 squash stopped on conflicts, which leaves no `MERGE_HEAD`, with `reset --merge`.
 
+An operation stopped on conflicts (issue #104: merge, rebase, cherry-pick, revert, or `git am`)
+shows a banner over the history: "Merge in progress" (a rebase adds its step, "2/5", from
+`rebase-merge/msgnum` and `end`), what it does (the merge message's first line, "branch onto
+main", the commit picked), then "Conflicts in" and the files (a click shows the file's diff), or
+"All conflicts resolved" once none is left unstaged. Abort asks first, in Fork's words ("Do you
+want to abort the merge?" / "…the rebase?"), with a red action, then runs `git <op> --abort`;
+Continue, active only when every conflict is resolved, runs `git <op> --continue` with
+`GIT_EDITOR=true` (no editor, Git's message); Skip (rebase only) runs `--skip`. Each is one Undo
+step that brings the operation back as it was left: before it runs, the operation's files in the
+Git folder (`rebase-merge/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, the sequencer…), the index (with
+its conflict stages) and every file that differs from HEAD are copied to a temporary folder; Undo
+puts the branches and HEAD back, `reset --hard`, then the files, the index and the operation's
+files, and drops the autostash copy a finished rebase left in the stash list. It refuses when the
+branches or the files changed after the action, so nothing done since is overwritten. Git itself
+refuses `merge --abort` when a file the merge brought has unstaged edits; its message is shown.
+
 ## Screens (from the compiled layouts in Resources/*.nib)
 
 * Sidebar groups: **Branches, Remotes, Tags, Stashes** (`0x100610cc8…cf8`), a search field and a filter toggle (SidebarController.nib).
@@ -163,7 +179,7 @@ those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what
 | Repository > Commit (`showCommitView:`) | ⇧⌘C | commits, like the Commit button |
 | Fetch… / Quick Fetch | ⇧⌘F / ⌥⇧⌘F | Fetch / Fetch All Remotes |
 | Pull… (`showPullSheet:`) | ⇧⌘L | the Pull dialog (#101): remote branch, Merge or Rebase, Stash and reapply; the toolbar's Pull still pulls at once |
-| Push… | ⇧⌘P | Push (no sheet in Fourchette) |
+| Push… | ⇧⌘P | the Push dialog (PushWindowController): remote, remote branch (the upstream, or a new one tracked with `--set-upstream`), Force push (always `--force-with-lease`, a second click when it replaces commits), Push all tags; the toolbar's Push still pushes at once |
 | Save Stash… (`saveStash:`) | ⇧⌘H | Stash Changes; Pop Stash added (toolbar's Pop) |
 | Checkout Branch… (`showQuickLaunchCheckout:`) | ⌘B | the branch palette |
 | New Branch… / New Tag… | ⇧⌘B / ⇧⌘T | the new branch / tag dialog at HEAD |
@@ -195,6 +211,8 @@ Dragging the toolbar's empty background moves the window; a double-click zooms i
   `reset --keep` refuses, Undo resets with `--hard` and re-applies them as they were, only if they
   were not edited since the pull (otherwise it refuses), and drops Git's "autostash" copy. A
   dropped stash comes back under its own message.
+  Abort, Continue and Skip of a stopped merge, rebase, cherry-pick or revert are undone by putting
+  the stopped operation back whole (conflicts and half-done resolutions included, see above).
   30 steps deep. Actions that change nothing are not recorded. Push and fetch are not undoable
   (they touch the server).
 * **Command palette** (⌘K or ⌘P): type to run any action, check out or merge any branch, open a

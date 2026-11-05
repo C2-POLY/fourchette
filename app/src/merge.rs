@@ -272,7 +272,7 @@ pub fn run(repo: &Repo, m: &Merge, way: Way) -> Result<String, String> {
         if repo.operation().is_some() || (way == Way::Squash && !conflicts.is_empty()) {
             let what = if way == Way::Squash { "squash" } else { "merge" };
             return Err(format!(
-                "The {what} of {} into {} stopped on conflicts in {}. Resolve them in a terminal, or Undo (⌘Z) to go back to before the {what}.",
+                "The {what} of {} into {} stopped on conflicts in {}. Resolve them, then Continue in the banner above the history, or Undo (⌘Z) to go back to before the {what}.",
                 m.branch,
                 m.head,
                 git::file_list(&conflicts)
