@@ -1,8 +1,14 @@
-//! The GitHub project linked to the repository: loading it and its colours (read only).
+//! The GitHub project linked to the repository: loading it, its colours, and writing the moves
+//! of its cards.
 use super::*;
 use crate::github::{self, Board};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+
+/// A move to write, with what takes it back if GitHub refuses it.
+type Write = (github::Ids, github::Move, github::Undo);
+/// GitHub's answer to a move.
+type Written = (github::Undo, Result<(), String>);
 
 #[derive(Default)]
 pub struct ProjectState {
@@ -10,6 +16,8 @@ pub struct ProjectState {
     pub board: Option<Arc<Board>>,
     pub error: Option<String>,
     pub loading: Option<Receiver<Result<Board, String>>>,
+    /// The thread writing moves to GitHub one at a time, in order, and its answers.
+    pub writes: Option<(Sender<Write>, Receiver<Written>)>,
 }
 
 /// The colour of a GitHub colour name ("BLUE"), as used by project options and issue types,
@@ -89,6 +97,7 @@ impl Tab {
     }
 
     pub(super) fn project_poll(&mut self) {
+        self.project_written();
         let Some(rx) = &self.project.loading else { return };
         let Ok(res) = rx.try_recv() else { return };
         self.project.loading = None;
@@ -98,6 +107,42 @@ impl Tab {
                 self.project.error = None;
             }
             Err(e) => self.project.error = Some(e),
+        }
+    }
+
+    /// Moves a card at once, then writes the move to GitHub in the background. The sample
+    /// project has no ids, so its moves stay on screen.
+    pub(super) fn project_move(&mut self, m: github::Move) {
+        let Some(b) = self.project.board.as_mut() else { return };
+        let board = Arc::make_mut(b);
+        let Some(undo) = board.apply(&m) else { return };
+        if board.ids.project.is_empty() {
+            return;
+        }
+        let ids = board.ids.clone();
+        let (tx, _) = self.project.writes.get_or_insert_with(|| {
+            let (tx, jobs) = channel::<Write>();
+            let (done, rx) = channel();
+            std::thread::spawn(move || {
+                for (ids, m, undo) in jobs {
+                    let _ = done.send((undo, github::write_move(&ids, &m)));
+                }
+            });
+            (tx, rx)
+        });
+        let _ = tx.send((ids, m, undo));
+    }
+
+    /// A move GitHub refused goes back where it was, with the reason.
+    fn project_written(&mut self) {
+        let Some((_, rx)) = &self.project.writes else { return };
+        let failed: Vec<(github::Undo, String)> = rx.try_iter().filter_map(|(u, r)| r.err().map(|e| (u, e))).collect();
+        for (u, e) in failed {
+            let Some(b) = self.project.board.as_mut() else { continue };
+            let board = Arc::make_mut(b);
+            let name = board.items.iter().find(|i| i.id == u.item).map(|i| i.number.map(|n| format!("#{n}")).unwrap_or_else(|| format!("“{}”", i.title))).unwrap_or_else(|| "the card".into());
+            board.revert(&u);
+            self.notify(format!("Couldn't move {name}, so it went back: {e}"), true);
         }
     }
 

@@ -121,6 +121,8 @@ pub enum Cmd {
     OpenUrl(String),
     ProjectReload,
     ProjectPick(usize),
+    /// Move a card of the project's board: at once on screen, then on GitHub.
+    ProjectMove(crate::github::Move),
     /// Go to the Project view, or back to the history (⌘B).
     Board,
     /// Tabs: pick a repository for a new tab in the switcher (⌘T, "+").
@@ -302,6 +304,11 @@ impl App {
         if let Some(n) = std::env::var("FOURCHETTE_BOARD_DETAIL").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
             t.board.open = true;
             t.board.detail = t.project.board.as_ref().and_then(|b| b.items.iter().find(|i| i.number == Some(n))).map(|i| i.id.clone());
+        }
+        // FOURCHETTE_BOARD_DRAG=<n> shows card #n lifted mid-drag over the next column.
+        if let Some(n) = std::env::var("FOURCHETTE_BOARD_DRAG").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
+            t.board.open = true;
+            t.board.drag_demo = Some(n);
         }
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {

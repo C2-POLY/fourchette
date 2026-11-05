@@ -512,6 +512,7 @@ impl Tab {
             | Cmd::SelectTab(_)
             | Cmd::CloseTab(_)
             | Cmd::ShowTab { .. } => {}
+            Cmd::ProjectMove(m) => self.project_move(m),
         }
     }
 
@@ -723,6 +724,28 @@ mod tests {
         poll(&mut t);
         assert!(t[0].project.loading.is_none() && t[0].project.board.is_some());
         assert!(t[1].project.board.is_none());
+    }
+
+    #[test]
+    fn a_card_moves_at_once_and_comes_back_when_github_refuses() {
+        use crate::github::Move;
+        let mut t = tabs(1);
+        t[0].project.board = Some(std::sync::Arc::new(crate::github::sample()));
+        let status = |t: &Tab| t.project.board.as_ref().unwrap().items.iter().find(|i| i.number == Some(44)).unwrap().status.clone();
+        // The sample project has no ids: the move stays on screen and nothing is written.
+        t[0].project_move(Move { item: "item-44".into(), status: Some("Ready".into()), place: true, after: None });
+        assert_eq!(status(&t[0]), "Ready");
+        assert!(t[0].project.writes.is_none());
+        // A refused write puts the card back, with the reason.
+        let undo = std::sync::Arc::make_mut(t[0].project.board.as_mut().unwrap()).apply(&Move { item: "item-44".into(), status: Some("Done".into()), place: false, after: None }).unwrap();
+        let (jobs, _) = channel();
+        let (tx, rx) = channel();
+        t[0].project.writes = Some((jobs, rx));
+        tx.send((undo, Err("GitHub needs your OK to change projects.".into()))).unwrap();
+        assert_eq!(status(&t[0]), "Done");
+        poll(&mut t);
+        assert_eq!(status(&t[0]), "Ready");
+        assert_eq!(notice(&t[0]), Some(("Couldn't move #44, so it went back: GitHub needs your OK to change projects.", true)));
     }
 
     #[test]
