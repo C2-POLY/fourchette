@@ -953,6 +953,8 @@ impl Tab {
             paths.dedup();
             paths.len()
         };
+        // The Push dialog counts commits against another remote branch when one is chosen.
+        let (repo, refs) = (&self.repo, &self.refs);
         let close = match &mut self.dialog {
             None => return,
             Some(Dialog::NewRef { at, label, name, checkout, tag }) => {
@@ -1197,6 +1199,126 @@ impl Tab {
                 }
                 out.primary || out.close
             }
+            Some(Dialog::Push(push)) => {
+                // The original's PushWindowController: where to, Force push, Push all tags. One
+                // panel like Check out's: the result's title and Now / After on top, the choices on
+                // the left and the graph on the right, the sentence under them.
+                use crate::preview;
+                const FORM_W: f32 = 250.0;
+                if push.stale() {
+                    let branch = push.branch.clone();
+                    push.recount(refs, |r| {
+                        let out = repo.as_ref()?.git(&["rev-list", "--left-right", "--count", &format!("refs/heads/{branch}...refs/remotes/{r}")]).ok()?;
+                        let mut n = out.split_whitespace().filter_map(|x| x.parse().ok());
+                        Some((n.next()?, n.next()?))
+                    });
+                }
+                let k = theme::c();
+                let mut status = vec![text("to"), remote(push.remote_ref()), text(push.counts())];
+                if push.tags {
+                    status.push(text("· all tags"));
+                }
+                let hint = if push.confirm {
+                    vec![Hint::Text("Click again to replace them".into())]
+                } else if !push.valid() {
+                    vec![Hint::Text("Not a valid branch name".into())]
+                } else if push.diverged() && !push.force {
+                    vec![Hint::Text("Pull first, or tick Force push".into())]
+                } else {
+                    vec![Hint::Text("A push can't be undone with ⌘Z".into())]
+                };
+                let out = Modal::new("push", Width::Large, "push", vec![text("Push"), pill(push.branch.as_str())])
+                    .danger(push.replaces() && push.confirm)
+                    .status(status)
+                    .hint(hint)
+                    .primary(push.button(), push.force, push.can_push())
+                    .show(ctx, |ui| {
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            let view_id = egui::Id::new("push_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_PUSH_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("push_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            let col = if push.replaces() { k.deleted } else { k.strong };
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &push.title(), egui::FontId::proportional(theme::FS_TITLE), col, title_w);
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The choices on the left, the graph on the right, as tall as the taller.
+                            let before = (push.key(), push.force);
+                            let top = ui.cursor().min;
+                            let form = Rect::from_min_size(top, vec2(FORM_W, 400.0));
+                            let mut left = ui.new_child(egui::UiBuilder::new().id_salt("push_form").max_rect(form).layout(Layout::top_down(Align::Min)));
+                            left.spacing_mut().item_spacing.y = 6.0;
+                            modal::caption(&mut left, "Remote");
+                            if push.remotes.len() > 1 {
+                                let names: Vec<&str> = push.remotes.iter().map(|r| r.as_str()).collect();
+                                let cur = push.remotes.iter().position(|r| *r == push.remote).unwrap_or(0);
+                                if let Some(i) = modal::segmented(&mut left, &names, cur, &[]) {
+                                    push.remote = push.remotes[i].clone();
+                                }
+                            } else {
+                                modal::pill_ui(&mut left, &push.remote, true, theme::FS_BODY);
+                            }
+                            left.add_space(6.0);
+                            modal::caption(&mut left, "Remote branch");
+                            modal::text_field(&mut left, &mut push.target, "branch name");
+                            left.label(RichText::new(push.tracking()).font(theme::secondary()).color(k.faint));
+                            left.add_space(6.0);
+                            modal::check_row(&mut left, &mut push.force, "Force push", Some("with lease"));
+                            modal::check_row(&mut left, &mut push.tags, "Push all tags", None);
+                            let form_h = left.min_rect().height();
+                            let p = push.preview();
+                            let graph_h = preview::height(p.rows);
+                            let block_h = form_h.max(graph_h);
+                            let x = form.right() + 16.0;
+                            ui.painter().vline(x, top.y..=top.y + block_h, Stroke::new(1.0_f32, k.border));
+                            let graph = Rect::from_min_size(pos2(x + 16.0, top.y + (block_h - graph_h) / 2.0), vec2(w - FORM_W - 32.0, graph_h));
+                            let mut right = ui.new_child(egui::UiBuilder::new().id_salt("push_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
+                            preview::show(&mut right, egui::Id::new("push_preview"), &p, after);
+                            ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
+                            if (push.key(), push.force) != before {
+                                push.confirm = false;
+                            }
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            let sentence = if after { push.explain() } else { push.summary() };
+                            ui.label(RichText::new(sentence).color(k.dim));
+                            if push.confirm {
+                                ui.add_space(12.0);
+                                modal::note(ui, k.deleted, |ui| {
+                                    ui.label(RichText::new(push.warning()).color(k.text));
+                                });
+                            } else if push.diverged() && !push.force {
+                                ui.add_space(12.0);
+                                modal::note(ui, k.modified, |ui| {
+                                    ui.label(RichText::new(format!("{} has commits that {} doesn't. Tick Force push to replace them.", push.remote_ref(), push.branch)).color(k.text));
+                                });
+                            }
+                        });
+                    });
+                // Replacing commits on the remote takes a second click.
+                let go = out.primary && push.can_push();
+                if go && push.replaces() && !push.confirm {
+                    push.confirm = true;
+                    false
+                } else {
+                    if go {
+                        cmds.push(Cmd::PushTo(push.clone()));
+                    }
+                    go || out.close
+                }
+            }
         };
         if close {
             self.dialog = None;
@@ -1332,7 +1454,7 @@ impl App {
             Id::Fetch => Cmd::Fetch { all: false, quiet: false },
             Id::FetchAll => Cmd::Fetch { all: true, quiet: false },
             Id::Pull => Cmd::Pull,
-            Id::Push => Cmd::Push,
+            Id::Push => Cmd::AskPush,
             Id::Stash => Cmd::stash(),
             Id::PopStash => Cmd::pop_stash(),
             Id::CheckoutBranch => Cmd::PaletteCheckout,
