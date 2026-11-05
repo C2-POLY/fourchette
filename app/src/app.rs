@@ -135,6 +135,10 @@ pub enum Cmd {
     Settings,
     /// Keep the settings chosen in the Settings window; they apply at once.
     SetSettings(crate::settings::Settings),
+    /// The List / Tree switch of the local changes (a setting, shared by every repository).
+    SetFilesTree(bool),
+    /// Folds or unfolds a folder of the Tree view (`true` for the staged list).
+    ToggleDir(bool, String),
     /// AI assistant (Claude through the person's subscription).
     AiCleanup,
     AiCommitMessage,
@@ -310,6 +314,13 @@ impl App {
                     app.notify(e, true);
                 }
                 None => app.tab_mut().load_demo(),
+            }
+        }
+        // FOURCHETTE_FILES=tree|list shows the local changes (selected) as a tree or a list for a screenshot without saving it.
+        if app.screenshot.is_some() {
+            if let Ok(v) = std::env::var("FOURCHETTE_FILES") {
+                app.library.settings.files_tree = v == "tree";
+                app.tab_mut().sel = Sel::Wip;
             }
         }
         // FOURCHETTE_TABS=<n> shows the sample project in n tabs, so the strip shows.
@@ -579,6 +590,10 @@ impl App {
                         self.update.check_now(s.update_channel);
                     }
                     self.library.settings = s;
+                    self.library.save();
+                }
+                Cmd::SetFilesTree(on) => {
+                    self.library.settings.files_tree = on;
                     self.library.save();
                 }
                 // The hidden palette command sets the same setting as the Settings window.
