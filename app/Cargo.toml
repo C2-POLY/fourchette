@@ -3,6 +3,10 @@ name = "fourchette"
 version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
+description = "A Git client for macOS in Rust and egui"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/C2-POLY/fourchette"
+homepage = "https://c2-poly.github.io/fourchette/"
 
 [dependencies]
 eframe = "0.32"

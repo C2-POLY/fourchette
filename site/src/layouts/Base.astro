@@ -1,0 +1,70 @@
+---
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '../styles/global.css';
+// The weights the first screen uses, preloaded so that the text does not
+// reflow when they arrive.
+import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
+import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { type Lang, langs, t, pagePath, asset } from '../i18n';
+import heroShot from '../assets/shots/history-dark.png';
+import { getImage } from 'astro:assets';
+
+interface Props {
+  lang: Lang;
+  page: '' | '404.html';
+  title: string;
+  description: string;
+}
+
+const { lang, page, title, description } = Astro.props;
+const s = t(lang);
+const canonical = new URL(pagePath(lang, page), Astro.site).href;
+const alternates = langs.map((l) => ({ lang: l, href: new URL(pagePath(l, page), Astro.site).href }));
+const og = await getImage({ src: heroShot, width: 1600, format: 'png' });
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {[inter400, inter600].map((font) => <link rel="preload" href={font} as="font" type="font/woff2" crossorigin />)}
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
+    <link rel="alternate" hreflang="x-default" href={alternates[0].href} />
+    <link rel="icon" type="image/png" href={asset('favicon.png')} />
+    <link rel="apple-touch-icon" href={asset('apple-touch-icon.png')} />
+    <meta name="theme-color" content="#111215" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL(og.src, Astro.site).href} />
+    <meta property="og:locale" content={lang === 'fr' ? 'fr_FR' : 'en_US'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script is:inline>
+      // Before the first paint: the theme the toggle chose.
+      (function () {
+        try {
+          var t = localStorage.getItem('fourchette-theme');
+          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">{s.a11y.skip}</a>
+    <Header lang={lang} page={page} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+  </body>
+</html>

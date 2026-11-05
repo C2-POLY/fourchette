@@ -1,5 +1,5 @@
-//! GitHub Projects, read only: the board of the project linked to the open repository.
-//! Everything goes through the GitHub command line (`gh`), so its sign-in is used and the app
+//! GitHub Projects: the board of the project linked to the open repository, and the moves of
+//! its cards (the Status field and the position, nothing else). Everything goes through the GitHub command line (`gh`), so its sign-in is used and the app
 //! never keeps a token.
 use serde_json::Value;
 use std::borrow::Borrow;
@@ -13,6 +13,7 @@ pub const NO_STATUS: &str = "No status";
 
 const NOT_SIGNED_IN: &str = "The GitHub command line isn't signed in. Open Terminal and run `gh auth login`.";
 const NO_PROJECT_SCOPE: &str = "GitHub needs your OK to read projects. Open Terminal and run `gh auth refresh -s project`.";
+const NO_WRITE_SCOPE: &str = "GitHub needs your OK to change projects. Open Terminal and run `gh auth refresh -s project`.";
 
 /// Apps opened from the Finder get a short PATH, so the usual places are checked too.
 pub fn find_gh() -> Option<PathBuf> {
@@ -117,6 +118,38 @@ impl Item {
     }
 }
 
+/// The ids a write needs: the project, its Status field and each option's (name, id).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Ids {
+    pub project: String,
+    pub status_field: String,
+    pub options: Vec<(String, String)>,
+}
+
+impl Ids {
+    pub fn option(&self, status: &str) -> Option<&str> {
+        self.options.iter().find(|o| o.0 == status).map(|o| o.1.as_str())
+    }
+}
+
+/// A card moved on the board. `status` is None when it stays in its column; with `place`, it
+/// goes right after the item `after` in the project's order, or to the top without one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Move {
+    pub item: String,
+    pub status: Option<String>,
+    pub place: bool,
+    pub after: Option<String>,
+}
+
+/// What takes a move back: where the item was in the project's order, and its status.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Undo {
+    pub item: String,
+    pub index: usize,
+    pub status: String,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Board {
     /// Projects linked to the repository.
@@ -126,8 +159,10 @@ pub struct Board {
     pub slug: String,
     /// Status options in the project's order, with their colour name ("GREEN").
     pub statuses: Vec<(String, String)>,
-    /// Every item of the project, all repositories and drafts included.
+    /// Every item of the project, all repositories and drafts included, in the project's order.
     pub items: Vec<Item>,
+    /// Empty for the sample project, whose moves stay on screen.
+    pub ids: Ids,
     /// The signed-in GitHub login, for "Mine only".
     pub me: String,
 }
@@ -150,6 +185,39 @@ impl Board {
     pub fn status_color(&self, status: &str) -> Option<&str> {
         self.statuses.iter().find(|s| s.0 == status).map(|s| s.1.as_str())
     }
+
+    /// Moves an item as GitHub will once the move is written: the new status, then the place
+    /// right after `after` (the top without one). None when the item isn't there.
+    pub fn apply(&mut self, m: &Move) -> Option<Undo> {
+        let from = self.items.iter().position(|i| i.id == m.item)?;
+        let mut it = self.items.remove(from);
+        let undo = Undo { item: it.id.clone(), index: from, status: it.status.clone() };
+        if let Some(s) = &m.status {
+            it.status = s.clone();
+        }
+        let to = match (&m.place, &m.after) {
+            (false, _) => from,
+            (true, None) => 0,
+            (true, Some(a)) => self.items.iter().position(|i| &i.id == a).map(|p| p + 1).unwrap_or(from),
+        };
+        self.items.insert(to.min(self.items.len()), it);
+        Some(undo)
+    }
+
+    /// Puts an item back where `apply` found it.
+    pub fn revert(&mut self, u: &Undo) {
+        let Some(at) = self.items.iter().position(|i| i.id == u.item) else { return };
+        let mut it = self.items.remove(at);
+        it.status = u.status.clone();
+        self.items.insert(u.index.min(self.items.len()), it);
+    }
+}
+
+/// The item a card dropped at `slot` of a column goes after: the visible card above it, the
+/// dragged one left out (None: the top). `column` is the column's cards as shown.
+pub fn drop_after(column: &[&str], dragged: &str, slot: usize) -> Option<String> {
+    let others: Vec<&str> = column.iter().copied().filter(|id| *id != dragged).collect();
+    slot.checked_sub(1).and_then(|i| others.get(i.min(others.len().saturating_sub(1)))).map(|s| s.to_string())
 }
 
 /// "owner/name" from a GitHub remote address (SSH or HTTPS).
@@ -233,15 +301,16 @@ pub fn parse_projects(v: &Value) -> Vec<ProjectRef> {
     out
 }
 
-/// The project's items with what a card shows. The owner can be an organisation or a user.
+/// The project's items with what a card shows, in the project's order (the order of the board's
+/// columns, Done aside), and the ids its moves need. The owner can be an organisation or a user.
 const ITEMS_QUERY: &str = "fragment V on ProjectV2ItemFieldValue{\
 ... on ProjectV2ItemFieldSingleSelectValue{name color field{... on ProjectV2FieldCommon{name}}} \
 ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2FieldCommon{name}}} \
 ... on ProjectV2ItemFieldNumberValue{number field{... on ProjectV2FieldCommon{name}}} \
 ... on ProjectV2ItemFieldDateValue{date field{... on ProjectV2FieldCommon{name}}} \
 ... on ProjectV2ItemFieldIterationValue{title field{... on ProjectV2FieldCommon{name}}}} \
-fragment P on ProjectV2{field(name:\"Status\"){... on ProjectV2SingleSelectField{options{name color}}} \
-items(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id fieldValues(first:20){nodes{...V}} content{__typename \
+fragment P on ProjectV2{id field(name:\"Status\"){... on ProjectV2SingleSelectField{id options{id name color}}} \
+items(first:100,after:$cursor,orderBy:{field:POSITION,direction:ASC}){pageInfo{hasNextPage endCursor} nodes{id fieldValues(first:20){nodes{...V}} content{__typename \
 ... on DraftIssue{title body createdAt updatedAt assignees(first:10){nodes{login}}} \
 ... on Issue{number title url state body createdAt updatedAt issueType{name color} repository{nameWithOwner} \
 labels(first:20){nodes{name color}} assignees(first:10){nodes{login}} subIssuesSummary{total completed} \
@@ -335,8 +404,8 @@ pub fn parse_item(n: &Value) -> Item {
     }
 }
 
-/// The Status options (name, colour), the items and the cursor of the next page.
-type ItemsPage = (Vec<(String, String)>, Vec<Item>, Option<String>);
+/// The ids, the Status options (name, colour), the items and the cursor of the next page.
+type ItemsPage = (Ids, Vec<(String, String)>, Vec<Item>, Option<String>);
 
 /// One page of the items query.
 pub fn parse_items_page(v: &Value) -> Result<ItemsPage, String> {
@@ -349,13 +418,16 @@ pub fn parse_items_page(v: &Value) -> Result<ItemsPage, String> {
     if p.is_null() {
         return Err("GitHub didn't return the project: it may have been deleted, or you can't see it.".into());
     }
-    let statuses = p["field"]["options"]
-        .as_array()
-        .map(|o| o.iter().filter_map(|x| Some((x["name"].as_str()?.to_string(), x["color"].as_str().unwrap_or("GRAY").to_string()))).collect())
-        .unwrap_or_default();
+    let options = p["field"]["options"].as_array().map(|a| a.as_slice()).unwrap_or_default();
+    let statuses = options.iter().filter_map(|x| Some((x["name"].as_str()?.to_string(), x["color"].as_str().unwrap_or("GRAY").to_string()))).collect();
+    let ids = Ids {
+        project: p["id"].as_str().unwrap_or("").into(),
+        status_field: p["field"]["id"].as_str().unwrap_or("").into(),
+        options: options.iter().filter_map(|x| Some((x["name"].as_str()?.to_string(), x["id"].as_str()?.to_string()))).collect(),
+    };
     let items = p["items"]["nodes"].as_array().map(|a| a.iter().map(parse_item).collect()).unwrap_or_default();
     let next = if p["items"]["pageInfo"]["hasNextPage"].as_bool() == Some(true) { p["items"]["pageInfo"]["endCursor"].as_str().map(String::from) } else { None };
-    Ok((statuses, items, next))
+    Ok((ids, statuses, items, next))
 }
 
 /// Puts items in their status column: the project's order first, then any status it doesn't
@@ -436,9 +508,10 @@ pub fn load(slug: &str, preferred: Option<&str>) -> Result<Board, String> {
             args.extend(["-f".into(), format!("cursor={c}")]);
         }
         let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let (statuses, items, next) = parse_items_page(&json(&exe, &a)?)?;
+        let (ids, statuses, items, next) = parse_items_page(&json(&exe, &a)?)?;
         if board.statuses.is_empty() {
             board.statuses = statuses;
+            board.ids = ids;
         }
         board.items.extend(items);
         cursor = next;
@@ -448,6 +521,61 @@ pub fn load(slug: &str, preferred: Option<&str>) -> Result<Board, String> {
     }
     board.items.truncate(ITEM_LIMIT);
     Ok(board)
+}
+
+const SET_STATUS: &str = "mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:\
+{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}";
+const CLEAR_STATUS: &str = "mutation($project:ID!,$item:ID!,$field:ID!){clearProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field}){projectV2Item{id}}}";
+const SET_POSITION: &str = "mutation($project:ID!,$item:ID!,$after:ID){updateProjectV2ItemPosition(input:{projectId:$project,itemId:$item,afterId:$after}){clientMutationId}}";
+
+/// The reason a write failed, from `gh`'s error or GitHub's answer; a missing scope says how to
+/// give it.
+fn write_error(res: Result<Value, String>) -> Result<(), String> {
+    let v = res.map_err(|e| if e == NO_PROJECT_SCOPE { NO_WRITE_SCOPE.into() } else { e })?;
+    let Some(e) = v["errors"].as_array().and_then(|a| a.first()) else { return Ok(()) };
+    let m = e["message"].as_str().unwrap_or("");
+    Err(if e["type"].as_str() == Some("INSUFFICIENT_SCOPES") || m.contains("scope") { NO_WRITE_SCOPE.into() } else { format!("GitHub: {m}") })
+}
+
+fn mutation(query: &str, vars: &[(&str, &str)]) -> Result<(), String> {
+    let exe = find_gh().ok_or("The GitHub command line (gh) isn't installed. Install it with `brew install gh`, then run `gh auth login`.")?;
+    let mut args = vec!["api".to_string(), "graphql".into(), "-f".into(), format!("query={query}")];
+    for (k, v) in vars {
+        args.extend(["-f".into(), format!("{k}={v}")]);
+    }
+    let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    write_error(json(&exe, &a))
+}
+
+/// Sets an item's Status field to an option, or clears it with None. Only that field changes:
+/// the issue stays open or closed.
+pub fn set_status(ids: &Ids, item: &str, option: Option<&str>) -> Result<(), String> {
+    let base = [("project", ids.project.as_str()), ("item", item), ("field", ids.status_field.as_str())];
+    match option {
+        Some(o) => mutation(SET_STATUS, &[&base[..], &[("option", o)]].concat()),
+        None => mutation(CLEAR_STATUS, &base),
+    }
+}
+
+/// Puts an item right after `after` in the project's order, or at the top without one.
+pub fn set_position(ids: &Ids, item: &str, after: Option<&str>) -> Result<(), String> {
+    let mut vars = vec![("project", ids.project.as_str()), ("item", item)];
+    if let Some(a) = after {
+        vars.push(("after", a));
+    }
+    mutation(SET_POSITION, &vars)
+}
+
+/// Writes a move: its status, then its place. Runs in a background thread.
+pub fn write_move(ids: &Ids, m: &Move) -> Result<(), String> {
+    if let Some(s) = &m.status {
+        let option = if s == NO_STATUS { None } else { Some(ids.option(s).ok_or_else(|| format!("The project has no status “{s}” any more. Refresh it."))?) };
+        set_status(ids, &m.item, option)?;
+    }
+    if m.place {
+        set_position(ids, &m.item, m.after.as_deref())?;
+    }
+    Ok(())
 }
 
 /// A board for the sample project, with something of every kind a card can show.
@@ -533,6 +661,7 @@ pub fn sample() -> Board {
     items.push(w);
 
     Board {
+        ids: Ids::default(),
         projects: vec![ProjectRef { owner: "example".into(), number: 1, title: "Fourchette roadmap".into(), url: "https://github.com/orgs/example/projects/1".into() }],
         chosen: 0,
         slug: slug.into(),
@@ -558,8 +687,8 @@ mod tests {
     }
 
     fn page() -> Value {
-        json!({"data": {"repositoryOwner": {"projectV2": {
-            "field": {"options": [{"name": "Backlog", "color": "GRAY"}, {"name": "In progress", "color": "BLUE"}, {"name": "Done", "color": "GREEN"}]},
+        json!({"data": {"repositoryOwner": {"projectV2": {"id": "PVT_1",
+            "field": {"id": "F_status", "options": [{"id": "o1", "name": "Backlog", "color": "GRAY"}, {"id": "o2", "name": "In progress", "color": "BLUE"}, {"id": "o3", "name": "Done", "color": "GREEN"}]},
             "items": {"pageInfo": {"hasNextPage": true, "endCursor": "abc"}, "nodes": [
                 {"id": "I1", "fieldValues": {"nodes": [
                     {},
@@ -589,8 +718,9 @@ mod tests {
 
     #[test]
     fn reads_a_page_of_project_items() {
-        let (statuses, items, next) = parse_items_page(&page()).unwrap();
+        let (ids, statuses, items, next) = parse_items_page(&page()).unwrap();
         assert_eq!(statuses[1], ("In progress".to_string(), "BLUE".to_string()));
+        assert_eq!((ids.project.as_str(), ids.status_field.as_str(), ids.option("Done"), ids.option("Blocked")), ("PVT_1", "F_status", Some("o3"), None));
         assert_eq!(next.as_deref(), Some("abc"));
         let a = &items[0];
         assert_eq!((a.id.as_str(), a.status.as_str(), a.kind.clone(), a.number), ("I1", "In progress", Kind::Issue, Some(1)));
@@ -612,7 +742,7 @@ mod tests {
 
     #[test]
     fn keeps_this_repository_and_orders_columns() {
-        let (statuses, items, _) = parse_items_page(&page()).unwrap();
+        let (_, statuses, items, _) = parse_items_page(&page()).unwrap();
         let board = Board { slug: "o/r".into(), statuses, items, ..Default::default() };
         let mine: Vec<&Item> = board.items.iter().filter(|i| board.in_repo(i)).collect();
         assert_eq!(mine.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["A", "B"]);
@@ -628,6 +758,53 @@ mod tests {
         let v = json!({"errors": [{"type": "INSUFFICIENT_SCOPES", "message": "Your token has not been granted the required scopes"}]});
         assert_eq!(parse_items_page(&v).unwrap_err(), NO_PROJECT_SCOPE);
         assert!(parse_items_page(&json!({"data": {"repositoryOwner": {"projectV2": null}}})).is_err());
+        assert_eq!(write_error(Ok(v)).unwrap_err(), NO_WRITE_SCOPE);
+        assert_eq!(write_error(Err(NO_PROJECT_SCOPE.into())).unwrap_err(), NO_WRITE_SCOPE, "a write asks for the right to change");
+        assert_eq!(write_error(Ok(json!({"errors": [{"message": "Could not resolve to a node"}]}))).unwrap_err(), "GitHub: Could not resolve to a node");
+        assert_eq!(write_error(Ok(json!({"data": {"x": {"clientMutationId": null}}}))), Ok(()));
+    }
+
+    fn board(cards: &[(&str, &str)]) -> Board {
+        Board { items: cards.iter().map(|(id, s)| Item { id: id.to_string(), status: s.to_string(), ..Default::default() }).collect(), ..Default::default() }
+    }
+
+    fn order(b: &Board) -> Vec<String> {
+        b.items.iter().map(|i| format!("{}:{}", i.id, i.status)).collect()
+    }
+
+    #[test]
+    fn finds_the_card_a_drop_goes_after() {
+        let col = ["a", "b", "c"];
+        assert_eq!(drop_after(&col, "x", 0), None, "the top of the column");
+        assert_eq!(drop_after(&col, "x", 2).as_deref(), Some("b"));
+        assert_eq!(drop_after(&col, "x", 9).as_deref(), Some("c"), "past the end: after the last");
+        assert_eq!(drop_after(&col, "a", 1).as_deref(), Some("b"), "the dragged card is left out");
+        assert_eq!(drop_after(&col, "c", 2).as_deref(), Some("b"));
+        assert_eq!(drop_after(&[], "x", 1), None);
+    }
+
+    #[test]
+    fn applies_and_takes_back_a_move() {
+        let mut b = board(&[("a", "Todo"), ("b", "Doing"), ("c", "Todo"), ("d", "Doing")]);
+        let m = Move { item: "c".into(), status: Some("Doing".into()), place: true, after: Some("b".into()) };
+        let u = b.apply(&m).unwrap();
+        assert_eq!(order(&b), ["a:Todo", "b:Doing", "c:Doing", "d:Doing"]);
+        b.revert(&u);
+        assert_eq!(order(&b), ["a:Todo", "b:Doing", "c:Todo", "d:Doing"]);
+        // To the top, in the same column.
+        let u = b.apply(&Move { item: "d".into(), status: None, place: true, after: None }).unwrap();
+        assert_eq!(order(&b), ["d:Doing", "a:Todo", "b:Doing", "c:Todo"]);
+        b.revert(&u);
+        assert_eq!(order(&b), ["a:Todo", "b:Doing", "c:Todo", "d:Doing"]);
+        // Done keeps its date order: the status only, the place in the project unchanged.
+        b.apply(&Move { item: "a".into(), status: Some("Done".into()), place: false, after: None }).unwrap();
+        assert_eq!(order(&b), ["a:Done", "b:Doing", "c:Todo", "d:Doing"]);
+        // After a card further down.
+        b.apply(&Move { item: "b".into(), status: Some("Todo".into()), place: true, after: Some("c".into()) }).unwrap();
+        assert_eq!(order(&b), ["a:Done", "c:Todo", "b:Todo", "d:Doing"]);
+        assert_eq!(b.apply(&Move { item: "zz".into(), status: None, place: true, after: None }), None);
+        let mut columns = columns(&["Todo".to_string()], b.items.iter(), false).into_iter();
+        assert_eq!(columns.next().map(|c| c.1.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()), Some(vec!["c", "b"]), "a column follows the project's order");
     }
 
     #[test]

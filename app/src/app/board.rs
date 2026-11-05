@@ -1,17 +1,28 @@
-//! The GitHub project as a view next to the history (sidebar "Project", ⌘B), read only: a board
-//! with one column per status, or a list grouped by status; a ticket's detail shows in the
-//! details panel.
+//! The GitHub project as a view next to the history (sidebar "Project", ⌘B): a board with one
+//! column per status, or a list grouped by status; a ticket's detail shows in the details panel.
+//! Cards move by dragging them or with "Move to" (right-click), which writes only their Status
+//! and their place in the project.
 use super::project::{named_color, status_color};
 use super::*;
-use crate::github::{self, Board, Item, Kind, Linked};
+use crate::github::{self, Board, Item, Kind, Linked, Move};
 use crate::ui::board_icon;
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
-use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, Ui};
+use egui::emath::TSTransform;
+use egui::{pos2, vec2, Align, Align2, CornerRadius, FontId, Id, Key, Layout, Margin, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
 
 /// Cards a finished column shows before "Show all": the most recently updated ones.
 const DONE_LIMIT: usize = 20;
 const COL_W: f32 = 284.0;
 const COL_GAP: f32 = 12.0;
+/// Space between two cards of a column.
+const CARD_GAP: f32 = 8.0;
+/// Seconds the cards take to part for a dragged one, and a dropped card to glide to its place.
+const PART_TIME: f32 = 0.15;
+const GLIDE_TIME: f32 = 0.18;
+/// How close to a column's or the board's edge a dragged card scrolls it.
+const SCROLL_EDGE: f32 = 48.0;
+/// The board scrolls with the wheel and its bars, not by dragging it: dragging moves cards.
+const NO_DRAG_SCROLL: egui::scroll_area::ScrollSource = egui::scroll_area::ScrollSource { drag: false, ..egui::scroll_area::ScrollSource::ALL };
 
 // Surfaces of the mode on screen: columns sit below the page, cards above it.
 fn column_fill() -> Color32 {
@@ -52,6 +63,115 @@ pub struct BoardState {
     pub detail: Option<String>,
     /// Whether a text field had the keyboard when the frame began, so Esc only leaves it.
     pub typing: bool,
+    /// The card being dragged, or gliding to its place once let go.
+    pub drag: Option<Drag>,
+    /// Drags so far, so each one's animations start afresh.
+    drags: u64,
+    /// Where the columns and cards were on the last frame, to find where a drag points.
+    columns_at: Vec<(String, Rect)>,
+    cards_at: Vec<(String, String, Rect)>,
+    /// FOURCHETTE_BOARD_DRAG: the number of a card to show lifted over the next column.
+    pub drag_demo: Option<u64>,
+}
+
+#[derive(Clone)]
+pub struct Drag {
+    item: String,
+    /// Its column, and its place among the column's other cards, when it was picked up.
+    from: (String, usize),
+    /// Where the pointer holds the card, and the card's size.
+    grab: Vec2,
+    size: Vec2,
+    /// The card's top-left corner, following the pointer; kept where it was let go.
+    pos: Pos2,
+    /// The column and place it would land in.
+    target: Option<(String, usize)>,
+    /// Once let go: the column and place it glides to, and when it was let go.
+    glide: Option<(String, usize, f64)>,
+    gen: u64,
+    /// For a screenshot: the pointer stays on this point and never lets go.
+    demo: Option<Pos2>,
+}
+
+impl Drag {
+    /// Where a column opens a gap: where the card would land, else in its own column where it
+    /// was picked up. Done keeps its date order, so it doesn't part while a card is over it.
+    fn gap(&self, status: &str) -> Option<usize> {
+        if let Some((c, slot, _)) = &self.glide {
+            return (c == status).then_some(*slot);
+        }
+        match &self.target {
+            Some((c, slot)) if c == status && !github::is_done(c) => Some(*slot),
+            _ if self.from.0 == status => Some(self.from.1),
+            _ => None,
+        }
+    }
+}
+
+/// The column under the pointer and the place among its cards (the dragged one left out) that
+/// the pointer is at: the count of cards whose middle is above it.
+fn drop_target(p: Pos2, columns: &[(String, Rect)], cards: &[(String, String, Rect)], dragged: &str) -> Option<(String, usize)> {
+    let (status, _) = columns.iter().find(|(_, r)| r.contains(p))?;
+    let slot = cards.iter().filter(|(s, id, r)| s == status && id != dragged && r.center().y < p.y).count();
+    Some((status.clone(), slot))
+}
+
+/// The move a drop makes, None when the card lands where it was. Done keeps its date order, so
+/// a card dropped there takes its status only. `column` is the target column's cards as shown.
+fn drop_move(d: &Drag, status: &str, slot: usize, column: &[&str]) -> Option<Move> {
+    let done = github::is_done(status);
+    let same = status == d.from.0;
+    if same && (done || slot == d.from.1) {
+        return None;
+    }
+    let after = if done { None } else { github::drop_after(column, &d.item, slot) };
+    Some(Move { item: d.item.clone(), status: (!same).then(|| status.to_string()), place: !done, after })
+}
+
+/// "Move to" a status: the card goes to the top of that column, or among Done by its date.
+pub fn move_to(it: &Item, status: &str) -> Move {
+    Move { item: it.id.clone(), status: Some(status.to_string()), place: !github::is_done(status), after: None }
+}
+
+/// The right-click menu of a card or a row: "Move to" and the project's statuses, its own one
+/// greyed out.
+fn card_menu(ui: &mut Ui, board: &Board, it: &Item, cmds: &mut Vec<Cmd>) {
+    ui.menu_button("Move to", |ui| {
+        for (s, _) in &board.statuses {
+            if ui.add_enabled(s != &it.status, egui::Button::new(s)).clicked() {
+                cmds.push(Cmd::ProjectMove(move_to(it, s)));
+            }
+        }
+    });
+}
+
+/// The room a column leaves for a dragged card, opening and closing smoothly: a pale slot where
+/// it would land. Returns the slot's top-left corner while it is open.
+fn card_gap(ui: &mut Ui, id: Id, open: bool, card: Vec2) -> Option<Pos2> {
+    let full = card.y + CARD_GAP;
+    let h = ui.ctx().animate_value_with_time(id, if open { full } else { 0.0 }, PART_TIME);
+    if h < 0.5 {
+        return None;
+    }
+    let top = ui.cursor().min;
+    ui.add_space(h);
+    let f = h / full;
+    let slot = Rect::from_min_size(top, vec2(ui.available_width(), card.y * f));
+    ui.painter().rect_filled(slot, CornerRadius::same(8), theme::c().hover.gamma_multiply(f));
+    ui.painter().rect_stroke(slot, CornerRadius::same(8), Stroke::new(1.0_f32, theme::c().border.gamma_multiply(f)), StrokeKind::Inside);
+    open.then_some(top)
+}
+
+/// How far to scroll when a dragged card is near an edge of `clip` along one axis: faster the
+/// closer it is, positive towards the start.
+fn edge_scroll(p: f32, start: f32, end: f32) -> f32 {
+    if p < start + SCROLL_EDGE {
+        (start + SCROLL_EDGE - p).min(SCROLL_EDGE) / SCROLL_EDGE * 14.0
+    } else if p > end - SCROLL_EDGE {
+        -(p - (end - SCROLL_EDGE)).min(SCROLL_EDGE) / SCROLL_EDGE * 14.0
+    } else {
+        0.0
+    }
 }
 
 // ---------------------------------------------------------------- small pure helpers
@@ -570,7 +690,7 @@ pub fn branch_has_number(branch: &str, n: u64) -> bool {
 
 /// The project as a list: a header per status (dot, name, count), then one row per ticket.
 /// Returns the ticket whose row was clicked.
-fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_repo: bool, selected: Option<&str>) -> Option<String> {
+fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_repo: bool, selected: Option<&str>, cmds: &mut Vec<Cmd>) -> Option<String> {
     let mut clicked = None;
     egui::ScrollArea::vertical().id_salt("board_list").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -590,9 +710,11 @@ fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_rep
             p.rect_filled(badge, CornerRadius::same(9), color.gamma_multiply(0.16));
             p.galley(badge.center() - n.size() / 2.0, n, color);
             for it in items {
-                if list_row(ui, it, show_repo, selected == Some(it.id.as_str())).clicked() {
+                let resp = list_row(ui, it, show_repo, selected == Some(it.id.as_str()));
+                if resp.clicked() {
                     clicked = Some(it.id.clone());
                 }
+                resp.context_menu(|ui| card_menu(ui, board, it, cmds));
             }
         }
         ui.add_space(16.0);
@@ -673,9 +795,9 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
     clicked
 }
 
-/// One ticket on the board.
 /// One ticket on the board, with the rect of its parent line when it has one: the card's click
 /// covers the whole card, so the caller tells a click on the parent apart by where it landed.
+/// Its response covers the frame, border included, and can start a drag.
 fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, Option<Rect>) {
     let mut parent_rect = None;
     let mut prepared = egui::Frame::new().fill(card_fill()).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
@@ -743,8 +865,8 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
             });
         });
     }
-    let outer = prepared.content_ui.min_rect().expand(10.0);
-    let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click());
+    let outer = prepared.content_ui.min_rect().expand(11.0);
+    let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click_and_drag());
     if selected {
         prepared.frame.stroke = Stroke::new(1.5_f32, theme::c().accent);
         prepared.frame.fill = card_hover();
@@ -770,10 +892,16 @@ impl App {
 
 impl Tab {
 
-    /// Esc closes the ticket's detail. Returns whether it did something.
-    pub(super) fn board_escape(&mut self) -> bool {
+    /// Esc puts a dragged card back where it was, else closes the ticket's detail. Returns
+    /// whether it did something.
+    pub(super) fn board_escape(&mut self, now: f64) -> bool {
         if !self.board.open || self.board.typing {
             return false;
+        }
+        if let Some(d) = self.board.drag.as_mut().filter(|d| d.glide.is_none()) {
+            d.glide = Some((d.from.0.clone(), d.from.1, now));
+            d.target = None;
+            return true;
         }
         self.board.detail.take().is_some()
     }
@@ -838,11 +966,27 @@ impl Tab {
         let mut flip: Option<String> = None;
         let h = ui.available_height() - 12.0;
         if st.list {
-            if let Some(id) = list_view(ui, &board, &cols, show_repo, detail.as_deref()) {
+            if let Some(id) = list_view(ui, &board, &cols, show_repo, detail.as_deref(), cmds) {
                 clicked = Some(id);
             }
         } else {
-        egui::ScrollArea::horizontal().id_salt("board_columns").auto_shrink([false, false]).show(ui, |ui| {
+        let ctx = ui.ctx().clone();
+        let now = ctx.input(|i| i.time);
+        self.drag_step(&ctx, &cols, now, cmds);
+        let drag = self.board.drag.clone();
+        // Where the pointer drags a card, for scrolling near the edges.
+        let pointer = drag.as_ref().filter(|d| d.glide.is_none() && d.demo.is_none()).map(|d| d.pos + d.grab);
+        let mut started: Option<Drag> = None;
+        let mut landing: Option<Pos2> = None;
+        let (mut columns_at, mut cards_at) = (Vec::new(), Vec::new());
+        egui::ScrollArea::horizontal().id_salt("board_columns").scroll_source(NO_DRAG_SCROLL).auto_shrink([false, false]).show(ui, |ui| {
+            if let Some(p) = pointer {
+                let clip = ui.clip_rect();
+                let dx = edge_scroll(p.x, clip.left(), clip.right());
+                if dx != 0.0 {
+                    ui.scroll_with_delta(vec2(dx, 0.0));
+                }
+            }
             ui.horizontal_top(|ui| {
                 ui.add_space(16.0);
                 ui.spacing_mut().item_spacing.x = COL_GAP;
@@ -850,9 +994,14 @@ impl Tab {
                     let color = status_color(&board, status);
                     let done = github::is_done(status);
                     let limit = if done && !self.board.done_all.contains(status) { DONE_LIMIT } else { usize::MAX };
+                    let hovered = drag.as_ref().is_some_and(|d| d.glide.is_none() && d.target.as_ref().is_some_and(|t| &t.0 == status));
+                    let gap = drag.as_ref().and_then(|d| d.gap(status));
+                    // The dragged card leaves its column; a gap keeps its room.
+                    let shown: Vec<&Item> = items.iter().copied().filter(|i| drag.as_ref().is_none_or(|d| d.item != i.id)).take(limit).collect();
                     ui.allocate_ui_with_layout(vec2(COL_W, h), Layout::top_down(Align::Min), |ui| {
-                        let frame = egui::Frame::new().fill(column_fill()).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
-                        frame.show(ui, |ui| {
+                        let border = if hovered { Stroke::new(1.5_f32, theme::c().accent) } else { Stroke::new(1.0_f32, theme::c().border) };
+                        let frame = egui::Frame::new().fill(column_fill()).stroke(border).corner_radius(10).inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 8 });
+                        let col = frame.show(ui, |ui| {
                             ui.set_min_size(vec2(COL_W - 18.0, h - 10.0));
                             ui.set_max_width(COL_W - 18.0);
                             // Header: a coloured line, the status and its count.
@@ -867,15 +1016,35 @@ impl Tab {
                             p.rect_filled(badge, CornerRadius::same(9), color.gamma_multiply(0.16));
                             p.galley(badge.center() - n.size() / 2.0, n, color);
 
-                            egui::ScrollArea::vertical().id_salt(("board_col", status)).auto_shrink([false, false]).show(ui, |ui| {
-                                ui.spacing_mut().item_spacing.y = 8.0;
+                            egui::ScrollArea::vertical().id_salt(("board_col", status)).scroll_source(NO_DRAG_SCROLL).auto_shrink([false, false]).show(ui, |ui| {
+                                ui.spacing_mut().item_spacing.y = CARD_GAP;
+                                if let Some(p) = pointer.filter(|_| hovered) {
+                                    let clip = ui.clip_rect();
+                                    let dy = edge_scroll(p.y, clip.top(), clip.bottom());
+                                    if dy != 0.0 {
+                                        ui.scroll_with_delta(vec2(0.0, dy));
+                                    }
+                                }
                                 if items.is_empty() {
                                     ui.add_space(10.0);
                                     ui.vertical_centered(|ui| ui.label(RichText::new("No cards").size(theme::FS_SECONDARY).color(theme::c().faint)));
                                 }
-                                for it in items.iter().take(limit) {
+                                let mut gap_at = |ui: &mut Ui, j: usize, below: &str| {
+                                    if let Some(d) = &drag {
+                                        if let Some(at) = card_gap(ui, Id::new(("board_gap", d.gen, status, below)), gap == Some(j), d.size) {
+                                            landing = Some(at);
+                                        }
+                                    }
+                                };
+                                for (j, it) in shown.iter().enumerate() {
+                                    gap_at(ui, j, &it.id);
                                     let (resp, parent_rect) = card(ui, it, show_repo, detail.as_deref() == Some(it.id.as_str()));
-                                    if resp.clicked() {
+                                    cards_at.push((status.clone(), it.id.clone(), resp.rect));
+                                    if resp.drag_started() && drag.is_none() {
+                                        let p = resp.interact_pointer_pos().unwrap_or(resp.rect.center());
+                                        let d = Drag { item: it.id.clone(), from: (status.clone(), j), grab: p - resp.rect.min, size: resp.rect.size(), pos: resp.rect.min, target: Some((status.clone(), j)), glide: None, gen: self.board.drags + 1, demo: None };
+                                        started = Some(d);
+                                    } else if resp.clicked() {
                                         let on_parent = parent_rect.zip(resp.interact_pointer_pos()).map(|(r, p)| r.contains(p)).unwrap_or(false);
                                         if on_parent {
                                             goto = it.parent.clone();
@@ -883,7 +1052,11 @@ impl Tab {
                                             clicked = Some(it.id.clone());
                                         }
                                     }
+                                    if drag.is_none() {
+                                        resp.context_menu(|ui| card_menu(ui, &board, it, cmds));
+                                    }
                                 }
+                                gap_at(ui, shown.len(), "");
                                 if done && items.len() > DONE_LIMIT {
                                     let label = if limit == usize::MAX { "Show the latest 20".to_string() } else { format!("Show all {}", items.len()) };
                                     ui.vertical_centered(|ui| {
@@ -894,11 +1067,20 @@ impl Tab {
                                 }
                             });
                         });
+                        columns_at.push((status.clone(), col.response.rect.intersect(ui.clip_rect())));
                     });
                 }
                 ui.add_space(16.0);
             });
         });
+        self.board.columns_at = columns_at;
+        self.board.cards_at = cards_at;
+        if let Some(d) = started {
+            ctx.animate_value_with_time(Id::new(("board_lift", d.gen)), 0.0, 0.0);
+            self.board.drags = d.gen;
+            self.board.drag = Some(d);
+        }
+        self.drag_overlay(&ctx, &board, show_repo, landing, now);
         }
         if let Some(s) = flip {
             if !self.board.done_all.remove(&s) {
@@ -916,6 +1098,105 @@ impl Tab {
                 None => {}
             }
         }
+    }
+
+    /// Follows the pointer with the dragged card, at the start of a frame and with the last
+    /// frame's places: the column and place it points at, then on release the move and the
+    /// glide to where the card lands (back where it was when let go outside the columns).
+    fn drag_step(&mut self, ctx: &egui::Context, cols: &[(String, Vec<&Item>)], now: f64, cmds: &mut Vec<Cmd>) {
+        // FOURCHETTE_BOARD_DRAG: once the board is drawn, the card is lifted over the next column.
+        if let Some(n) = self.board.drag_demo {
+            let at = cols.iter().position(|c| c.1.iter().any(|i| i.number == Some(n)));
+            let card = cols.iter().flat_map(|c| c.1.iter()).find(|i| i.number == Some(n));
+            let rect = card.and_then(|it| self.board.cards_at.iter().find(|c| c.1 == it.id)).map(|c| c.2);
+            let next = at.and_then(|i| self.board.columns_at.get(i + 1)).map(|c| c.1);
+            if let (Some(i), Some(it), Some(r), Some(next)) = (at, card, rect, next) {
+                let j = cols[i].1.iter().position(|x| x.id == it.id).unwrap_or(0);
+                let grab = vec2(r.width() * 0.4, 26.0);
+                let p = pos2(next.center().x - r.width() * 0.1, next.top() + 150.0);
+                self.board.drags += 1;
+                self.board.drag = Some(Drag { item: it.id.clone(), from: (cols[i].0.clone(), j), grab, size: r.size(), pos: p - grab, target: None, glide: None, gen: self.board.drags, demo: Some(p) });
+                self.board.drag_demo = None;
+            }
+        }
+        let Some(d) = self.board.drag.as_mut() else { return };
+        ctx.request_repaint();
+        if let Some((_, _, t0)) = &d.glide {
+            if now - t0 > GLIDE_TIME as f64 {
+                self.board.drag = None;
+            }
+            return;
+        }
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        let (pointer, down) = match d.demo {
+            Some(p) => (Some(p), true),
+            None => ctx.input(|i| (i.pointer.latest_pos(), i.pointer.primary_down())),
+        };
+        if let Some(p) = pointer {
+            d.pos = p - d.grab;
+            d.target = drop_target(p, &self.board.columns_at, &self.board.cards_at, &d.item);
+        }
+        if down {
+            return;
+        }
+        let Some((status, slot)) = d.target.clone() else {
+            d.glide = Some((d.from.0.clone(), d.from.1, now));
+            return;
+        };
+        let column: Vec<&Item> = cols.iter().find(|c| c.0 == status).map(|c| c.1.clone()).unwrap_or_default();
+        let ids: Vec<&str> = column.iter().map(|i| i.id.as_str()).collect();
+        let m = drop_move(d, &status, slot, &ids);
+        // Done shows the card at its date's place, among the column's other cards.
+        let slot = match (&m, github::is_done(&status)) {
+            (None, _) => d.from.1,
+            (Some(_), true) => {
+                let updated = cols.iter().flat_map(|c| c.1.iter()).find(|i| i.id == d.item).map(|i| i.updated).unwrap_or(0);
+                column.iter().filter(|i| i.id != d.item && i.updated > updated).count()
+            }
+            (Some(_), false) => slot,
+        };
+        d.glide = Some((status, slot, now));
+        if let Some(m) = m {
+            cmds.push(Cmd::ProjectMove(m));
+        }
+    }
+
+    /// The dragged card on top of everything: lifted (a shadow, a little larger) while held,
+    /// then gliding to `landing`, the gap left for it, as it settles.
+    fn drag_overlay(&mut self, ctx: &egui::Context, board: &Board, show_repo: bool, landing: Option<Pos2>, now: f64) {
+        let Some(d) = self.board.drag.clone() else { return };
+        let Some(it) = board.items.iter().find(|i| i.id == d.item) else {
+            self.board.drag = None;
+            return;
+        };
+        let held = d.glide.is_none();
+        let lift = ctx.animate_value_with_time(Id::new(("board_lift", d.gen)), if held { 1.0 } else { 0.0 }, if held { 0.12 } else { GLIDE_TIME });
+        let pos = match (&d.glide, landing) {
+            (Some((_, _, t0)), Some(to)) => {
+                let t = ((now - t0) as f32 / GLIDE_TIME).clamp(0.0, 1.0);
+                d.pos.lerp(to, 1.0 - (1.0 - t).powi(3))
+            }
+            // Its place is out of sight (folded Done, filtered): it fades where it was let go.
+            (Some(_), None) if lift < 0.05 => {
+                self.board.drag = None;
+                return;
+            }
+            _ => d.pos,
+        };
+        let rect = Rect::from_min_size(pos, d.size);
+        let area = egui::Area::new(Id::new("board_drag")).order(egui::Order::Tooltip).fixed_pos(pos).interactable(false).show(ctx, |ui| {
+            ui.set_width(d.size.x);
+            ui.set_max_width(d.size.x);
+            if landing.is_none() && !held {
+                ui.set_opacity(lift);
+            }
+            let shadow = egui::epaint::Shadow { offset: [0, (10.0 * lift) as i8], blur: (26.0 * lift) as u8, spread: 0, color: Color32::from_black_alpha((if theme::is_light() { 60.0 } else { 120.0 } * lift) as u8) };
+            ui.painter().add(shadow.as_shape(rect, CornerRadius::same(8)));
+            card(ui, it, show_repo, true);
+        });
+        // A little larger while held, around the card's middle.
+        let scale = 1.0 + 0.035 * lift;
+        ctx.set_transform_layer(area.response.layer_id, TSTransform::new(rect.center().to_vec2() * (1.0 - scale), scale));
     }
 
     fn board_bar(&mut self, ui: &mut Ui, board: Option<&Board>, loading: bool, cmds: &mut Vec<Cmd>) {
@@ -1213,6 +1494,55 @@ mod tests {
         assert!(!branch_has_number("feat/510-x", 51));
         assert!(!branch_has_number("feat/151-x", 51));
         assert!(!branch_has_number("main", 51));
+    }
+
+    fn drag(from: (&str, usize), target: Option<(&str, usize)>) -> Drag {
+        Drag { item: "x".into(), from: (from.0.into(), from.1), grab: Vec2::ZERO, size: vec2(260.0, 90.0), pos: Pos2::ZERO, target: target.map(|(s, i)| (s.into(), i)), glide: None, gen: 1, demo: None }
+    }
+
+    #[test]
+    fn finds_where_a_dragged_card_points() {
+        let cols = vec![("Todo".to_string(), Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 500.0))), ("Done".to_string(), Rect::from_min_max(pos2(110.0, 0.0), pos2(210.0, 500.0)))];
+        let card = |s: &str, id: &str, top: f32| (s.to_string(), id.to_string(), Rect::from_min_size(pos2(0.0, top), vec2(100.0, 80.0)));
+        let cards = vec![card("Todo", "a", 50.0), card("Todo", "x", 140.0), card("Todo", "b", 230.0)];
+        assert_eq!(drop_target(pos2(50.0, 60.0), &cols, &cards, "x"), Some(("Todo".into(), 0)), "above a's middle");
+        assert_eq!(drop_target(pos2(50.0, 200.0), &cols, &cards, "x"), Some(("Todo".into(), 1)), "the dragged card doesn't count");
+        assert_eq!(drop_target(pos2(50.0, 400.0), &cols, &cards, "x"), Some(("Todo".into(), 2)));
+        assert_eq!(drop_target(pos2(150.0, 10.0), &cols, &cards, "x"), Some(("Done".into(), 0)));
+        assert_eq!(drop_target(pos2(105.0, 10.0), &cols, &cards, "x"), None, "between columns");
+    }
+
+    #[test]
+    fn a_drop_makes_the_right_move() {
+        let col = ["a", "x", "b"];
+        // Same column, same place: nothing to write.
+        assert_eq!(drop_move(&drag(("Todo", 1), None), "Todo", 1, &col), None);
+        // Same column, to the top: position only.
+        assert_eq!(drop_move(&drag(("Todo", 1), None), "Todo", 0, &col), Some(Move { item: "x".into(), status: None, place: true, after: None }));
+        assert_eq!(drop_move(&drag(("Todo", 1), None), "Todo", 2, &col).unwrap().after.as_deref(), Some("b"));
+        // Another column: the status and the card above.
+        let m = drop_move(&drag(("Todo", 1), None), "Doing", 1, &["c", "d"]).unwrap();
+        assert_eq!((m.status.as_deref(), m.place, m.after.as_deref()), (Some("Doing"), true, Some("c")));
+        // Done: the status only, whatever the place.
+        assert_eq!(drop_move(&drag(("Todo", 1), None), "Done", 3, &["c"]), Some(Move { item: "x".into(), status: Some("Done".into()), place: false, after: None }));
+        assert_eq!(drop_move(&drag(("Done", 0), None), "Done", 2, &["c"]), None);
+        assert_eq!(move_to(&Item { id: "x".into(), ..Default::default() }, "Ready"), Move { item: "x".into(), status: Some("Ready".into()), place: true, after: None });
+    }
+
+    #[test]
+    fn columns_part_where_the_card_would_land() {
+        let d = drag(("Todo", 1), Some(("Doing", 2)));
+        assert_eq!((d.gap("Todo"), d.gap("Doing"), d.gap("Done")), (Some(1), Some(2), None), "a placeholder where it was, a gap where it goes");
+        let d = drag(("Todo", 1), Some(("Todo", 0)));
+        assert_eq!(d.gap("Todo"), Some(0), "in its own column the gap follows it");
+        let d = drag(("Todo", 1), Some(("Done", 4)));
+        assert_eq!((d.gap("Todo"), d.gap("Done")), (Some(1), None), "Done keeps its date order");
+        let mut d = drag(("Todo", 1), None);
+        assert_eq!(d.gap("Todo"), Some(1), "outside the columns, its place waits for it");
+        d.glide = Some(("Done".into(), 3, 0.0));
+        assert_eq!((d.gap("Todo"), d.gap("Done")), (None, Some(3)), "once let go, only where it lands");
+        assert_eq!(edge_scroll(200.0, 0.0, 400.0), 0.0);
+        assert!(edge_scroll(10.0, 0.0, 400.0) > 0.0 && edge_scroll(395.0, 0.0, 400.0) < 0.0);
     }
 
     #[test]
