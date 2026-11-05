@@ -664,7 +664,8 @@ impl Tab {
             | Cmd::ShowTab { .. }
             | Cmd::UpdateDialog(_)
             | Cmd::InstallUpdate
-            | Cmd::UpdateCheckNow => {}
+            | Cmd::UpdateCheckNow
+            | Cmd::CloseWhatsNew => {}
             Cmd::ProjectMove(m) => self.project_move(m),
             Cmd::IssueMove => self.issue_accept(),
             Cmd::IssueDecline => self.issue_decline(),

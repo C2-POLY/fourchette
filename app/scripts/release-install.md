@@ -1,5 +1,3 @@
-# Fourchette
-
 A Git client for macOS: history graph, branches, worktrees, stashes, undo for every local action, a Claude assistant and the GitHub project of the open repository.
 
 ## Install

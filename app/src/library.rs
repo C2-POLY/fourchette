@@ -169,7 +169,7 @@ pub fn restore_tabs(tabs: &[PathBuf], active: usize, exists: impl Fn(&Path) -> b
     (out, at.unwrap_or(last))
 }
 
-fn support_dir() -> Option<PathBuf> {
+pub(crate) fn support_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Fourchette"))
 }
 

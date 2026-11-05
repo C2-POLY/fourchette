@@ -1817,6 +1817,7 @@ impl App {
             Id::NewTag => Cmd::new_ref_at_head(true),
             Id::ShowInFinder => Cmd::Reveal(root()?),
             Id::OpenInTerminal => Cmd::OpenTerminal(root()?),
+            Id::ReleaseNotes => Cmd::OpenUrl(menu::release_notes_url()),
             Id::Website => Cmd::OpenUrl(menu::REPO_URL.into()),
             Id::Issues => Cmd::OpenUrl(menu::ISSUES_URL.into()),
             Id::NewTab => Cmd::NewTab,
@@ -2082,6 +2083,9 @@ impl eframe::App for App {
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
+        if !self.update.dialog {
+            self.whats_new_dialog(ctx, &mut cmds);
+        }
         if !self.modal() {
             self.switcher_ui(ctx, &mut cmds);
             self.settings_ui(ctx, &mut cmds);
