@@ -526,7 +526,8 @@ impl Tab {
             | Cmd::CloseTab(_)
             | Cmd::ShowTab { .. }
             | Cmd::UpdateDialog(_)
-            | Cmd::InstallUpdate => {}
+            | Cmd::InstallUpdate
+            | Cmd::UpdateCheckNow => {}
             Cmd::ProjectMove(m) => self.project_move(m),
         }
     }

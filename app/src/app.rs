@@ -146,6 +146,8 @@ pub enum Cmd {
     UpdateDialog(bool),
     /// The update dialog's "Update and Restart".
     InstallUpdate,
+    /// Settings' "Check now": check for an update at once, unless a check is running.
+    UpdateCheckNow,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
 }
@@ -466,6 +468,10 @@ impl App {
                     if (s.ui_font, s.code_font) != (self.library.settings.ui_font, self.library.settings.code_font) {
                         theme::set_fonts(ctx, s.ui_font, s.code_font);
                     }
+                    // Another channel: check on it at once, so the pill shows what it offers.
+                    if s.update_channel != self.library.settings.update_channel {
+                        self.update.check_now(s.update_channel);
+                    }
                     self.library.settings = s;
                     self.library.save();
                 }
@@ -511,6 +517,7 @@ impl App {
                 Cmd::Board => self.board_toggle(),
                 Cmd::UpdateDialog(open) => self.update_dialog_open(open),
                 Cmd::InstallUpdate => self.update_install(ctx),
+                Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel),
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);
