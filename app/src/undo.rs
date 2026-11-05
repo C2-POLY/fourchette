@@ -33,6 +33,8 @@ pub struct Snapshot {
     pub trashed: Option<(String, PathBuf)>,
     /// A new file the action wrote (CHANGELOG.md): Undo moves it to the Trash.
     pub written: Option<String>,
+    /// Files the action marked resolved (`git add` during a conflict): Undo puts them back in conflict.
+    pub resolved: Vec<String>,
     /// Worktrees removed by the action (with their saved uncommitted work).
     pub worktrees: Vec<crate::worktree::Removed>,
     /// Uncommitted changes before a pull or a checkout-and-sync (`git stash create`). One that
@@ -63,7 +65,7 @@ impl Repo {
 
     pub fn snapshot(&self, label: &str, soft: bool, save_worktree: bool) -> Snapshot {
         let worktree = if save_worktree { self.stash_create() } else { None };
-        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, written: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
+        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, written: None, resolved: Vec::new(), worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
     }
 
     /// Notes, right after the action, what Undo needs to know of its result: the operation it
@@ -83,6 +85,10 @@ impl Repo {
             if self.root.join(path).exists() {
                 crate::git::trash(&self.root, path)?;
             }
+        }
+        // Files marked resolved go back in conflict (from Git's resolve-undo record).
+        for path in &s.resolved {
+            self.git(&["update-index", "--unresolve", "--", path])?;
         }
         // A new file sent to the Trash comes back first.
         if let Some((path, in_trash)) = &s.trashed {

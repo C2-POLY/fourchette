@@ -4,6 +4,7 @@ mod changelog;
 mod palette;
 mod project;
 mod repos;
+mod resolve;
 mod settings;
 mod tab;
 mod tabs;
@@ -129,6 +130,8 @@ pub enum Cmd {
     AiDeleteSelected,
     /// Claude writes the changelog, for the audience chosen in its window.
     AiChangelog,
+    /// Claude proposes a resolution for these conflicted files (all of them when empty).
+    AiResolve(Vec<String>),
     /// Worktrees.
     AskDeleteBranch(String),
     DeleteBranch { name: String, force: bool, also_worktree: bool },
@@ -298,6 +301,10 @@ impl App {
         if let Ok(v) = std::env::var("FOURCHETTE_CHANGELOG") {
             let a = crate::changelog::Audience::ALL.into_iter().find(|a| a.label().to_lowercase().starts_with(&v.to_lowercase())).unwrap_or_default();
             app.tab_mut().changelog_sample(a);
+        }
+        // FOURCHETTE_RESOLVE=1 shows the conflict window with the sample project's conflicts.
+        if std::env::var("FOURCHETTE_RESOLVE").is_ok() {
+            app.tab_mut().resolve_sample();
         }
         if let Ok(v) = std::env::var("FOURCHETTE_CLEANUP_PREVIEW") {
             let a = |name: &str, action: &str, reason: &str, merged: bool| crate::ai::Advice {

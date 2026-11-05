@@ -76,6 +76,13 @@ impl App {
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));
             v.push(item("Assistant", "Write the changelog with Claude", "AI · for developers, product, leadership or users", Cmd::AiChangelog));
+            let conflicts = super::resolve::conflicted(&t.status);
+            if conflicts.len() > 1 {
+                v.push(item("Assistant", "Resolve all conflicts with Claude", "AI · one proposal per file", Cmd::AiResolve(Vec::new())));
+            }
+            for p in conflicts {
+                v.push(item("Assistant", format!("Resolve {p} with Claude"), "AI · conflict", Cmd::AiResolve(vec![p])));
+            }
             if !t.status.staged.is_empty() {
                 v.push(item("Assistant", "Suggest a commit message with Claude", "AI · from staged changes", Cmd::AiCommitMessage));
             }
