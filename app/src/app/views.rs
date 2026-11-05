@@ -1087,10 +1087,15 @@ impl Tab {
                 }
                 out.primary || out.close
             }
-            Some(Dialog::CheckoutSync { sync, action, stash, dirty }) => {
+            Some(Dialog::CheckoutSync { sync, action, merge, stash, dirty }) => {
                 // The original's CheckoutAndSyncController: the branch, its upstream, a choice of
                 // action, "Stash and reapply local changes", "Checkout".
-                use crate::checkout::{Sync, SyncAction};
+                use crate::checkout::{MergeStyle, Sync, SyncAction};
+                use crate::preview::{self, Preview};
+                // Layout: one panel. On top the result's title, Merge's styles and Now / After; in
+                // the middle the actions on the left and the graph on the right, on the same rows;
+                // under them the sentence and the stash.
+                const LIST_W: f32 = 190.0;
                 let cards = Sync::cards();
                 let enabled: Vec<bool> = cards.iter().map(|a| sync.unavailable(*a).is_none()).collect();
                 let cur = cards.iter().position(|a| a == action).unwrap_or(0);
@@ -1107,46 +1112,85 @@ impl Tab {
                 let out = Modal::new("checkout_sync", Width::Large, "branch", vec![text("Check out"), pill(sync.branch.as_str())])
                     .status(status)
                     .hint(hint)
-                    .primary(sync.label(*action), reset, true)
+                    .primary(sync.label(*action, *merge), reset, true)
                     .show(ctx, |ui| {
                         let k = theme::c();
-                        ui.horizontal_top(|ui| {
-                            ui.spacing_mut().item_spacing.x = 16.0;
-                            // The choices, and the stash option under them.
-                            ui.allocate_ui_with_layout(vec2(300.0, 0.0), Layout::top_down(Align::Min), |ui| {
-                                ui.set_width(300.0);
-                                ui.spacing_mut().item_spacing.y = 7.0;
-                                for (i, a) in cards.iter().enumerate() {
-                                    let why = sync.unavailable(*a);
-                                    if modal::choice(ui, Sync::short(*a), &sync.hint(*a), Some(i + 1), a == action, *a == SyncAction::Reset, why.as_deref()).clicked() {
-                                        *action = *a;
-                                    }
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            // The title, then on its right Now / After and Merge's styles (or the
+                            // action's line).
+                            let view_id = egui::Id::new("checkout_sync_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("checkout_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            side.spacing_mut().item_spacing.x = 8.0;
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            if *action == SyncAction::Merge {
+                                let names: Vec<&str> = MergeStyle::ALL.iter().map(|m| m.short()).collect();
+                                let cur = MergeStyle::ALL.iter().position(|m| m == merge).unwrap_or(0);
+                                if let Some(j) = modal::segmented(&mut side, &names, cur, &[]) {
+                                    *merge = MergeStyle::ALL[j];
                                 }
-                                if *dirty {
-                                    ui.add_space(5.0);
-                                    let side = if changed == 1 { "1 file".to_string() } else { format!("{changed} files") };
-                                    modal::check_row(ui, stash, "Stash and reapply changes", Some(&side));
+                            } else {
+                                side.label(RichText::new(sync.hint(*action)).font(theme::secondary()).color(k.faint));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            let col = if reset { k.deleted } else { k.strong };
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &sync.text(*action, *merge), egui::FontId::proportional(theme::FS_TITLE), col, title_w);
+                            // The actions and the graph, between two rules, on the same rows.
+                            let preview = Preview::from_sync(sync, *action, *merge);
+                            let block_h = preview::height(preview.rows.max(cards.len()));
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(10.0);
+                            let (block, _) = ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
+                            let list = Rect::from_min_size(block.min, vec2(LIST_W, block_h));
+                            let mut left = ui.new_child(egui::UiBuilder::new().id_salt("checkout_actions").max_rect(list).layout(Layout::top_down(Align::Min)));
+                            left.spacing_mut().item_spacing.y = 0.0;
+                            for (i, a) in cards.iter().enumerate() {
+                                let why = sync.unavailable(*a);
+                                if modal::list_row(&mut left, Sync::short(*a), Some(i + 1), a == action, *a == SyncAction::Reset, why.as_deref(), preview::ROW).clicked() {
+                                    *action = *a;
                                 }
+                            }
+                            let x = list.right() + 16.0;
+                            ui.painter().vline(x, block.y_range(), Stroke::new(1.0_f32, k.border));
+                            let graph = Rect::from_min_max(pos2(x + 16.0, block.top()), block.max);
+                            let mut right = ui.new_child(egui::UiBuilder::new().id_salt("checkout_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
+                            preview::show(&mut right, egui::Id::new("checkout_sync_preview"), &preview, after);
+                            ui.add_space(10.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The sentence, in a room as tall as the longest one, then the stash.
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let mut texts = vec![sync.summary()];
+                            for a in sync.actions() {
+                                for m in MergeStyle::ALL {
+                                    texts.push(sync.explain(a, m));
+                                }
+                            }
+                            let room = texts.iter().map(|t| ui.painter().layout(t.clone(), font.clone(), k.dim, w).size().y).fold(0.0, f32::max);
+                            let sentence = if after { sync.explain(*action, *merge) } else { sync.summary() };
+                            ui.allocate_ui_with_layout(vec2(w, room), Layout::top_down(Align::Min), |ui| {
+                                ui.set_min_size(vec2(w, room));
+                                ui.label(RichText::new(sentence).color(k.dim));
                             });
-                            // What the choice does. Room for the animated preview of #92.
-                            let inner = Width::Large.px() - 2.0 * modal::PAD - 300.0 - 16.0 - 2.0 * 14.0;
-                            egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
-                                ui.set_width(inner);
-                                ui.set_min_height(236.0);
-                                ui.with_layout(Layout::top_down(Align::Min), |ui| {
-                                ui.spacing_mut().item_spacing.y = 8.0;
-                                modal::caption(ui, "What happens");
-                                ui.label(RichText::new(sync.summary()).color(k.dim));
-                                ui.add_space(6.0);
-                                let col = if reset { k.deleted } else { k.strong };
-                                ui.label(RichText::new(sync.text(*action)).color(col));
-                                ui.label(RichText::new(sync.explain(*action)).color(k.dim));
-                                });
-                            });
+                            if *dirty {
+                                ui.add_space(12.0);
+                                let side = if changed == 1 { "1 file".to_string() } else { format!("{changed} files") };
+                                modal::check_row(ui, stash, "Stash and reapply changes", Some(&side));
+                            }
                         });
                     });
                 if out.primary {
-                    cmds.push(Cmd::CheckoutSync { sync: sync.clone(), action: *action, stash: *stash && *dirty });
+                    cmds.push(Cmd::CheckoutSync { sync: sync.clone(), action: *action, merge: *merge, stash: *stash && *dirty });
                 }
                 out.primary || out.close
             }
@@ -1547,10 +1591,13 @@ impl eframe::App for App {
             self.settings_ui(ctx, &mut cmds);
         }
 
-        if let Some((msg, err, at)) = &self.toast {
-            if at.elapsed().as_secs_f32() < 4.0 {
-                crate::modal::toast(ctx, msg, *err, at.elapsed().as_secs_f64());
-                ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        if let Some(t) = &self.toast {
+            let (age, life) = (t.at.elapsed().as_secs_f32(), if t.undo { tab::UNDO_SECS } else { tab::TOAST_SECS });
+            if age < life {
+                // A toast that offers Cmd+Z shows the time left as a bar that shrinks.
+                let left = t.undo.then(|| 1.0 - age / life);
+                crate::modal::toast(ctx, &t.msg, t.error, age as f64, left);
+                ctx.request_repaint_after(std::time::Duration::from_millis(if t.undo { 33 } else { 250 }));
             } else {
                 self.toast = None;
             }

@@ -58,8 +58,22 @@ pub struct Tab {
     /// Where the details panel sits in this repository.
     pub(super) details_layout: DetailsLayout,
     /// The tab's latest message for the person; `App` moves it to the window's toast.
-    pub(super) notice: Option<(String, bool, Instant)>,
+    pub(super) notice: Option<Notice>,
 }
+
+/// A message for the person, shown as the window's toast.
+#[derive(Clone, Debug)]
+pub struct Notice {
+    pub msg: String,
+    pub error: bool,
+    pub at: Instant,
+    /// What it reports can be taken back with Cmd+Z: the toast says so, and stays `UNDO_SECS`.
+    pub undo: bool,
+}
+
+/// How long a toast stays, and one that offers Cmd+Z.
+pub const TOAST_SECS: f32 = 4.0;
+pub const UNDO_SECS: f32 = 12.0;
 
 /// Polls every tab's background work once per frame (jobs, Claude, the GitHub project), then
 /// its timers unless `timers` is off (screenshots).
@@ -359,7 +373,7 @@ impl Tab {
     }
 
     pub(super) fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.notice = Some((msg.into(), error, Instant::now()));
+        self.notice = Some(Notice { msg: msg.into(), error, at: Instant::now(), undo: false });
     }
 
     pub(super) fn ensure_details(&mut self) {
@@ -412,7 +426,7 @@ impl Tab {
                     self.run(c, ctx);
                 }
             }
-            Cmd::CheckoutSync { sync, action, stash } => self.checkout_sync(&sync, action, stash),
+            Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
@@ -560,10 +574,15 @@ impl Tab {
     pub(super) fn checkout(&mut self, name: &str, remote: bool) -> Option<Cmd> {
         match crate::checkout::plan(name, remote, &self.refs, &self.worktrees) {
             crate::checkout::Plan::Now { label, args } => Some(Cmd::Git { label, args, network: false }),
+            // Nothing to choose: check out and fast-forward, and the toast offers Cmd+Z.
+            crate::checkout::Plan::FastForward(sync) => {
+                self.checkout_sync(&sync, crate::checkout::SyncAction::FastForward, Default::default(), false);
+                None
+            }
             crate::checkout::Plan::Ask(sync) => {
                 self.refresh_status();
                 let action = sync.default_action();
-                self.dialog = Some(Dialog::CheckoutSync { sync, action, stash: false, dirty: !self.status.is_empty() });
+                self.dialog = Some(Dialog::CheckoutSync { sync, action, merge: Default::default(), stash: false, dirty: !self.status.is_empty() });
                 None
             }
         }
@@ -571,7 +590,7 @@ impl Tab {
 
     /// The Check out dialog's choice: the whole sequence under one snapshot, which also keeps the
     /// uncommitted changes, so one Undo takes back the branch, HEAD and the changes.
-    fn checkout_sync(&mut self, sync: &crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool) {
+    fn checkout_sync(&mut self, sync: &crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool) {
         let Some(r) = &self.repo else {
             self.notify("This is the sample project — open one of your repositories to do that.", true);
             return;
@@ -580,13 +599,18 @@ impl Tab {
             self.notify("Please wait for the current operation to finish.", true);
             return;
         }
-        let snap = Snapshot { dirty: r.stash_create(), ..r.snapshot(&sync.label(action), false, false) };
-        let res = crate::checkout::run(r, sync, action, stash);
+        let snap = Snapshot { dirty: r.stash_create(), ..r.snapshot(&sync.label(action, merge), false, false) };
+        let res = crate::checkout::run(r, sync, action, merge, stash);
         self.reload();
+        let steps = self.undo.len();
         self.record(Some(snap));
         match res {
             Ok(msg) => self.notify(msg, false),
             Err(e) => self.notify(e, true),
+        }
+        // Several Git steps ran as one: the toast offers to take them all back while it shows.
+        if let Some(n) = &mut self.notice {
+            n.undo = self.undo.len() > steps;
         }
     }
 
@@ -726,7 +750,27 @@ mod tests {
     }
 
     fn notice(t: &Tab) -> Option<(&str, bool)> {
-        t.notice.as_ref().map(|(m, e, _)| (m.as_str(), *e))
+        t.notice.as_ref().map(|n| (n.msg.as_str(), n.error))
+    }
+
+    #[test]
+    fn a_branch_only_behind_is_fast_forwarded_at_once_and_offers_cmd_z() {
+        use crate::checkout::{plan, MergeStyle, Plan, SyncAction};
+        let (base, repo) = crate::checkout::repo_tests::fixture("toast");
+        let Plan::FastForward(s) = plan("behind", false, &repo.refs(), &repo.worktrees()) else { panic!("behind is only behind") };
+        let mut t = Tab::new();
+        t.repo = Some(repo);
+        t.reload();
+        // Only behind: no dialog, the checkout and the fast-forward happen at once.
+        assert!(t.checkout("behind", false).is_none());
+        assert!(t.dialog.is_none());
+        let n = t.notice.clone().unwrap();
+        assert!(!n.error && n.undo, "{n:?}");
+        assert_eq!(t.undo_label(), Some(s.label(SyncAction::FastForward, MergeStyle::Commit).as_str()));
+        // An ordinary message does not offer it.
+        t.notify("Fetched", false);
+        assert!(!t.notice.as_ref().unwrap().undo);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

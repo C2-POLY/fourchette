@@ -61,7 +61,7 @@ pub enum Dialog {
     NewGroup { path: PathBuf, name: String },
     /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
     /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
-    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool, dirty: bool },
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
@@ -70,7 +70,8 @@ pub enum Cmd {
     /// dialog when it is behind its upstream (`checkout::plan`).
     Checkout { name: String, remote: bool },
     /// The Check out dialog's choice, run as one undo step.
-    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool },
+    /// `merge`: how Merge joins the upstream (ignored by the other actions).
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool },
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
@@ -192,7 +193,7 @@ pub struct App {
     /// The open repositories. There is always at least one; the views show `tabs[active]`.
     tabs: Vec<Tab>,
     active: usize,
-    toast: Option<(String, bool, Instant)>,
+    toast: Option<tab::Notice>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
     /// The Settings window (⌘,) is open.
@@ -339,14 +340,37 @@ impl App {
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
             t.details_layout = l;
         }
-        // FOURCHETTE_CHECKOUT_SYNC=1 opens the Check out dialog on `main`, 3 commits behind
-        // origin/main; FOURCHETTE_CHECKOUT_SYNC=diverged with 2 commits of its own as well.
-        if let Ok(v) = std::env::var("FOURCHETTE_CHECKOUT_SYNC") {
+        // FOURCHETTE_CHECKOUT_SYNC=1 opens the Check out dialog on `main`, diverged from
+        // origin/main: 2 commits of its own, 3 behind. (Only behind, it would not ask.)
+        if std::env::var("FOURCHETTE_CHECKOUT_SYNC").is_ok() {
             if let Some(b) = t.refs.iter_mut().find(|r| r.name == "main" && r.kind == RefKind::Local) {
-                (b.upstream, b.behind, b.ahead) = ("origin/main".into(), 3, if v == "diverged" { 2 } else { 0 });
+                (b.upstream, b.behind, b.ahead) = ("origin/main".into(), 3, 2);
             }
             let now = t.checkout("main", false);
             debug_assert!(now.is_none(), "main should ask");
+            // FOURCHETTE_CHECKOUT_ACTION=ff|merge|rebase|reset|stay picks the action shown.
+            if let (Some(Dialog::CheckoutSync { sync, action, .. }), Ok(a)) = (&mut t.dialog, std::env::var("FOURCHETTE_CHECKOUT_ACTION")) {
+                use crate::checkout::SyncAction::*;
+                let wanted = match a.as_str() {
+                    "ff" => FastForward,
+                    "merge" => Merge,
+                    "rebase" => Rebase,
+                    "reset" => Reset,
+                    _ => JustCheckout,
+                };
+                if sync.actions().contains(&wanted) {
+                    *action = wanted;
+                }
+            }
+            // FOURCHETTE_CHECKOUT_CLEAN=1 shows it without local changes (no stash option).
+            if let (Some(Dialog::CheckoutSync { dirty, .. }), Ok(_)) = (&mut t.dialog, std::env::var("FOURCHETTE_CHECKOUT_CLEAN")) {
+                *dirty = false;
+            }
+            // FOURCHETTE_CHECKOUT_MERGE=squash picks Merge with that style.
+            if let (Some(Dialog::CheckoutSync { action, merge, .. }), Ok(m)) = (&mut t.dialog, std::env::var("FOURCHETTE_CHECKOUT_MERGE")) {
+                let wanted = if m == "squash" { crate::checkout::MergeStyle::Squash } else { crate::checkout::MergeStyle::Commit };
+                (*action, *merge) = (crate::checkout::SyncAction::Merge, wanted);
+            }
         }
         // FOURCHETTE_DIALOG=<name> opens one of the dialogs on the sample project.
         if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
@@ -357,10 +381,15 @@ impl App {
             let (x, y) = v.split_once(',')?;
             Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
         });
-        // FOURCHETTE_TOAST=<message> shows a toast, FOURCHETTE_TOAST=error:<message> an error's.
+        // FOURCHETTE_TOAST=<message> shows a toast, FOURCHETTE_TOAST=error:<message> an error's,
+        // FOURCHETTE_TOAST=undo:<message> one that offers Cmd+Z.
         if let Ok(v) = std::env::var("FOURCHETTE_TOAST") {
             let (msg, error) = v.strip_prefix("error:").map_or((v.as_str(), false), |m| (m, true));
+            let (msg, undo) = msg.strip_prefix("undo:").map_or((msg, false), |m| (m, true));
             app.notify(msg.to_string(), error);
+            if let Some(t) = &mut app.toast {
+                t.undo = undo;
+            }
         }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
@@ -401,7 +430,7 @@ impl App {
     }
 
     fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.toast = Some((msg.into(), error, Instant::now()));
+        self.toast = Some(tab::Notice { msg: msg.into(), error, at: Instant::now(), undo: false });
     }
 
     /// Moves the tabs' latest messages to the window's toast. A message from a tab in the
@@ -409,9 +438,11 @@ impl App {
     fn take_notices(&mut self) {
         let active = self.active;
         for (i, t) in self.tabs.iter_mut().enumerate() {
-            if let Some((msg, error, at)) = t.notice.take() {
-                let msg = if i == active { msg } else { format!("{}: {msg}", t.name()) };
-                self.toast = Some((msg, error, at));
+            if let Some(mut n) = t.notice.take() {
+                if i != active {
+                    n.msg = format!("{}: {}", t.name(), n.msg);
+                }
+                self.toast = Some(n);
             }
         }
     }
