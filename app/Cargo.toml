@@ -1,6 +1,6 @@
 [package]
 name = "fourchette"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.85"
 description = "A Git client for macOS in Rust and egui"
@@ -9,7 +9,9 @@ repository = "https://github.com/C2-POLY/fourchette"
 homepage = "https://c2-poly.github.io/fourchette/"
 
 [dependencies]
-eframe = "0.32"
+# wgpu (Metal) instead of the default glow (OpenGL): glow shows stale or stretched frames during a live resize on macOS.
+# The other default features are kept, minus glow, wayland, x11 and the web screen reader.
+eframe = { version = "0.32", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
 egui = "0.32"
 rfd = "0.15"
 serde_json = "1"
@@ -17,9 +19,12 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 # The menu bar and the window buttons go through AppKit; the same versions eframe and winit already use.
 [target.'cfg(target_os = "macos")'.dependencies]
+# eframe's wgpu feature enables no backend by itself: Metal, with the WGSL shaders egui uses.
+wgpu = { version = "25", default-features = false, features = ["metal", "wgsl"] }
 objc2 = "0.5"
+block2 = "0.5"
 objc2-app-kit = { version = "0.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl"] }
-objc2-foundation = { version = "0.2", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray"] }
+objc2-foundation = { version = "0.2", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "block2"] }
 
 [profile.release]
 opt-level = 3

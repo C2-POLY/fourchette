@@ -197,6 +197,9 @@ Control and the Window menu). The 60 pt toolbar is the top edge. The close, mini
 are moved onto its centre line (close at x = 20 pt, y centred in 60 pt, AppKit's own spacing), and the
 toolbar keeps 86 pt free on its left for them (none in full screen, where macOS hides them).
 Dragging the toolbar's empty background moves the window; a double-click zooms it.
+AppKit puts the buttons back at every resize step, so they are re-placed on the window's resize, end of live resize
+and full screen notifications as well as every frame. The renderer is wgpu (Metal): with OpenGL the content showed
+stale or stretched frames during a live resize (issue #139).
 
 ## New features (not in the original — the person asked for a real edge)
 

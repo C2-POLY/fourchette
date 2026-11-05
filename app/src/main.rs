@@ -54,6 +54,8 @@ fn main() -> eframe::Result<()> {
     if let Some(icon) = icon::data() {
         viewport = viewport.with_icon(icon);
     }
-    let options = eframe::NativeOptions { viewport, ..Default::default() };
+    // wgpu (Metal): the OpenGL renderer shows stale or stretched frames while the window is resized.
+    // Its default present mode (AutoVsync) is kept: it already presents in step with the display.
+    let options = eframe::NativeOptions { viewport, renderer: eframe::Renderer::Wgpu, ..Default::default() };
     eframe::run_native("Fourchette", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, repo, screenshot)))))
 }

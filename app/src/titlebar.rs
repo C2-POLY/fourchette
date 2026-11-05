@@ -40,19 +40,52 @@ pub fn place_buttons() {}
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod mac {
-    use objc2_app_kit::{NSApplication, NSView, NSWindowButton, NSWindowStyleMask};
-    use objc2_foundation::{MainThreadMarker, NSPoint, NSRect};
+    use std::ptr::NonNull;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use block2::RcBlock;
+    use objc2_app_kit::{
+        NSApplication, NSView, NSWindowButton, NSWindowDidEndLiveResizeNotification, NSWindowDidEnterFullScreenNotification,
+        NSWindowDidExitFullScreenNotification, NSWindowDidResizeNotification, NSWindowStyleMask,
+    };
+    use objc2_foundation::{MainThreadMarker, NSNotification, NSNotificationCenter, NSPoint, NSRect};
+
+    static OBSERVING: AtomicBool = AtomicBool::new(false);
+
+    /// AppKit lays the titlebar out again at every step of a resize and puts the buttons back at
+    /// their default spot, and egui only redraws after that: waiting for the next frame shows them
+    /// jumping. So they are also placed as the window announces a resize or a full screen change,
+    /// on the main thread, before the step is drawn. Registered once.
+    fn observe_resizes() {
+        if OBSERVING.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let center = unsafe { NSNotificationCenter::defaultCenter() };
+        let block = RcBlock::new(|_: NonNull<NSNotification>| place_buttons());
+        for name in unsafe {
+            [
+                NSWindowDidResizeNotification,
+                NSWindowDidEndLiveResizeNotification,
+                NSWindowDidEnterFullScreenNotification,
+                NSWindowDidExitFullScreenNotification,
+            ]
+        } {
+            // The centre keeps the observer for the life of the app.
+            std::mem::forget(unsafe { center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block) });
+        }
+    }
 
     fn differs(a: f64, b: f64) -> bool {
         (a - b).abs() > 0.5
     }
 
     /// Moves the close, minimise and zoom buttons onto the toolbar's centre line. AppKit puts
-    /// them back after a resize or a full screen change, so this runs every frame and only
-    /// touches a frame that is off. Their container is grown to the toolbar's height, the way
+    /// them back after a resize or a full screen change, so this runs every frame, and on the window's
+    /// resize notifications, and only touches a frame that is off. Their container is grown to the toolbar's height, the way
     /// Electron places them (`trafficLightPosition`).
     pub fn place_buttons() {
         let Some(mtm) = MainThreadMarker::new() else { return };
+        observe_resizes();
         let app = NSApplication::sharedApplication(mtm);
         for window in app.windows().iter() {
             let mask = window.styleMask();
