@@ -120,6 +120,9 @@ impl Tab {
                 if ui.button("📝  Write the changelog…").clicked() {
                     cmds.push(Cmd::AiChangelog);
                 }
+                if ui.add_enabled(self.branch.is_some(), egui::Button::new("📤  Draft the pull request…")).on_disabled_hover_text("Check out a branch first").clicked() {
+                    cmds.push(Cmd::AiDraftPr);
+                }
                 let conflicts = super::resolve::conflicted(&self.status);
                 if ui.add_enabled(!conflicts.is_empty(), egui::Button::new("🔀  Resolve conflicts…")).on_disabled_hover_text("No file is in conflict").clicked() {
                     cmds.push(Cmd::AiResolve(Vec::new()));
@@ -1924,6 +1927,7 @@ impl eframe::App for App {
         t.dialogs(ctx, &mut cmds);
         t.cleanup_window(ctx, &mut cmds);
         t.changelog_window(ctx);
+        t.pr_draft_window(ctx);
         t.resolve_window(ctx);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);

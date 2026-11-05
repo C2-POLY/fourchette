@@ -55,6 +55,7 @@ pub struct Tab {
     pub(super) diff_req: Option<DiffReq>,
     pub(super) ai: assistant::AiState,
     pub(super) changelog: Option<super::changelog::ChangelogView>,
+    pub(super) pr_draft: Option<super::pr_draft::PrDraftView>,
     pub(super) resolve: Option<super::resolve::ResolveView>,
     pub(super) worktrees: Vec<crate::worktree::Worktree>,
     /// Where the details panel sits in this repository.
@@ -87,6 +88,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.poll_busy();
         t.ai_poll();
         t.changelog_poll();
+        t.pr_draft_poll();
         t.resolve_poll();
         t.project_poll();
         if timers {
@@ -141,6 +143,7 @@ impl Tab {
             diff_req: None,
             ai: assistant::AiState::default(),
             changelog: None,
+            pr_draft: None,
             resolve: None,
             worktrees: Vec::new(),
             details_layout: DetailsLayout::default(),
@@ -533,6 +536,7 @@ impl Tab {
             Cmd::AiExplain(h) => self.ai_explain(h, ctx),
             Cmd::AiDeleteSelected => self.ai_delete_selected(),
             Cmd::AiChangelog => self.changelog_open(ctx),
+            Cmd::AiDraftPr => self.pr_draft_open(ctx),
             Cmd::AiResolve(paths) => self.resolve_open(paths, ctx),
             Cmd::AskDeleteBranch(name) => {
                 let Some(r) = &self.repo else {
