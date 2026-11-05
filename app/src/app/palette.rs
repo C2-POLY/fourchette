@@ -115,7 +115,7 @@ impl App {
                 RefKind::Local if !r.is_head => {
                     v.push(item("Branches", format!("Check out {}", r.name), "branch", Cmd::Checkout { name: r.name.clone(), remote: false }));
                     if !checkout_only && !cur.is_empty() {
-                        v.push(item("Branches", format!("Merge {} into {cur}", r.name), "branch", Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false }));
+                        v.push(item("Branches", format!("Merge {} into {cur}…", r.name), "branch", Cmd::AskMerge { name: r.name.clone(), remote: false }));
                     }
                 }
                 RefKind::Remote => v.push(item("Branches", format!("Check out {}", r.name), "remote branch", checkout_remote(r))),

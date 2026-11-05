@@ -109,6 +109,24 @@ names its mode (`--rebase` or `--no-rebase`), so the setting wins over `pull.reb
 person's Git config. A pull stopped on conflicts, or whose stashed changes conflict when put back
 (Git then keeps them in the stash list as "autostash"), is reported as an error saying so.
 
+### Merge (MergeWindowController, MergeTestGitCommand; issue #102)
+
+Fork's Merge window has a "No fast-forward" box (`noFastForwardCheckBox`), and the original passes
+`--no-ff` to `git merge` [ev_12829593]; its `Merge/MergeTestGitCommand.swift` checks a merge
+before running it [ev_9be9b63c]. The rebuild opens one dialog from a branch's "Merge … into …",
+the remote branch's "Merge … into current branch" and the palette:
+
+| Choice | Git |
+|---|---|
+| Merge commit, a fast-forward possible | `merge --ff-only <branch>` |
+| Merge commit with "No fast-forward", or diverged | `merge --no-ff --no-edit <branch>` (`--no-ff` named, so `merge.ff` in the person's config changes nothing) |
+| Squash | `merge --squash <branch>`, then `commit -m "Squash <branch> into <head>"` when it staged anything |
+| Conflict check, in a thread before anything runs | `git -c core.quotePath=false merge-tree --write-tree --name-only --no-messages HEAD <branch>`: exit 0 clean, 1 conflicts (tree id, then one file a line), 129 a Git older than 2.38 (the dialog says it cannot tell). It writes objects only: no ref, index or file moves |
+
+The box shows only when a fast-forward is possible (the checked-out branch has no commits of its
+own). One Undo takes the merge back; a merge stopped on conflicts is aborted (`merge --abort`), a
+squash stopped on conflicts, which leaves no `MERGE_HEAD`, with `reset --merge`.
+
 ## Screens (from the compiled layouts in Resources/*.nib)
 
 * Sidebar groups: **Branches, Remotes, Tags, Stashes** (`0x100610cc8…cf8`), a search field and a filter toggle (SidebarController.nib).
