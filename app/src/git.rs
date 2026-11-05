@@ -366,6 +366,23 @@ impl Repo {
         refs
     }
 
+    /// The remotes with their fetch URLs, in the order Git lists them (`git remote -v`).
+    pub fn remotes(&self) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for l in self.git(&["remote", "-v"]).unwrap_or_default().lines() {
+            if !l.ends_with("(fetch)") {
+                continue;
+            }
+            if let Some((name, rest)) = l.split_once(['\t', ' ']) {
+                let url = rest.trim_end_matches("(fetch)").trim();
+                if !out.iter().any(|r| r.0 == name) {
+                    out.push((name.to_string(), url.to_string()));
+                }
+            }
+        }
+        out
+    }
+
     pub fn stashes(&self) -> Vec<Stash> {
         self.git(&["stash", "list", "--format=%gd\t%s"])
             .unwrap_or_default()

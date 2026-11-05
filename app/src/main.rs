@@ -18,6 +18,7 @@ mod push;
 mod pull;
 mod resolve;
 mod settings;
+mod sidebar;
 mod theme;
 mod titlebar;
 mod ui;
