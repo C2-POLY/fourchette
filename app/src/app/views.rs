@@ -1190,7 +1190,7 @@ impl App {
         if t.board.open {
             // Esc closes the ticket's detail; the history's keys wait.
             if escape {
-                t.board_escape();
+                t.board_escape(ctx.input(|i| i.time));
             }
             return;
         }
