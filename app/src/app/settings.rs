@@ -3,7 +3,8 @@
 //! applies and is saved at once, so there is no OK button; Esc, the close button or a click
 //! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
-use crate::settings::{count_label, minutes_label, ClaudeModel, CodeFont, CommitLanguage, Settings, UiFont, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
+use super::updater::{now_secs, CheckStatus, UpdateState};
+use crate::settings::{count_label, minutes_label, ClaudeModel, CodeFont, CommitLanguage, Settings, UiFont, UpdateChannel, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
 use crate::theme::{Appearance, Colors, Variant};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
@@ -24,6 +25,8 @@ const SEG_W: f32 = 264.0;
 /// `SEG_W` so that their help text fits beside them.
 const MODEL_W: f32 = 280.0;
 const LANG_W: f32 = 240.0;
+/// The Updates section's two channels.
+const CHANNEL_W: f32 = 220.0;
 const SEG_H: f32 = 28.0;
 const FONT_W: f32 = 200.0;
 const TILE_H: f32 = 64.0;
@@ -35,6 +38,8 @@ pub(super) struct Pane<'a> {
     variant: Variant,
     settings: &'a mut Settings,
     cmds: &'a mut Vec<Cmd>,
+    /// The update checks, for the Updates section.
+    update: &'a UpdateState,
 }
 
 /// One section of the window.
@@ -50,12 +55,13 @@ pub(super) struct Section {
     body: fn(&mut Ui, &mut Pane<'_>),
 }
 
-pub(super) const SECTIONS: [Section; 5] = [
+pub(super) const SECTIONS: [Section; 6] = [
     Section { key: "appearance", label: "Appearance", tint: Color32::from_rgb(0x6e, 0x5b, 0xd6), icon: appearance_glyph, body: appearance },
     Section { key: "fetch", label: "Fetch", tint: Color32::from_rgb(0x1c, 0x8c, 0xf0), icon: fetch_glyph, body: fetch },
     Section { key: "git", label: "Git", tint: Color32::from_rgb(0xe8, 0x5d, 0x3a), icon: git_glyph, body: git },
     Section { key: "diff", label: "Diff and commit", tint: Color32::from_rgb(0xe0, 0x7a, 0x1f), icon: diff_glyph, body: diff_commit },
     Section { key: "claude", label: "Claude", tint: Color32::from_rgb(0xc2, 0x4f, 0x9c), icon: claude_glyph, body: claude },
+    Section { key: "updates", label: "Updates", tint: Color32::from_rgb(0x2e, 0xa0, 0x5a), icon: updates_glyph, body: updates },
 ];
 
 /// The section a key names (any case), or the first one.
@@ -88,6 +94,11 @@ fn diff_glyph(p: &Painter, c: Pos2) {
 /// The assistant's sparkles, as on the toolbar's Claude button.
 fn claude_glyph(p: &Painter, c: Pos2) {
     crate::ui::glyph(p, c, "ai", 15.0, 1.4, Color32::WHITE);
+}
+
+/// An arrow down onto a line, as on the update dialog.
+fn updates_glyph(p: &Painter, c: Pos2) {
+    crate::ui::glyph(p, c, "pull", 15.0, 1.4, Color32::WHITE);
 }
 
 /// A section's entry in the sidebar: its icon in a coloured square, then its name.
@@ -491,6 +502,93 @@ fn claude(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
 }
 
+/// A dialog-style button against the right of `rect`. Returns true when clicked.
+fn button_at(ui: &mut Ui, rect: Rect, id: &str, text: &str, kind: crate::modal::Kind, enabled: bool) -> bool {
+    let mut child = ui.new_child(UiBuilder::new().id_salt(id).max_rect(rect).layout(Layout::right_to_left(Align::Center)));
+    crate::modal::button(&mut child, text, kind, enabled).clicked()
+}
+
+/// `text` cut to `max` characters, with an ellipsis when it was longer.
+fn ellipsize(text: &str, max: usize) -> String {
+    let line = text.lines().next().unwrap_or_default().trim();
+    if line.chars().count() <= max && !text.trim().contains('\n') {
+        return line.to_string();
+    }
+    format!("{}…", line.chars().take(max.saturating_sub(1)).collect::<String>().trim_end())
+}
+
+/// "Checked just now", "Checked 5 min ago", "Checked 2 h ago", from seconds since then.
+fn checked_ago(secs: i64) -> String {
+    match secs.max(0) {
+        s if s < 60 => "Checked just now".into(),
+        s if s < 3600 => format!("Checked {} min ago", s / 60),
+        s if s < 86400 => format!("Checked {} h ago", s / 3600),
+        s => format!("Checked {} d ago", s / 86400),
+    }
+}
+
+/// The update channel, the installed version and the last check, with "Check now".
+fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
+    use crate::modal::Kind;
+    use crate::update::{Version, COMMIT};
+    let s = &mut *pane.settings;
+    let u = pane.update;
+    card(ui, |c| {
+        let ctrl = c.row("Channel", "The releases Fourchette offers", vec2(CHANNEL_W, SEG_H), true);
+        let channels = UpdateChannel::ALL;
+        let chosen = channels.iter().position(|ch| *ch == s.update_channel).unwrap_or(1);
+        if let Some(i) = segmented(c.ui, ctrl, channels.len(), chosen, true, "update_channel", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, channels[i].label(), theme::body(), fg);
+        }) {
+            s.update_channel = channels[i];
+        }
+    });
+    let status = u.status();
+    card(ui, |c| {
+        let current = Version::current();
+        let built = if COMMIT.is_empty() { "The version installed".to_string() } else { format!("Built from {}", short(COMMIT)) };
+        let can = u.can_check();
+        let ctrl = c.row(&format!("Fourchette {current}"), &built, vec2(120.0, 30.0), true);
+        if button_at(c.ui, ctrl, "update_check_now", "Check now", Kind::Plain, can && status != CheckStatus::Checking) {
+            pane.cmds.push(Cmd::UpdateCheckNow);
+        }
+        let ago = u.checked_at.map(|t| checked_ago(now_secs() - t));
+        let (title, help) = match &status {
+            CheckStatus::Off => ("Not checked".to_string(), "Checks only run in the installed app".to_string()),
+            CheckStatus::Never => ("Not checked yet".to_string(), "The first check runs at launch".to_string()),
+            CheckStatus::Checking => ("Checking…".to_string(), format!("On the {} channel", s.update_channel.label())),
+            CheckStatus::UpToDate => ("Up to date".to_string(), ago.unwrap_or_default()),
+            CheckStatus::Available(v) if *v == current => (format!("A new build of {v} is available"), ago.unwrap_or_else(|| format!("On the {} channel", s.update_channel.label()))),
+            CheckStatus::Available(v) => (format!("{v} is available"), ago.unwrap_or_else(|| format!("On the {} channel", s.update_channel.label()))),
+            CheckStatus::Failed(e) => ("Couldn't check".to_string(), ellipsize(e, 52)),
+        };
+        let ctrl = c.row(&title, &help, vec2(140.0, 30.0), true);
+        match &status {
+            CheckStatus::Available(_) => {
+                if button_at(c.ui, ctrl, "update_show", "Show Update", Kind::Primary, true) {
+                    pane.cmds.push(Cmd::UpdateDialog(true));
+                }
+            }
+            CheckStatus::Checking => {
+                let mut child = c.ui.new_child(UiBuilder::new().id_salt("update_spinner").max_rect(ctrl).layout(Layout::right_to_left(Align::Center)));
+                child.add_space(8.0);
+                child.spinner();
+            }
+            CheckStatus::Failed(e) => {
+                // The whole error on hover, over the row's text.
+                let row = Rect::from_x_y_ranges(c.ui.min_rect().x_range(), ctrl.expand2(vec2(0.0, 13.0)).y_range());
+                c.ui.interact(row, c.ui.id().with("update_error"), Sense::hover()).on_hover_text(e.as_str());
+            }
+            _ => {}
+        }
+    });
+    // Under the cards, lined up with the rows' names.
+    let note = "Stable: only full releases. Pre-release: every published build.\nFourchette checks at launch, then every hour.";
+    egui::Frame::new().inner_margin(Margin::symmetric(16, 0)).show(ui, |ui| {
+        ui.label(egui::RichText::new(note).size(theme::FS_SMALL).color(theme::c().faint));
+    });
+}
+
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
         if !self.settings_open {
@@ -555,7 +653,7 @@ impl App {
             let mut bui = ui.new_child(UiBuilder::new().id_salt(("settings_body", sec.key)).max_rect(body).layout(Layout::top_down(Align::Min)));
             egui::ScrollArea::vertical().id_salt(("settings_scroll", sec.key)).auto_shrink([false, false]).show(&mut bui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let mut pane = Pane { appearance: self.library.appearance, variant: theme::variant(), settings: &mut s, cmds };
+                let mut pane = Pane { appearance: self.library.appearance, variant: theme::variant(), settings: &mut s, cmds, update: &self.update };
                 (sec.body)(ui, &mut pane);
             });
             // Footer, as in every dialog: a hairline, a darker strip and the hint.
@@ -585,7 +683,7 @@ mod tests {
 
     #[test]
     fn sections_have_unique_lowercase_keys_and_names() {
-        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Git", "Diff and commit", "Claude"]);
+        assert_eq!(SECTIONS.iter().map(|s| s.label).collect::<Vec<_>>(), ["Appearance", "Fetch", "Git", "Diff and commit", "Claude", "Updates"]);
         for (i, s) in SECTIONS.iter().enumerate() {
             assert!(!s.label.is_empty());
             assert_eq!(s.key, s.key.to_lowercase(), "{}", s.label);
@@ -607,10 +705,19 @@ mod tests {
         assert_eq!(section_index(" Fetch "), 1);
         assert_eq!(section_index("GIT"), 2);
         assert_eq!(section_index("claude"), 4);
+        assert_eq!(section_index("updates"), 5);
         // FOURCHETTE_SETTINGS=1, or a section that does not exist yet, opens Appearance.
         for other in ["1", "", "fonts", "appearance"] {
             assert_eq!(section_index(other), 0, "{other}");
         }
+    }
+
+    #[test]
+    fn errors_and_check_times_read_short() {
+        assert_eq!(ellipsize("No network", 52), "No network");
+        assert_eq!(ellipsize("abcdefghij", 5), "abcd…");
+        assert_eq!(ellipsize("first line\nsecond", 52), "first line…");
+        assert_eq!([0, 59, 60, 3599, 7200, 200_000, -5].map(checked_ago), ["Checked just now", "Checked just now", "Checked 1 min ago", "Checked 59 min ago", "Checked 2 h ago", "Checked 2 d ago", "Checked just now"]);
     }
 
     #[test]
