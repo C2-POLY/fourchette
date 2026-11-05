@@ -365,6 +365,11 @@ impl App {
             t.board.open = true;
             t.board.list = true;
         }
+        // FOURCHETTE_BOARD_TREE=parents|all|nested: how the board shows sub-issues.
+        if let Ok(v) = std::env::var("FOURCHETTE_BOARD_TREE") {
+            t.board.open = true;
+            t.board.tree = board::Tree::ALL.into_iter().find(|tr| tr.label().eq_ignore_ascii_case(&v)).unwrap_or_default();
+        }
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD") {
             t.board.open = true;
             t.board.all = v == "all";

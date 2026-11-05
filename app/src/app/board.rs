@@ -47,12 +47,62 @@ fn ink(c: Color32) -> Color32 {
     }
 }
 
+/// How the board shows sub-issues: only the top-level tickets, every ticket at its place, or
+/// each sub-issue inside its parent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tree {
+    Parents,
+    All,
+    #[default]
+    Nested,
+}
+
+impl Tree {
+    pub const ALL: [Tree; 3] = [Tree::Parents, Tree::All, Tree::Nested];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Tree::Parents => "Parents",
+            Tree::All => "All",
+            Tree::Nested => "Nested",
+        }
+    }
+}
+
+/// The tickets placed in the columns, and the sub-issues shown inside their parent (by the
+/// parent's item id), for `tree`. `shown` are the tickets the filters keep, in project order;
+/// `project` is every ticket, to tell a sub-issue whose parent is in the project.
+pub fn arrange<'a>(shown: Vec<&'a Item>, project: &[Item], tree: Tree) -> (Vec<&'a Item>, HashMap<String, Vec<&'a Item>>) {
+    let mut kids: HashMap<String, Vec<&'a Item>> = HashMap::new();
+    match tree {
+        Tree::All => (shown, kids),
+        // Top level: no parent, or a parent the project doesn't hold.
+        Tree::Parents => (shown.into_iter().filter(|it| it.parent.as_ref().is_none_or(|p| !project.iter().any(|o| !p.url.is_empty() && o.url == p.url))).collect(), kids),
+        // A sub-issue goes inside its parent when the parent is shown, else stays at its place.
+        Tree::Nested => {
+            let by_url: HashMap<&str, &str> = shown.iter().filter(|it| !it.url.is_empty()).map(|it| (it.url.as_str(), it.id.as_str())).collect();
+            let mut top = Vec::new();
+            for it in shown.iter().copied() {
+                match it.parent.as_ref().and_then(|p| by_url.get(p.url.as_str())).filter(|pid| **pid != it.id.as_str()) {
+                    Some(pid) => kids.entry(pid.to_string()).or_default().push(it),
+                    None => top.push(it),
+                }
+            }
+            (top, kids)
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct BoardState {
     /// Whether the Project view is the one on screen (rather than the history).
     pub open: bool,
     /// The list rather than the board (kept in memory only).
     pub list: bool,
+    /// How sub-issues show (kept in memory, per repository's tab).
+    pub tree: Tree,
+    /// Parents whose sub-issues are folded away in the nested view.
+    pub folded: HashSet<String>,
     /// The whole project rather than the open repository's tickets.
     pub all: bool,
     pub mine: bool,
@@ -616,7 +666,16 @@ fn refresh_button(ui: &mut Ui, loading: bool) -> Response {
     resp.on_hover_text("Read the project again")
 }
 
-/// Two options side by side, the chosen one filled.
+/// The search field, the refresh button and their margins, right of the pickers.
+const BAR_RIGHT_W: f32 = 260.0;
+
+/// How wide `segmented` draws `options`.
+fn segmented_width(ui: &Ui, options: &[&str]) -> f32 {
+    let font = FontId::proportional(theme::FS_SECONDARY);
+    options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).sum::<f32>() + 4.0
+}
+
+/// Options side by side, the chosen one filled.
 fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
     let font = FontId::proportional(theme::FS_SECONDARY);
     let widths: Vec<f32> = options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).collect();
@@ -627,7 +686,8 @@ fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
     let mut picked = None;
     for (i, (o, w)) in options.iter().zip(&widths).enumerate() {
         let r = Rect::from_min_size(pos2(x, rect.top() + 2.0), vec2(*w, rect.height() - 4.0));
-        let resp = ui.interact(r, ui.id().with(("seg", o)), Sense::click());
+        // Two pickers can share an option ("All"): the id has the whole set.
+        let resp = ui.interact(r, ui.id().with(("seg", options.join("|"), o)), Sense::click());
         let p = ui.painter();
         if i == chosen {
             p.rect_filled(r, CornerRadius::same(6), theme::c().select);
@@ -690,8 +750,12 @@ pub fn branch_has_number(branch: &str, n: u64) -> bool {
 
 /// The project as a list: a header per status (dot, name, count), then one row per ticket.
 /// Returns the ticket whose row was clicked.
-fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_repo: bool, selected: Option<&str>, cmds: &mut Vec<Cmd>) -> Option<String> {
+/// The list, grouped by status; in the nested view a parent's sub-issues follow it, indented,
+/// unless it is folded. Returns the ticket clicked and the parent whose fold was clicked.
+#[allow(clippy::too_many_arguments)]
+fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], kids: &HashMap<String, Vec<&Item>>, folded: &HashSet<String>, show_repo: bool, selected: Option<&str>, cmds: &mut Vec<Cmd>) -> (Option<String>, Option<String>) {
     let mut clicked = None;
+    let mut fold = None;
     egui::ScrollArea::vertical().id_salt("board_list").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         ui.set_width(ui.available_width());
@@ -710,22 +774,43 @@ fn list_view(ui: &mut Ui, board: &Board, cols: &[(String, Vec<&Item>)], show_rep
             p.rect_filled(badge, CornerRadius::same(9), color.gamma_multiply(0.16));
             p.galley(badge.center() - n.size() / 2.0, n, color);
             for it in items {
-                let resp = list_row(ui, it, show_repo, selected == Some(it.id.as_str()));
+                let inside = kids.get(&it.id).filter(|v| !v.is_empty());
+                let open = inside.map(|_| !folded.contains(&it.id));
+                let resp = list_row(ui, it, show_repo, selected == Some(it.id.as_str()), 0.0, None);
+                // The chevron sits in the row's left margin.
+                if let Some(o) = open {
+                    let c = pos2(resp.rect.left() + 8.0, resp.rect.center().y);
+                    chevron(ui.painter(), c, o, theme::c().dim);
+                }
                 if resp.clicked() {
-                    clicked = Some(it.id.clone());
+                    let on_chevron = open.is_some() && resp.interact_pointer_pos().is_some_and(|p| p.x < resp.rect.left() + 16.0);
+                    if on_chevron {
+                        fold = Some(it.id.clone());
+                    } else {
+                        clicked = Some(it.id.clone());
+                    }
                 }
                 resp.context_menu(|ui| card_menu(ui, board, it, cmds));
+                for k in inside.filter(|_| open == Some(true)).into_iter().flatten() {
+                    let resp = list_row(ui, k, show_repo, selected == Some(k.id.as_str()), 26.0, Some(status_color(board, &k.status)));
+                    if resp.clicked() {
+                        clicked = Some(k.id.clone());
+                    }
+                    resp.context_menu(|ui| card_menu(ui, board, k, cmds));
+                }
             }
         }
         ui.add_space(16.0);
     });
-    clicked
+    (clicked, fold)
 }
 
 /// One ticket of the list: type, number, title, then labels, pull request, age and assignees.
-fn list_row(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> Response {
+/// `indent` moves a sub-issue right under its parent, with `dot` its own status colour.
+fn list_row(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool, indent: f32, dot: Option<Color32>) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
-    let inner = rect.shrink2(vec2(16.0, 0.0));
+    let mut inner = rect.shrink2(vec2(16.0, 0.0));
+    inner.min.x += indent;
     if selected {
         ui.painter().rect_filled(rect.shrink2(vec2(8.0, 1.0)), CornerRadius::same(6), theme::c().select);
     } else if resp.hovered() {
@@ -749,6 +834,9 @@ fn list_row(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> Response
         if let Some(pr) = it.pull_requests.first() {
             pr_chip(ui, pr);
         }
+        if it.sub_progress.1 > 0 {
+            ui.label(RichText::new(format!("{}/{}", it.sub_progress.0, it.sub_progress.1)).size(theme::FS_SMALL).color(theme::c().dim)).on_hover_text("Sub-issues done");
+        }
         // Labels only while they leave the title some room.
         for l in it.labels.iter().take(2).rev() {
             if ui.available_width() > 360.0 {
@@ -761,6 +849,10 @@ fn list_row(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> Response
     ui.scope_builder(egui::UiBuilder::new().max_rect(left).layout(Layout::left_to_right(Align::Center)), |ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         ui.set_clip_rect(left.intersect(ui.clip_rect()));
+        if let Some(c) = dot {
+            let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
+            ui.painter().circle_filled(r.center(), 3.5, c);
+        }
         type_pill(ui, it);
         if let Some(n) = it.number {
             ui.label(RichText::new(format!("#{n}")).monospace().size(theme::FS_SMALL).color(theme::c().faint));
@@ -798,8 +890,10 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
 /// One ticket on the board, with the rect of its parent line when it has one: the card's click
 /// covers the whole card, so the caller tells a click on the parent apart by where it landed.
 /// Its response covers the frame, border included, and can start a drag.
-fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, Option<Rect>) {
+fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool, nest: Option<Nest>) -> CardOut {
     let mut parent_rect = None;
+    let mut fold_rect = None;
+    let mut kid_rects = Vec::new();
     let mut prepared = egui::Frame::new().fill(card_fill()).stroke(Stroke::new(1.0_f32, theme::c().border)).corner_radius(8).inner_margin(Margin::same(10)).begin(ui);
     {
         let ui = &mut prepared.content_ui;
@@ -864,6 +958,11 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
                 }
             });
         });
+        if let Some(n) = nest {
+            let (f, rows) = kids_inside(ui, &n);
+            fold_rect = Some(f);
+            kid_rects = rows;
+        }
     }
     let outer = prepared.content_ui.min_rect().expand(11.0);
     let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click_and_drag());
@@ -875,7 +974,70 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool) -> (Response, O
         prepared.frame.stroke = Stroke::new(1.0_f32, theme::c().widget_hover_border);
     }
     prepared.end(ui);
-    (resp, parent_rect)
+    CardOut { resp, parent: parent_rect, fold: fold_rect, kids: kid_rects }
+}
+
+/// Height of a sub-issue lifted out of its parent's card.
+const KID_DRAG_H: f32 = 92.0;
+
+/// A parent's sub-issues, drawn inside its card in the nested view.
+struct Nest<'a> {
+    kids: &'a [&'a Item],
+    folded: bool,
+    board: &'a Board,
+}
+
+/// What a card's click or drag landed on: the card, its parent line, the fold line of its
+/// sub-issues, or one of them (item id and row).
+struct CardOut {
+    resp: Response,
+    parent: Option<Rect>,
+    fold: Option<Rect>,
+    kids: Vec<(String, Rect)>,
+}
+
+/// The sub-issues section of a card: a line to fold them ("3 sub-issues"), then one row each with
+/// its status colour, number and title. Returns the fold line and each row; the card's own
+/// response takes the clicks, so the caller tells them apart by where they land.
+fn kids_inside(ui: &mut Ui, n: &Nest) -> (Rect, Vec<(String, Rect)>) {
+    let k = theme::c();
+    let w = ui.available_width();
+    let (line, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+    ui.painter().hline(line.x_range(), line.center().y, Stroke::new(1.0_f32, k.border));
+    let (fold, _) = ui.allocate_exact_size(vec2(w, 18.0), Sense::hover());
+    let hot = ui.rect_contains_pointer(fold);
+    let col = if hot { k.accent } else { k.dim };
+    chevron(ui.painter(), pos2(fold.left() + 5.0, fold.center().y), !n.folded, col);
+    let count = n.kids.len();
+    ui.painter().text(pos2(fold.left() + 16.0, fold.center().y), Align2::LEFT_CENTER, format!("{count} sub-issue{}", if count == 1 { "" } else { "s" }), FontId::proportional(theme::FS_SMALL), col);
+    if hot {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let mut rows = Vec::new();
+    if !n.folded {
+        for kid in n.kids {
+            let (r, _) = ui.allocate_exact_size(vec2(w, 20.0), Sense::hover());
+            let hot = ui.rect_contains_pointer(r);
+            let p = ui.painter();
+            if hot {
+                p.rect_filled(r.expand2(vec2(4.0, 0.0)), CornerRadius::same(5), theme::c().hover);
+            }
+            p.circle_filled(pos2(r.left() + 5.0, r.center().y), 3.5, status_color(n.board, &kid.status));
+            let num = p.text(pos2(r.left() + 14.0, r.center().y), Align2::LEFT_CENTER, kid.number.map(|n| format!("#{n}")).unwrap_or_default(), FontId::monospace(theme::FS_SMALL - 1.0), k.faint);
+            let tc = if kid.is_closed() { k.dim } else { k.text };
+            p.with_clip_rect(r.intersect(ui.clip_rect())).text(pos2(num.right() + 6.0, r.center().y), Align2::LEFT_CENTER, &kid.title, FontId::proportional(theme::FS_SECONDARY), tc);
+            rows.push((kid.id.clone(), r));
+        }
+    }
+    (fold, rows)
+}
+
+/// A small chevron centred on `c`, pointing down when `open`, right when folded.
+fn chevron(p: &egui::Painter, c: Pos2, open: bool, col: Color32) {
+    let s = Stroke::new(1.4_f32, col);
+    let pts = if open { [c + vec2(-3.5, -1.5), c + vec2(0.0, 2.0), c + vec2(3.5, -1.5)] } else { [c + vec2(-1.5, -3.5), c + vec2(2.0, 0.0), c + vec2(-1.5, 3.5)] };
+    p.line_segment([pts[0], pts[1]], s);
+    p.line_segment([pts[1], pts[2]], s);
 }
 
 impl App {
@@ -941,7 +1103,8 @@ impl Tab {
 
         let st = &self.board;
         let visible = |it: &&Item| (st.all || board.in_repo(it)) && (!st.mine || it.assignees.iter().any(|a| a == &board.me)) && matches(it, &st.search);
-        let mut cols = github::columns(&board.order(), board.items.iter().filter(visible), true);
+        let (top, kids) = arrange(board.items.iter().filter(visible).collect(), &board.items, st.tree);
+        let mut cols = github::columns(&board.order(), top, true);
         if cols.iter().all(|c| c.1.is_empty()) {
             let (title, detail) = if !st.search.trim().is_empty() || st.mine {
                 ("No card matches", "Nothing in the project matches these filters. Clear the search or turn off Mine.")
@@ -964,11 +1127,14 @@ impl Tab {
         let mut clicked: Option<String> = None;
         let mut goto: Option<Linked> = None;
         let mut flip: Option<String> = None;
+        let mut fold_flip: Option<String> = None;
         let h = ui.available_height() - 12.0;
         if st.list {
-            if let Some(id) = list_view(ui, &board, &cols, show_repo, detail.as_deref(), cmds) {
+            let (id, fold) = list_view(ui, &board, &cols, &kids, &self.board.folded, show_repo, detail.as_deref(), cmds);
+            if let Some(id) = id {
                 clicked = Some(id);
             }
+            fold_flip = fold;
         } else {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
@@ -1038,15 +1204,29 @@ impl Tab {
                                 };
                                 for (j, it) in shown.iter().enumerate() {
                                     gap_at(ui, j, &it.id);
-                                    let (resp, parent_rect) = card(ui, it, show_repo, detail.as_deref() == Some(it.id.as_str()));
+                                    // Its sub-issues inside it, in the nested view (the dragged one left out).
+                                    let inside: Vec<&Item> = kids.get(&it.id).map(|v| v.iter().copied().filter(|k| drag.as_ref().is_none_or(|d| d.item != k.id)).collect()).unwrap_or_default();
+                                    let nest = (!inside.is_empty()).then(|| Nest { kids: &inside, folded: self.board.folded.contains(&it.id), board: &board });
+                                    let c = card(ui, it, show_repo, detail.as_deref() == Some(it.id.as_str()), nest);
+                                    let resp = c.resp;
                                     cards_at.push((status.clone(), it.id.clone(), resp.rect));
+                                    let at = resp.interact_pointer_pos();
+                                    let kid_at = at.and_then(|p| c.kids.iter().find(|(_, r)| r.contains(p))).map(|(id, r)| (id.clone(), *r));
                                     if resp.drag_started() && drag.is_none() {
-                                        let p = resp.interact_pointer_pos().unwrap_or(resp.rect.center());
-                                        let d = Drag { item: it.id.clone(), from: (status.clone(), j), grab: p - resp.rect.min, size: resp.rect.size(), pos: resp.rect.min, target: Some((status.clone(), j)), glide: None, gen: self.board.drags + 1, demo: None };
+                                        let p = at.unwrap_or(resp.rect.center());
+                                        // A sub-issue leaves its parent's card; the parent moves as a whole.
+                                        let d = match kid_at.as_ref().and_then(|(id, r)| inside.iter().find(|k| &k.id == id).map(|k| (k, r))) {
+                                            Some((k, r)) => Drag { item: k.id.clone(), from: (k.status.clone(), usize::MAX), grab: p - r.min, size: vec2(resp.rect.width(), KID_DRAG_H), pos: r.min, target: Some((k.status.clone(), usize::MAX)), glide: None, gen: self.board.drags + 1, demo: None },
+                                            None => Drag { item: it.id.clone(), from: (status.clone(), j), grab: p - resp.rect.min, size: resp.rect.size(), pos: resp.rect.min, target: Some((status.clone(), j)), glide: None, gen: self.board.drags + 1, demo: None },
+                                        };
                                         started = Some(d);
                                     } else if resp.clicked() {
-                                        let on_parent = parent_rect.zip(resp.interact_pointer_pos()).map(|(r, p)| r.contains(p)).unwrap_or(false);
-                                        if on_parent {
+                                        let on = |r: Option<Rect>| r.zip(at).is_some_and(|(r, p)| r.contains(p));
+                                        if on(c.fold) {
+                                            fold_flip = Some(it.id.clone());
+                                        } else if let Some((id, _)) = kid_at {
+                                            clicked = Some(id);
+                                        } else if on(c.parent) {
                                             goto = it.parent.clone();
                                         } else {
                                             clicked = Some(it.id.clone());
@@ -1081,6 +1261,11 @@ impl Tab {
             self.board.drag = Some(d);
         }
         self.drag_overlay(&ctx, &board, show_repo, landing, now);
+        }
+        if let Some(id) = fold_flip {
+            if !self.board.folded.remove(&id) {
+                self.board.folded.insert(id);
+            }
         }
         if let Some(s) = flip {
             if !self.board.done_all.remove(&s) {
@@ -1192,7 +1377,7 @@ impl Tab {
             }
             let shadow = egui::epaint::Shadow { offset: [0, (10.0 * lift) as i8], blur: (26.0 * lift) as u8, spread: 0, color: Color32::from_black_alpha((if theme::is_light() { 60.0 } else { 120.0 } * lift) as u8) };
             ui.painter().add(shadow.as_shape(rect, CornerRadius::same(8)));
-            card(ui, it, show_repo, true);
+            card(ui, it, show_repo, true, None);
         });
         // A little larger while held, around the card's middle.
         let scale = 1.0 + 0.035 * lift;
@@ -1200,6 +1385,7 @@ impl Tab {
     }
 
     fn board_bar(&mut self, ui: &mut Ui, board: Option<&Board>, loading: bool, cmds: &mut Vec<Cmd>) {
+        let mut two_rows = false;
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 28.0), Sense::hover());
             board_icon(ui.painter(), r.center() + vec2(2.0, 2.0), theme::c().accent_text);
@@ -1223,16 +1409,11 @@ impl Tab {
                     cmds.push(Cmd::OpenUrl(p.url.clone()));
                 }
             }
-            ui.add_space(12.0);
-            if let Some(i) = segmented(ui, &["This repo", "All"], self.board.all as usize) {
-                self.board.all = i == 1;
-            }
-            if let Some(i) = segmented(ui, &["Board", "List"], self.board.list as usize) {
-                self.board.list = i == 1;
-            }
-            let me = board.map(|b| b.me.clone()).unwrap_or_default();
-            if !me.is_empty() && toggle_chip(ui, "Mine", self.board.mine).on_hover_text(format!("Only tickets assigned to {me}")).clicked() {
-                self.board.mine = !self.board.mine;
+            // The pickers go on a second line when the bar is too narrow for them and the search.
+            two_rows = ui.available_width() < self.bar_pickers_width(ui, board) + BAR_RIGHT_W;
+            if !two_rows {
+                ui.add_space(12.0);
+                self.bar_pickers(ui, board);
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if refresh_button(ui, loading).clicked() && !loading {
@@ -1249,6 +1430,35 @@ impl Tab {
                 }
             });
         });
+        if two_rows {
+            ui.add_space(6.0);
+            ui.horizontal(|ui| self.bar_pickers(ui, board));
+        }
+    }
+
+    /// Where the board looks: this repository or all, board or list, how sub-issues show, Mine.
+    fn bar_pickers(&mut self, ui: &mut Ui, board: Option<&Board>) {
+        if let Some(i) = segmented(ui, &["This repo", "All"], self.board.all as usize) {
+            self.board.all = i == 1;
+        }
+        if let Some(i) = segmented(ui, &["Board", "List"], self.board.list as usize) {
+            self.board.list = i == 1;
+        }
+        let trees = Tree::ALL.map(Tree::label);
+        if let Some(i) = segmented(ui, &trees, Tree::ALL.iter().position(|t| *t == self.board.tree).unwrap_or(2)) {
+            self.board.tree = Tree::ALL[i];
+        }
+        let me = board.map(|b| b.me.clone()).unwrap_or_default();
+        if !me.is_empty() && toggle_chip(ui, "Mine", self.board.mine).on_hover_text(format!("Only tickets assigned to {me}")).clicked() {
+            self.board.mine = !self.board.mine;
+        }
+    }
+
+    /// The width `bar_pickers` takes.
+    fn bar_pickers_width(&self, ui: &Ui, board: Option<&Board>) -> f32 {
+        let sets: [&[&str]; 3] = [&["This repo", "All"], &["Board", "List"], &Tree::ALL.map(Tree::label)];
+        let mine = board.is_some_and(|b| !b.me.is_empty());
+        12.0 + sets.iter().map(|o| segmented_width(ui, o)).sum::<f32>() + if mine { segmented_width(ui, &["Mine"]) + 8.0 } else { 0.0 } + 4.0 * ui.spacing().item_spacing.x
     }
 
     /// The details panel while the Project view is on screen: the chosen ticket's detail.
@@ -1543,6 +1753,32 @@ mod tests {
         assert_eq!((d.gap("Todo"), d.gap("Done")), (None, Some(3)), "once let go, only where it lands");
         assert_eq!(edge_scroll(200.0, 0.0, 400.0), 0.0);
         assert!(edge_scroll(10.0, 0.0, 400.0) > 0.0 && edge_scroll(395.0, 0.0, 400.0) < 0.0);
+    }
+
+    #[test]
+    fn the_three_trees_place_sub_issues() {
+        let it = |n: u64, parent: Option<u64>| Item {
+            id: format!("i{n}"),
+            number: Some(n),
+            url: format!("u{n}"),
+            parent: parent.map(|p| Linked { number: p, title: String::new(), state: "OPEN".into(), url: format!("u{p}") }),
+            ..Default::default()
+        };
+        // 1 has the sub-issues 2 and 3; 4 is a sub-issue of 9, which is not in the project.
+        let project = vec![it(1, None), it(2, Some(1)), it(3, Some(1)), it(4, Some(9)), it(5, None)];
+        let nums = |v: &[&Item]| v.iter().map(|i| i.number.unwrap()).collect::<Vec<_>>();
+        let all: Vec<&Item> = project.iter().collect();
+        let (top, kids) = arrange(all.clone(), &project, Tree::All);
+        assert_eq!((nums(&top), kids.len()), (vec![1, 2, 3, 4, 5], 0));
+        let (top, _) = arrange(all.clone(), &project, Tree::Parents);
+        assert_eq!(nums(&top), vec![1, 4, 5], "a sub-issue whose parent isn't in the project counts as top level");
+        let (top, kids) = arrange(all.clone(), &project, Tree::Nested);
+        assert_eq!(nums(&top), vec![1, 4, 5]);
+        assert_eq!(nums(&kids["i1"]), vec![2, 3]);
+        // The parent filtered out (another repository, Mine, the search): its sub-issues stay at their place.
+        let shown: Vec<&Item> = project.iter().filter(|i| i.number != Some(1)).collect();
+        let (top, kids) = arrange(shown, &project, Tree::Nested);
+        assert_eq!((nums(&top), kids.len()), (vec![2, 3, 4, 5], 0));
     }
 
     #[test]

@@ -616,6 +616,13 @@ pub fn sample() -> Board {
     s53.parent = Some(Linked { number: 51, title: "Group repositories in the switcher".into(), state: "OPEN".into(), url: format!("https://github.com/{slug}/issues/51") });
     s53.labels = vec![label("zone:sélecteur", "1cadf8")];
     items.push(s53);
+    // The rest of #51's sub-issues, spread over the columns.
+    for (n, title, status, days) in [(54, "Drag a repository into a group", "Done", 4), (55, "Rename a group", "Ready", 2), (56, "Collapse a group in the list", "Backlog", 2)] {
+        let mut s = it(n, title, status, "Task", &["me"], days);
+        s.parent = Some(Linked { number: 51, title: "Group repositories in the switcher".into(), state: "OPEN".into(), url: format!("https://github.com/{slug}/issues/51") });
+        s.labels = vec![label("zone:sélecteur", "1cadf8")];
+        items.push(s);
+    }
     let mut b = it(52, "Show the linked issue in the toolbar when the branch name starts with its number", "Ready", "Feature", &[], 3);
     b.labels = vec![label("zone:historique", "64da38")];
     b.fields = vec![field("Priority", "P2", Some("ORANGE")), field("Estimate", "3", None)];
