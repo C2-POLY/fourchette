@@ -2,7 +2,7 @@
 //! The work itself is in `crate::update`; this side only polls its channels each frame.
 use super::*;
 use crate::update::{self, Progress, Release, Version};
-use egui::{vec2, Align, CornerRadius, Key, Layout, Margin, RichText, Sense, Stroke};
+use egui::{vec2, CornerRadius, Margin, RichText, Sense, Stroke};
 use std::sync::mpsc::TryRecvError;
 
 type CheckResult = Result<Option<Release>, String>;
@@ -152,6 +152,7 @@ impl App {
     /// The update dialog: the new version, its notes, then "Update and Restart" and "Later", or
     /// the install's progress, or its error.
     pub(super) fn update_dialog(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
+        use crate::modal::{self, pill, text, Modal, Width};
         let u = &self.update;
         if !u.dialog {
             return;
@@ -160,74 +161,62 @@ impl App {
         let c = theme::c();
         let current = Version::current();
         let same = r.version == current;
-        egui::Modal::new(egui::Id::new("update")).show(ctx, |ui| {
-            ui.set_width(460.0);
-            let title = if same { format!("A new build of Fourchette {}", r.version) } else { format!("Fourchette {} is available", r.version) };
-            ui.label(RichText::new(title).size(theme::FS_TITLE).color(c.strong));
-            let have = if update::COMMIT.is_empty() { current.to_string() } else { format!("{current} ({})", short(update::COMMIT)) };
-            let line = if same { format!("Built from {}. You have {have}.", short(&r.commit)) } else { format!("You have {have}.") };
-            ui.label(RichText::new(line).color(c.dim));
-            ui.add_space(10.0);
-            ui.label(RichText::new("Release notes").size(theme::FS_SMALL).color(c.faint));
-            ui.add_space(2.0);
-            egui::Frame::new().fill(c.bg).stroke(Stroke::new(1.0_f32, c.border)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(12)).show(ui, |ui| {
+        let title = if same { vec![text("A new build of Fourchette"), pill(r.version.to_string())] } else { vec![text("Fourchette"), pill(r.version.to_string()), text("is available")] };
+        let have = if update::COMMIT.is_empty() { current.to_string() } else { format!("{current} ({})", short(update::COMMIT)) };
+        let line = if same { format!("Built from {}. You have {have}.", short(&r.commit)) } else { format!("You have {have}.") };
+        let mut frame = Modal::new("update", Width::Medium, "pull", title).status(vec![text(line)]).hint(vec![modal::Hint::Text("Fourchette restarts once it is installed".into())]).cancel(Some("Later"));
+        frame = match &u.progress {
+            None => frame.primary("Update and Restart", false, true),
+            Some(Progress::Failed(_)) => {
+                let f = frame.hint(Vec::new()).primary("Try Again", false, true);
+                if r.page.is_empty() {
+                    f
+                } else {
+                    f.extra("Open Release Page")
+                }
+            }
+            // Downloading or installing: nothing to press, and it can't be closed.
+            Some(_) => frame.cancel(None).closable(false),
+        };
+        let out = frame.show(ctx, |ui| {
+            modal::caption(ui, "Release notes");
+            egui::Frame::new().fill(c.bg).stroke(Stroke::new(1.0_f32, c.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
                 egui::ScrollArea::vertical().max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
                     let notes = update::plain_notes(&r.notes);
                     let notes = if notes.is_empty() { "No notes for this release.".to_string() } else { notes };
                     ui.label(RichText::new(notes).color(c.text));
                 });
             });
-            ui.add_space(12.0);
-
-            let escape = ui.input(|i| i.key_pressed(Key::Escape));
             match &u.progress {
-                Some(Progress::Downloading(f)) => {
-                    progress_row(ui, &format!("Downloading… {:.0}%", f * 100.0), Some(*f));
-                }
+                Some(Progress::Downloading(f)) => progress_row(ui, &format!("Downloading… {:.0}%", f * 100.0), Some(*f)),
                 Some(Progress::Installing) => progress_row(ui, "Installing…", None),
                 Some(Progress::Done) => progress_row(ui, "Restarting…", None),
                 Some(Progress::Failed(e)) => {
-                    egui::Frame::new().fill(theme::tint(c.deleted, c.elevated, 0.12)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(10)).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
+                    ui.add_space(8.0);
+                    modal::note(ui, c.deleted, |ui| {
                         ui.label(RichText::new("The update didn't install. Fourchette is unchanged.").color(c.strong));
                         ui.label(RichText::new(e.as_str()).size(theme::FS_SECONDARY).color(c.dim));
                     });
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        if primary_button(ui, "Try Again").clicked() {
-                            cmds.push(Cmd::InstallUpdate);
-                        }
-                        if !r.page.is_empty() && ui.button("Open Release Page").clicked() {
-                            cmds.push(Cmd::OpenUrl(r.page.clone()));
-                        }
-                        if ui.button("Later").clicked() || escape {
-                            cmds.push(Cmd::UpdateDialog(false));
-                        }
-                    });
                 }
-                None => {
-                    ui.horizontal(|ui| {
-                        if primary_button(ui, "Update and Restart").clicked() {
-                            cmds.push(Cmd::InstallUpdate);
-                        }
-                        if ui.button("Later").clicked() || escape {
-                            cmds.push(Cmd::UpdateDialog(false));
-                        }
-                    });
-                }
+                None => {}
             }
         });
+        if out.primary {
+            cmds.push(Cmd::InstallUpdate);
+        }
+        if out.extra == Some(0) {
+            cmds.push(Cmd::OpenUrl(r.page.clone()));
+        }
+        if out.close {
+            cmds.push(Cmd::UpdateDialog(false));
+        }
     }
-}
-
-fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    let c = theme::c();
-    ui.add(egui::Button::new(RichText::new(text).color(c.on_accent)).fill(c.accent).stroke(Stroke::new(1.0_f32, c.accent)))
 }
 
 /// A step of the install: its text, and a bar for the download (a spinner otherwise).
 fn progress_row(ui: &mut egui::Ui, text: &str, part: Option<f32>) {
     let c = theme::c();
+    ui.add_space(10.0);
     ui.horizontal(|ui| {
         if part.is_none() {
             ui.spinner();
@@ -243,8 +232,4 @@ fn progress_row(ui: &mut egui::Ui, text: &str, part: Option<f32>) {
         done.set_width(rect.width() * f.clamp(0.0, 1.0));
         p.rect_filled(done, CornerRadius::same(3), c.accent);
     }
-    ui.add_space(4.0);
-    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-        ui.label(RichText::new("Fourchette restarts once the new version is in place.").size(theme::FS_SMALL).color(c.faint));
-    });
 }

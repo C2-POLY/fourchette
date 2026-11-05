@@ -208,6 +208,8 @@ pub struct App {
     menu_cmds: Vec<Cmd>,
     /// New releases on GitHub: the check, the pill, the dialog and the install.
     update: updater::UpdateState,
+    /// FOURCHETTE_MENU=<x>,<y>: where a screenshot right-clicks, to show a context menu.
+    shot_menu: Option<egui::Pos2>,
 }
 
 pub fn short(h: &str) -> &str {
@@ -236,6 +238,7 @@ impl App {
             palette: None,
             menu_cmds: Vec::new(),
             update: updater::UpdateState::default(),
+            shot_menu: None,
         }
     }
 
@@ -271,7 +274,7 @@ impl App {
         if let Some(n) = std::env::var("FOURCHETTE_TABS").ok().and_then(|v| v.trim().parse::<usize>().ok()) {
             app.sample_tabs(n);
         }
-        if std::env::var("FOURCHETTE_CLEANUP_PREVIEW").is_ok() {
+        if let Ok(v) = std::env::var("FOURCHETTE_CLEANUP_PREVIEW") {
             let a = |name: &str, action: &str, reason: &str, merged: bool| crate::ai::Advice {
                 name: name.into(),
                 action: action.into(),
@@ -297,7 +300,7 @@ impl App {
             app.tab_mut().ai.cleanup = Some(assistant::CleanupView {
                 base: "develop".into(),
                 count: 5,
-                loading: false,
+                loading: v == "loading",
                 summary: "Three branches are already fully in develop and can go — one of them is in a worktree that will be removed first. claude/new-graph has uncommitted work in its worktree, so check it.".into(),
                 advice: vec![
                     with_wt,
@@ -344,6 +347,20 @@ impl App {
             }
             let now = t.checkout("main", false);
             debug_assert!(now.is_none(), "main should ask");
+        }
+        // FOURCHETTE_DIALOG=<name> opens one of the dialogs on the sample project.
+        if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
+            t.dialog = sample_dialog(&v, &t.worktrees);
+        }
+        // FOURCHETTE_MENU=<x>,<y> right-clicks there, in points, to show a context menu.
+        app.shot_menu = std::env::var("FOURCHETTE_MENU").ok().and_then(|v| {
+            let (x, y) = v.split_once(',')?;
+            Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
+        });
+        // FOURCHETTE_TOAST=<message> shows a toast, FOURCHETTE_TOAST=error:<message> an error's.
+        if let Ok(v) = std::env::var("FOURCHETTE_TOAST") {
+            let (msg, error) = v.strip_prefix("error:").map_or((v.as_str(), false), |m| (m, true));
+            app.notify(msg.to_string(), error);
         }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
@@ -536,6 +553,33 @@ impl App {
             found.is_empty(),
         );
     }
+}
+
+/// The dialog `FOURCHETTE_DIALOG` names, filled in as on the sample project: `confirm` (delete a
+/// tag), `rebase`, `branch`, `tag`, `delete-branch` (checked out in a worktree with changes, not
+/// merged), `delete-worktree` and `group`.
+fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<Dialog> {
+    let wt = worktrees.iter().find(|w| !w.is_main).cloned();
+    let confirm = |title: &str, message: &str, args: &[&str]| Dialog::Confirm {
+        title: title.into(),
+        message: message.into(),
+        label: title.into(),
+        args: args.iter().map(|s| s.to_string()).collect(),
+        network: false,
+    };
+    Some(match name {
+        "confirm" => confirm("Delete tag", "Do you want to delete the tag “v2.3.0”?", &["tag", "-d", "v2.3.0"]),
+        "rebase" => confirm("Rebase", "Do you want to rebase “develop” onto “main”?", &["rebase", "main"]),
+        "branch" => Dialog::NewRef { at: "develop".into(), label: "develop".into(), name: "feature/".into(), checkout: true, tag: false },
+        "tag" => Dialog::NewRef { at: "ca2a04c".into(), label: "commit ca2a04c".into(), name: String::new(), checkout: false, tag: true },
+        "delete-branch" => {
+            let name = wt.as_ref().and_then(|w| w.branch.clone()).unwrap_or_else(|| "feature/search".into());
+            Dialog::DeleteBranch { name, merged: false, force: false, worktree: wt, dirty: true, also_worktree: true }
+        }
+        "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
+        "group" => Dialog::NewGroup { path: PathBuf::from("/Users/me/dev/fourchette"), name: "Side projects".into() },
+        _ => return None,
+    })
 }
 
 /// The saved fonts, or those of `FOURCHETTE_FONTS=<ui>,<code>` (either part may be left out).

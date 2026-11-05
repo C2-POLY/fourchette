@@ -2,7 +2,7 @@
 //! (QuickLaunchWindowController, its command providers and its layout — see MECHANICS.md).
 use super::*;
 use crate::ui::checkout_remote;
-use egui::{pos2, vec2, Align2, CornerRadius, FontId, Key, Margin, RichText, Sense, Stroke};
+use egui::{pos2, vec2, Align2, CornerRadius, FontId, Key, Margin, RichText, Sense};
 
 /// Rows shown before the list scrolls (estimated: the original's table size is set in its nib).
 const VISIBLE_ROWS: f32 = 12.0;
@@ -166,21 +166,17 @@ impl App {
         let left = screen.center().x - PALETTE_W * 0.5 - 10.0;
         let top = (screen.center().y - total_h * 2.0 / 3.0).max(screen.top() + 12.0);
 
+        let t = crate::modal::appear(ctx, egui::Id::new("palette"));
         egui::Area::new(egui::Id::new("palette_backdrop")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
             let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, theme::shadow(0.8));
+            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
             if resp.clicked() {
                 close = true;
             }
         });
-        egui::Area::new(egui::Id::new("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(theme::c().elevated)
-                .stroke(Stroke::new(1.0_f32, theme::c().border_strong))
-                .corner_radius(CornerRadius::same(10))
-                .inner_margin(Margin::same(10))
-                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: theme::shadow(1.0) })
-                .show(ui, |ui| {
+        let area = egui::Area::new(egui::Id::new("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
+            ui.multiply_opacity(t);
+            crate::modal::card(ui, crate::modal::RADIUS, Margin::same(12), |ui| {
                     ui.set_width(PALETTE_W);
                     let hint = if checkout_only { "Check out a branch…" } else { "Type a command, a branch or a commit…" };
                     let edit = ui.add(
@@ -228,9 +224,11 @@ impl App {
                         }
                     });
                     ui.add_space(4.0);
-                    ui.label(RichText::new("Up / Down to move · Enter to run · Esc to close").size(theme::FS_SMALL).color(theme::c().faint));
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| crate::modal::hint_row(ui, &crate::modal::list_hint("run")));
                 });
         });
+        crate::modal::animate_layer(ctx, area.response.layer_id, area.response.rect.center(), t);
         if let Some(k) = chosen {
             if k < items.len() {
                 match items.swap_remove(k).cmd {
