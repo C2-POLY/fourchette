@@ -3,7 +3,8 @@
 
 use crate::git::{GitRef, RefKind};
 use crate::theme;
-use crate::ui::{chevron, fit_galley, fit_text};
+use crate::pulls::Pull;
+use crate::ui::{chevron, fit_galley, fit_text, pr_badge, pr_badge_width};
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui};
 
 /// `owner/repo` for a GitHub or GitLab-style URL (https, ssh or scp form), else the host, else
@@ -222,8 +223,10 @@ fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
     x
 }
 
-/// A local branch: colour dot, name, then ahead/behind and the tracked remote on the right.
-pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking) -> egui::Response {
+/// A local branch: colour dot, name, its pull request badge, then ahead/behind and the tracked
+/// remote on the right.
+#[allow(clippy::too_many_arguments)]
+pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let p = ui.painter();
     if current {
@@ -234,10 +237,18 @@ pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, 
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
     p.circle_filled(pos2(x + 3.0, y), 3.5, color);
-    let left = tracking_badges(p, t, rect.right() - 8.0, y);
+    let left = pr_after(p, pr, tracking_badges(p, t, rect.right() - 8.0, y), y);
     let tc = if current { theme::c().strong } else { theme::c().text };
     fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, name, theme::body(), tc, left - 8.0 - (x + 15.0));
     resp
+}
+
+/// Draws a pull request badge ending before `right` and returns where the name must stop.
+fn pr_after(p: &Painter, pr: Option<&Pull>, right: f32, y: f32) -> f32 {
+    let Some(pr) = pr else { return right };
+    let left = right - 8.0 - pr_badge_width(pr);
+    pr_badge(p, left, y, pr);
+    left
 }
 
 /// A remote: chevron, repo icon, name in medium weight, short address on the right.
@@ -259,8 +270,9 @@ pub fn remote_row(ui: &mut Ui, name: &str, short: &str, open: bool) -> egui::Res
     resp
 }
 
-/// A remote branch: dot, name, then a link icon when a local branch tracks it, else "not local".
-pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, tracked: bool) -> egui::Response {
+/// A remote branch: dot, name, its pull request badge, then a link icon when a local branch
+/// tracks it, else "not local".
+pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, tracked: bool, pr: Option<&Pull>) -> egui::Response {
     let (rect, resp) = row_rect(ui, 0.0);
     let p = ui.painter();
     let c = theme::c();
@@ -276,6 +288,7 @@ pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, t
         p.galley(pos2(right, y - g.size().y / 2.0), g, c.faint);
         right -= 6.0;
     }
+    let right = pr_after(p, pr, right, y);
     let (dot, tc) = if tracked { (color, c.text) } else { (theme::tint(color, c.sidebar, 0.4), c.faint) };
     p.circle_filled(pos2(x + 3.0, y), 3.0, dot);
     fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, name, theme::body(), tc, right - 8.0 - (x + 15.0));

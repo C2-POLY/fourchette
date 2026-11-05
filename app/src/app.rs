@@ -504,6 +504,7 @@ impl App {
         let t = self.tab_mut();
         t.details_layout = layout;
         t.project = project::ProjectState::default();
+        t.pulls = project::PullsState::default();
         self.project_load();
     }
 

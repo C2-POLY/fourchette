@@ -205,7 +205,12 @@ impl Tab {
         } else {
             format!("Tracks {} · {} ahead, {} behind", b.upstream, b.ahead, b.behind)
         };
-        let resp = sidebar::local_branch_row(ui, label, self.ref_color(&b.target), b.is_head, indent, &t).on_hover_text(tip);
+        let pr = self.pull_of(b);
+        let tip = match pr {
+            Some(p) => format!("{tip}\n{}", p.describe()),
+            None => tip,
+        };
+        let resp = sidebar::local_branch_row(ui, label, self.ref_color(&b.target), b.is_head, indent, &t, pr).on_hover_text(tip);
         if resp.clicked() {
             cmds.push(Cmd::SelectHash(b.target.clone()));
         }
@@ -218,7 +223,12 @@ impl Tab {
     /// A branch of a remote: a link icon when a local branch tracks it, "not local" otherwise.
     fn remote_branch(&self, ui: &mut Ui, r: &GitRef, label: &str, indent: f32, locals: &[GitRef], cmds: &mut Vec<Cmd>) {
         let tracked = sidebar::is_tracked(&r.name, locals);
-        let resp = sidebar::remote_branch_row(ui, label, self.ref_color(&r.target), indent, tracked).on_hover_text(if tracked { format!("{} is tracked by a local branch", r.name) } else { format!("{} has no local branch", r.name) });
+        let pr = self.pull_of(r);
+        let mut tip = if tracked { format!("{} is tracked by a local branch", r.name) } else { format!("{} has no local branch", r.name) };
+        if let Some(p) = pr {
+            tip = format!("{tip}\n{}", p.describe());
+        }
+        let resp = sidebar::remote_branch_row(ui, label, self.ref_color(&r.target), indent, tracked, pr).on_hover_text(tip);
         if resp.clicked() {
             cmds.push(Cmd::SelectHash(r.target.clone()));
         }
@@ -518,7 +528,10 @@ impl Tab {
                     for (k, r) in refs.iter().enumerate() {
                         let (fill, stroke, text) = ref_colors(r, lane_col, bg);
                         let galley = p.layout_no_wrap(ref_label(r), theme::small(), text);
-                        let w = galley.size().x + 14.0;
+                        // A pull request badge sits inside the label, after its name.
+                        let pull = self.pull_of(r);
+                        let bw = pull.map(|q| pr_badge_width(q) + 5.0).unwrap_or(0.0);
+                        let w = galley.size().x + 14.0 + bw;
                         if x + w > max_x && k > 0 {
                             let mg = p.layout_no_wrap(format!("+{}", refs.len() - k), theme::small(), theme::c().dim);
                             let mr = Rect::from_min_size(pos2(x, y - 9.0), vec2(mg.size().x + 10.0, 18.0));
@@ -534,8 +547,11 @@ impl Tab {
                             p.rect_stroke(pr, CornerRadius::same(4), Stroke::new(1.0_f32, s), StrokeKind::Inside);
                         }
                         // A label wider than its pill ends with "…" inside it, never cut at the edge.
-                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0) } else { galley };
+                        let galley = if w > max_x - x { fit_galley(&p, &ref_label(r), theme::small(), text, pr.width() - 14.0 - bw) } else { galley };
                         p.with_clip_rect(pr.shrink(1.0)).galley(pos2(pr.left() + 7.0, y - galley.size().y / 2.0), galley, text);
+                        if let Some(q) = pull {
+                            pr_badge(&p.with_clip_rect(pr.shrink(1.0)), pr.right() - 7.0 - pr_badge_width(q), y, q);
+                        }
                         x = pr.right() + theme::REF_GAP;
                     }
                     p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
@@ -552,6 +568,9 @@ impl Tab {
                         resp.clone().on_hover_ui_at_pointer(|ui| {
                             for r in refs {
                                 ui.label(ref_label(r));
+                                if let Some(q) = self.pull_of(r) {
+                                    ui.label(RichText::new(q.describe()).small().color(theme::c().dim));
+                                }
                             }
                         });
                     }

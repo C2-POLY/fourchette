@@ -444,7 +444,7 @@ impl Repo {
             .filter_map(|l| {
                 let mut p = l.split('\t');
                 let code = p.next()?.chars().next()?;
-                let path = p.last()?.to_string();
+                let path = p.next_back()?.to_string();
                 Some(FileChange { path, code })
             })
             .collect();

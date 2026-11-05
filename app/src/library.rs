@@ -320,7 +320,7 @@ impl Library {
     /// Most recently opened first.
     pub fn recent(&self) -> Vec<&Entry> {
         let mut v: Vec<&Entry> = self.entries.iter().filter(|e| e.last_opened > 0).collect();
-        v.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));
+        v.sort_by_key(|e| std::cmp::Reverse(e.last_opened));
         v.truncate(RECENT_COUNT);
         v
     }
