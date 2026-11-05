@@ -179,8 +179,9 @@ pub fn fetch_summary(stderr: &str) -> String {
 }
 
 /// `-c push.default=upstream push <remote> <local>:refs/heads/<remote branch>
-///  [--force-with-lease] [--set-upstream] --verbose --progress` (sub_10016e1ec).
-pub fn push_args(remote: &str, local: &str, remote_branch: &str, set_upstream: bool, force: bool) -> Vec<String> {
+///  [--force-with-lease] [--tags] [--set-upstream] --verbose --progress` (sub_10016e1ec). Force is
+/// always `--force-with-lease` ("Fork always uses --force-with-lease").
+pub fn push_args(remote: &str, local: &str, remote_branch: &str, set_upstream: bool, force: bool, tags: bool) -> Vec<String> {
     let mut a = vec![
         "-c".to_string(),
         "push.default=upstream".into(),
@@ -190,6 +191,9 @@ pub fn push_args(remote: &str, local: &str, remote_branch: &str, set_upstream: b
     ];
     if force {
         a.push("--force-with-lease".into());
+    }
+    if tags {
+        a.push("--tags".into());
     }
     if set_upstream {
         a.push("--set-upstream".into());
@@ -682,7 +686,7 @@ mod tests {
         g(&["remote", "add", "origin", bare.to_str().unwrap()]);
         assert_eq!(repo.default_remote().as_deref(), Some("origin"));
         assert!(repo.upstream().is_none());
-        let args = push_args("origin", "main", "main", true, false);
+        let args = push_args("origin", "main", "main", true, false, false);
         let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (o, e) = exec(&dir, &a).unwrap();
         assert_eq!(push_summary(&format!("{o}{e}"), "main", "origin"), "Pushed main to origin");

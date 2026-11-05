@@ -63,6 +63,8 @@ pub enum Dialog {
     /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
     /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
+    /// The original's PushWindowController: the remote branch, Force push and Push all tags.
+    Push(crate::push::Push),
     /// The original's MergeWindowController: merge a branch into the checked-out one, as a merge
     /// commit or squashed, `no_ff` its "No fast-forward" box; `check` foresees conflicts.
     Merge { merge: crate::merge::Merge, style: crate::checkout::MergeStyle, no_ff: bool, check: crate::merge::Check },
@@ -93,6 +95,10 @@ pub enum Cmd {
     /// A stash's Apply: `stash apply`, or `stash pop` when "Delete stash after Apply" is on.
     ApplyStash(String),
     Push,
+    /// Push… (⇧⌘P, the palette): open the Push dialog on the current branch.
+    AskPush,
+    /// The Push dialog's choice.
+    PushTo(crate::push::Push),
     Discard { path: String, untracked: bool },
     Select(Sel),
     Diff(DiffReq),
@@ -399,6 +405,9 @@ impl App {
         // FOURCHETTE_DIALOG=<name> opens one of the dialogs on the sample project.
         if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
             t.dialog = sample_dialog(&v, &t.worktrees);
+            if let Some(kind) = v.strip_prefix("push") {
+                sample_push(t, kind);
+            }
         }
         // FOURCHETTE_DIALOG=pull: the Pull dialog on `develop`, diverged from origin/develop.
         if std::env::var("FOURCHETTE_DIALOG").is_ok_and(|v| v == "pull") {
@@ -663,6 +672,31 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
         }
         _ => return None,
     })
+}
+
+/// The Push dialog on the sample project's `develop`: `push` 3 commits ahead of origin/develop,
+/// `-diverged` 2 ahead and 3 behind, `-force` the same with Force push asking to confirm, `-new`
+/// to a new remote branch with all tags.
+fn sample_push(t: &mut Tab, kind: &str) {
+    let (ahead, behind, upstream) = match kind {
+        "-diverged" | "-force" => (2, 3, "origin/develop"),
+        "-new" => (0, 0, ""),
+        _ => (3, 0, "origin/develop"),
+    };
+    if let Some(b) = t.refs.iter_mut().find(|r| r.name == "develop" && r.kind == RefKind::Local) {
+        (b.upstream, b.ahead, b.behind) = (upstream.into(), ahead, behind);
+    }
+    t.ask_push();
+    if let Some(Dialog::Push(p)) = &mut t.dialog {
+        match kind {
+            "-force" => (p.force, p.confirm) = (true, true),
+            "-new" => {
+                p.target = "feature/lighter-toolbar".into();
+                p.tags = true;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The saved fonts, or those of `FOURCHETTE_FONTS=<ui>,<code>` (either part may be left out).

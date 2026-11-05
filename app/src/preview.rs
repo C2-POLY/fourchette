@@ -279,6 +279,47 @@ impl Preview {
     }
 }
 
+impl Preview {
+    /// A push of `branch` to `remote_ref` ("origin/main"), which exists or not, `ahead` commits
+    /// only the branch has and `behind` only the remote branch has. The branch is checked out in
+    /// both scenes. After, the remote label moves up to the branch; with `force`, the remote's own
+    /// commits turn into ghosts; without it, a diverged push is refused and nothing moves.
+    pub fn push(branch: &str, remote_ref: &str, exists: bool, ahead: usize, behind: usize, force: bool) -> Self {
+        let nm = if !exists || ahead > 0 { SIDE } else { 0 };
+        let nu = if exists && behind > 0 { SIDE } else { 0 };
+        let commit = |id: Id, message: String, lane: usize, row: usize, tone: Tone, parent: Id| Commit { id, message, lane, row, tone, parents: vec![parent], ghost: false, merge: false, from: None };
+        let mut commits: Vec<Commit> = (0..nm).map(|i| commit(mine(i), "Commit to push".into(), 0, i, Tone::Local, if i + 1 < nm { mine(i + 1) } else { BASE })).collect();
+        let lane = if nm > 0 { 1 } else { 0 };
+        commits.extend((0..nu).map(|i| commit(up(i), format!("Only on {remote_ref}"), lane, nm + i, Tone::Upstream, if i + 1 < nu { up(i + 1) } else { BASE })));
+        let base = match (exists, nu > 0) {
+            (false, _) => "Earlier commit".to_string(),
+            (true, true) => "Common ancestor".to_string(),
+            (true, false) => format!("Already on {remote_ref}"),
+        };
+        commits.push(Commit { parents: vec![], ..commit(BASE, base, 0, nm + nu, Tone::Base, BASE) });
+        let own_tip = if nm > 0 { mine(0) } else { BASE };
+        let label = |name: &str, remote: bool, at: Id| Label { name: name.into(), remote, at };
+        let mut labels = vec![label(branch, false, own_tip)];
+        if exists {
+            labels.push(label(remote_ref, true, if nu > 0 { up(0) } else { BASE }));
+        }
+        let before = Scene { commits, labels, head: Some(own_tip) };
+        let mut after = before.clone();
+        let refused = nu > 0 && !force;
+        if !refused {
+            match after.labels.get_mut(1) {
+                Some(l) => l.at = own_tip,
+                None => after.labels.push(label(remote_ref, true, own_tip)),
+            }
+            for c in after.commits.iter_mut().filter(|c| (100..200).contains(&c.id)) {
+                c.ghost = true;
+            }
+        }
+        let rows = before.rows();
+        Preview { before, after, rows }
+    }
+}
+
 // ------------------------------------------------------------------ animation
 
 /// Where a commit is drawn: in canvas points, how visible, and whether it is a ghost.
@@ -505,7 +546,8 @@ fn paint(ui: &Ui, rect: Rect, scene: &Scene, left: &Scene, pose: &Pose, spots: &
         let col = if n.ghost { c.faint } else if after && scene.head == Some(cm.id) { c.strong } else { c.text };
         let col = col.gamma_multiply(n.o);
         let pos = pos2(x, rect.min.y + n.y);
-        let r = painter.text(pos, Align2::LEFT_CENTER, &cm.message, font.clone(), col);
+        // Cut with "…" when long labels leave it little room.
+        let r = crate::ui::fit_text(&painter, pos, Align2::LEFT_CENTER, &cm.message, font.clone(), col, rect.right() - x);
         if n.ghost {
             painter.line_segment([pos2(r.left(), r.center().y), pos2(r.right(), r.center().y)], Stroke::new(1.0_f32, col));
         }
@@ -783,5 +825,55 @@ mod tests {
         assert_eq!((r.x, r.y, r.o), (from[&mine(0)].x, from[&mine(0)].y, 0.0));
         let end = blend(&from, &p.after, &p.before, 1.0);
         assert_eq!(end, pose_of(&p.after));
+    }
+
+    fn remote_at(s: &Scene) -> Option<Id> {
+        s.labels.iter().find(|l| l.remote).map(|l| l.at)
+    }
+
+    #[test]
+    fn a_push_moves_the_remote_label_up_to_the_branch() {
+        let p = Preview::push("main", "origin/main", true, 3, 0, false);
+        assert_eq!(ids(&p.before), vec![mine(0), mine(1), BASE]);
+        assert_eq!(names(&p.before), vec![("main", mine(0)), ("origin/main", BASE)]);
+        assert_eq!(names(&p.after), vec![("main", mine(0)), ("origin/main", mine(0))]);
+        assert_eq!((p.before.head, p.after.head), (Some(mine(0)), Some(mine(0))));
+        assert!(p.after.commits.iter().all(|c| !c.ghost));
+        assert_eq!(p.rows, 3);
+        // The same with force: nothing is replaced.
+        assert_eq!(Preview::push("main", "origin/main", true, 3, 0, true), p);
+    }
+
+    #[test]
+    fn a_new_remote_branch_appears_on_the_branch() {
+        let p = Preview::push("feature", "origin/feature", false, 0, 0, false);
+        assert_eq!(names(&p.before), vec![("feature", mine(0))]);
+        assert_eq!(names(&p.after), vec![("feature", mine(0)), ("origin/feature", mine(0))]);
+        assert_eq!(p.after.labels[1].remote, true);
+    }
+
+    #[test]
+    fn a_diverged_push_is_refused_unless_forced_and_then_the_remote_commits_go() {
+        let refused = Preview::push("main", "origin/main", true, 2, 3, false);
+        assert_eq!(refused.after, refused.before);
+        assert_eq!(ids(&refused.before), vec![mine(0), mine(1), up(0), up(1), BASE]);
+        assert!(refused.before.commits.iter().filter(|c| (100..200).contains(&c.id)).all(|c| c.lane == 1 && c.tone == Tone::Upstream));
+        let forced = Preview::push("main", "origin/main", true, 2, 3, true);
+        assert_eq!(remote_at(&forced.after), Some(mine(0)));
+        let ghosts: Vec<Id> = forced.after.commits.iter().filter(|c| c.ghost).map(|c| c.id).collect();
+        assert_eq!(ghosts, vec![up(0), up(1)]);
+        assert_eq!(forced.rows, 5);
+        assert!(forced.rows <= MAX_ROWS);
+        // Only behind: forced, the remote goes back to the branch's commit.
+        let back = Preview::push("main", "origin/main", true, 0, 2, true);
+        assert_eq!(remote_at(&back.after), Some(BASE));
+        assert!(back.before.commits.iter().all(|c| c.lane == 0));
+    }
+
+    #[test]
+    fn up_to_date_is_one_commit_with_both_labels() {
+        let p = Preview::push("main", "origin/main", true, 0, 0, false);
+        assert_eq!(ids(&p.before), vec![BASE]);
+        assert_eq!(p.after, p.before);
     }
 }

@@ -78,7 +78,7 @@ They were decoded byte by byte from the `mov`/`movk` constants, e.g. `0x2d2d 0x7
 | deleteStashAfterApply | false | Apply keeps the stash; Pop removes it. A user setting (Settings › Git): on, Apply runs `stash pop` |
 | pullSheetRebase / pullSheetStashAndReapply | false / false | Pull merges (`pull --no-edit --no-rebase <remote> <branch>`). User settings (Settings › Git): Merge or Rebase (`--rebase`), and "Stash and reapply" (`--autostash`) |
 | fetchSheetFetchAllRemotes / fetchSheetFetchAllTags | false / false | Fetch one remote, no `--tags` (Option-click = all remotes) |
-| pushSheetPushAllTags | false | no `--tags` |
+| pushSheetPushAllTags | false | no `--tags`: the Push dialog's "Push all tags" starts unticked |
 | contextSize | 3 | diffs use `--unified=3`; a user setting (Settings window, "Diff and commit"), the open diff refreshes when it changes |
 | localBranchSortOrder / remoteBranchSortOrder / tagSortOrder | 2 / 2 / 1 | meaning of the numbers not followed (*not used*) |
 | repositoryManagerScanDepth | 6 | not used |
@@ -163,7 +163,7 @@ those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what
 | Repository > Commit (`showCommitView:`) | ⇧⌘C | commits, like the Commit button |
 | Fetch… / Quick Fetch | ⇧⌘F / ⌥⇧⌘F | Fetch / Fetch All Remotes |
 | Pull… (`showPullSheet:`) | ⇧⌘L | the Pull dialog (#101): remote branch, Merge or Rebase, Stash and reapply; the toolbar's Pull still pulls at once |
-| Push… | ⇧⌘P | Push (no sheet in Fourchette) |
+| Push… | ⇧⌘P | the Push dialog (PushWindowController): remote, remote branch (the upstream, or a new one tracked with `--set-upstream`), Force push (always `--force-with-lease`, a second click when it replaces commits), Push all tags; the toolbar's Push still pushes at once |
 | Save Stash… (`saveStash:`) | ⇧⌘H | Stash Changes; Pop Stash added (toolbar's Pop) |
 | Checkout Branch… (`showQuickLaunchCheckout:`) | ⌘B | the branch palette |
 | New Branch… / New Tag… | ⇧⌘B / ⇧⌘T | the new branch / tag dialog at HEAD |

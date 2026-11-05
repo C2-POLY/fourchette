@@ -64,6 +64,7 @@ impl App {
             v.push(item("Commands", "Pull", pull, Cmd::Pull));
             v.push(item("Commands", "Pull…", "choose the remote branch, merge or rebase", Cmd::PullDialog));
             v.push(item("Commands", "Push", "send your commits", Cmd::Push));
+            v.push(item("Commands", "Push…", "⇧⌘P · remote branch, force, tags", Cmd::AskPush));
             v.push(item(
                 "Commands",
                 "New branch…",

@@ -12,6 +12,7 @@ mod menu;
 mod merge;
 mod modal;
 mod preview;
+mod push;
 mod pull;
 mod settings;
 mod theme;
