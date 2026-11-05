@@ -228,7 +228,7 @@ impl App {
         let current = Version::current();
         let same = r.version == current;
         let title = if same { vec![text("A new build of Fourchette"), pill(r.version.to_string())] } else { vec![text("Fourchette"), pill(r.version.to_string()), text("is available")] };
-        let have = if update::COMMIT.is_empty() { current.to_string() } else { format!("{current} ({})", short(update::COMMIT)) };
+        let have = match update::commit() { Some(c) => format!("{current} ({})", short(c)), None => current.to_string() };
         let line = if same { format!("Built from {}. You have {have}.", short(&r.commit)) } else { format!("You have {have}.") };
         let mut frame = Modal::new("update", Width::Medium, "pull", title).status(vec![text(line)]).hint(vec![modal::Hint::Text("Fourchette restarts once it is installed".into())]).cancel(Some("Later"));
         frame = match &u.progress {
