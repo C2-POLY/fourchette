@@ -10,6 +10,7 @@ mod icon;
 mod library;
 mod menu;
 mod modal;
+mod operation;
 mod preview;
 mod settings;
 mod theme;

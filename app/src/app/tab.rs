@@ -60,6 +60,8 @@ pub struct Tab {
     pub(super) details_layout: DetailsLayout,
     /// The tab's latest message for the person; `App` moves it to the window's toast.
     pub(super) notice: Option<Notice>,
+    /// A merge, rebase, cherry-pick or revert stopped on conflicts: the banner shows it.
+    pub(super) operation: Option<crate::operation::InProgress>,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -140,6 +142,7 @@ impl Tab {
             worktrees: Vec::new(),
             details_layout: DetailsLayout::default(),
             notice: None,
+            operation: None,
         }
     }
 
@@ -239,6 +242,7 @@ impl Tab {
         self.status = r.status();
         self.branch = r.current_branch();
         self.ahead_behind = r.ahead_behind();
+        self.read_operation();
         self.after_load();
         if let Some(h) = selected_hash {
             self.sel = self.index.get(&h).map(|&i| Sel::Commit(i)).unwrap_or(Sel::None);
@@ -256,6 +260,7 @@ impl Tab {
         if let Some(r) = &self.repo {
             self.status = r.status();
         }
+        self.read_operation();
         self.last_status = Instant::now();
     }
 
@@ -430,6 +435,7 @@ impl Tab {
                 }
             }
             Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
+            Cmd::Operation(a) => self.operation_run(a),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
@@ -751,7 +757,7 @@ mod tests {
 
     fn snapshot(label: &str) -> Snapshot {
         let state = crate::undo::State { head_branch: None, head_sha: String::new(), refs: vec![], stashes: vec![], operation: None };
-        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, written: None, worktrees: vec![], dirty: None, dirty_after: None, left: None }
+        Snapshot { label: label.into(), state, soft: false, worktree: None, trashed: None, written: None, worktrees: vec![], dirty: None, dirty_after: None, left: None, paused: None }
     }
 
     fn notice(t: &Tab) -> Option<(&str, bool)> {

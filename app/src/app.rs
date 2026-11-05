@@ -2,6 +2,7 @@ mod assistant;
 mod board;
 mod changelog;
 mod palette;
+mod operation;
 mod project;
 mod repos;
 mod settings;
@@ -63,6 +64,8 @@ pub enum Dialog {
     /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
     /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
+    /// "Do you want to abort the merge?" for the operation in progress (`Repo::operation`).
+    Abort { op: String },
 }
 
 pub enum Cmd {
@@ -73,6 +76,8 @@ pub enum Cmd {
     /// The Check out dialog's choice, run as one undo step.
     /// `merge`: how Merge joins the upstream (ignored by the other actions).
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool },
+    /// Abort, Continue or Skip the merge, rebase, cherry-pick or revert in progress.
+    Operation(crate::operation::Action),
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
@@ -382,6 +387,11 @@ impl App {
                 (*action, *merge) = (crate::checkout::SyncAction::Merge, wanted);
             }
         }
+        // FOURCHETTE_OPERATION=<merge|rebase|cherry-pick|revert>[,resolved] shows the banner of an
+        // operation stopped on conflicts (`,resolved`: all of them resolved).
+        if let Ok(v) = std::env::var("FOURCHETTE_OPERATION") {
+            t.operation = Some(crate::operation::sample(&v));
+        }
         // FOURCHETTE_DIALOG=<name> opens one of the dialogs on the sample project.
         if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
             t.dialog = sample_dialog(&v, &t.worktrees);
@@ -603,7 +613,7 @@ impl App {
 
 /// The dialog `FOURCHETTE_DIALOG` names, filled in as on the sample project: `confirm` (delete a
 /// tag), `rebase`, `branch`, `tag`, `delete-branch` (checked out in a worktree with changes, not
-/// merged), `delete-worktree` and `group`.
+/// merged), `delete-worktree`, `group` and `abort` (of `FOURCHETTE_OPERATION`'s, else a merge).
 fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<Dialog> {
     let wt = worktrees.iter().find(|w| !w.is_main).cloned();
     let confirm = |title: &str, message: &str, args: &[&str]| Dialog::Confirm {
@@ -623,6 +633,7 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
             Dialog::DeleteBranch { name, merged: false, force: false, worktree: wt, dirty: true, also_worktree: true }
         }
         "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
+        "abort" => Dialog::Abort { op: std::env::var("FOURCHETTE_OPERATION").map(|v| crate::operation::sample(&v).op).unwrap_or_else(|_| "merge".into()) },
         "group" => Dialog::NewGroup { path: PathBuf::from("/Users/me/dev/fourchette"), name: "Side projects".into() },
         _ => return None,
     })
