@@ -6,6 +6,7 @@ A Git client for macOS in Rust and egui: the history graph, branches, worktrees,
 
 - `app/`: the application (the only code). `app/MECHANICS.md` and `app/mechanics.json` hold the values measured in the original app, with their evidence ids; keep them in sync when one of those values changes.
 - `investigation.cany/`, `capture/`, `craft.json`, `attachments/`: what the rebuild tool found in the original app. Read them, never edit them by hand.
+- `site/`: the website, an Astro project published on GitHub Pages (<https://c2-poly.github.io/fourchette/>) by `.github/workflows/site.yml` on every push to `main` that touches it. English and French strings live in `site/src/i18n/`; its screenshots in `site/src/assets/shots/` come from the app's screenshot mode, in dark and light. Preview it with `npm install && npm run dev` from `site/`.
 - Git ignores the tool's working state (`feed.json`, `usage.json`, `build-activity.log`, `inbox/`, `pinned/`, `checks/`) and `app/target/`.
 
 ## Stack

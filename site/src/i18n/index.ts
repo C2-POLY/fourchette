@@ -1,0 +1,25 @@
+import en from './en';
+import fr from './fr';
+
+export type Lang = 'en' | 'fr';
+export const langs: Lang[] = ['en', 'fr'];
+const strings = { en, fr };
+
+export function t(lang: Lang) {
+  return strings[lang];
+}
+
+/** A page's path under the site's base, in `lang`: `page` is '' for the home page. */
+export function pagePath(lang: Lang, page = ''): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  return `${base}/${lang === 'en' ? '' : `${lang}/`}${page}`;
+}
+
+/** A file in public/, under the site's base. */
+export function asset(path: string): string {
+  return `${import.meta.env.BASE_URL.replace(/\/$/, '')}/${path}`;
+}
+
+export const repo = 'https://github.com/C2-POLY/fourchette';
+export const releases = 'https://github.com/C2-POLY/fourchette/releases';
+export const project = 'https://github.com/orgs/C2-POLY/projects/1';

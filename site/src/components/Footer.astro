@@ -1,0 +1,20 @@
+---
+import { type Lang, t, asset, repo } from '../i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const s = t(Astro.props.lang);
+---
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <span class="brand small">
+      <img src={asset('favicon.png')} alt="" width="20" height="20" />
+      <span>Fourchette</span>
+    </span>
+    <span class="dim">{s.footer.by} · <a href={`${repo}#license`}>{s.footer.licence}</a></span>
+    <a href={repo}>github.com/C2-POLY/fourchette</a>
+  </div>
+</footer>
