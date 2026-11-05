@@ -195,6 +195,8 @@ pub enum Cmd {
     InstallUpdate,
     /// Settings' "Check now": check for an update at once, unless a check is running.
     UpdateCheckNow,
+    /// The "What's new in Fourchette" dialog's OK.
+    CloseWhatsNew,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
 }
@@ -301,7 +303,8 @@ impl App {
         theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
         let mut app = App::with_library(library, screenshot);
         app.update = updater::UpdateState::new(app.screenshot.is_some());
-        // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release.
+        // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release;
+        // FOURCHETTE_WHATS_NEW=1 the dialog shown once after an update.
         app.update.apply_env();
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
@@ -508,7 +511,7 @@ impl App {
 
     /// A dialog takes the window: the tab's, or the update dialog.
     fn modal(&self) -> bool {
-        self.tab().dialog.is_some() || self.update.dialog
+        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some()
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -655,6 +658,7 @@ impl App {
                 Cmd::UpdateDialog(open) => self.update_dialog_open(open),
                 Cmd::InstallUpdate => self.update_install(ctx),
                 Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel),
+                Cmd::CloseWhatsNew => self.update.whats_new = None,
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);

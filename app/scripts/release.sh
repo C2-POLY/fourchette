@@ -2,6 +2,8 @@
 # Builds a universal Fourchette.app and a .dmg, ad hoc signed.
 # Without --publish, it only builds into app/target/release-bundle/.
 # With --publish, it creates or updates the GitHub pre-release v<version>.
+# With --notes, it builds nothing and only rewrites the notes of the existing release v<version>.
+# The notes come from release-notes.sh (preview them with `scripts/release-notes.sh`).
 set -euo pipefail
 
 # Resolve paths from this script's folder, so it runs from any cwd.
@@ -10,11 +12,13 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="C2-POLY/fourchette"
 DMGBUILD_VERSION="1.6.7"
 PUBLISH=0
+NOTES_ONLY=0
 
 case "${1:-}" in
   "") ;;
   --publish) PUBLISH=1 ;;
-  *) echo "usage: $0 [--publish]" >&2; exit 1 ;;
+  --notes) NOTES_ONLY=1 ;;
+  *) echo "usage: $0 [--publish | --notes]" >&2; exit 1 ;;
 esac
 
 cd "$APP_DIR"
@@ -26,6 +30,19 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 echo "Fourchette $VERSION"
+TAG="v$VERSION"
+
+# --notes: the release's notes from its tag's history, nothing built or uploaded.
+if [ "$NOTES_ONLY" -eq 1 ]; then
+  git -C "$APP_DIR" fetch origin --tags --force --quiet
+  gh release view "$TAG" --repo "$REPO" >/dev/null || { echo "error: no release $TAG on GitHub" >&2; exit 1; }
+  NOTES="$(mktemp -t fourchette-notes)"
+  trap 'rm -f "$NOTES"' EXIT
+  "$SCRIPT_DIR/release-notes.sh" "$VERSION" "$TAG^{commit}" > "$NOTES"
+  gh release edit "$TAG" --repo "$REPO" --notes-file "$NOTES"
+  echo "Updated the notes of release $TAG"
+  exit 0
+fi
 
 # Refuse to publish from a dirty tree or from a commit that is not origin/main.
 if [ "$PUBLISH" -eq 1 ]; then
@@ -39,7 +56,7 @@ if [ "$PUBLISH" -eq 1 ]; then
     exit 1
   fi
   git -C "$APP_DIR" fetch origin --tags --force --quiet
-  if [ "$(git -C "$APP_DIR" rev-parse "v$VERSION^{commit}" 2>/dev/null)" != "$(git -C "$APP_DIR" rev-parse HEAD)" ]; then
+  if [ "$(git -C "$APP_DIR" rev-parse "$TAG^{commit}" 2>/dev/null)" != "$(git -C "$APP_DIR" rev-parse HEAD)" ]; then
     echo "error: tag v$VERSION is not on main; move it first (see Versioning in CLAUDE.md)" >&2
     exit 1
   fi
@@ -90,9 +107,9 @@ if [ "$PUBLISH" -eq 0 ]; then
   exit 0
 fi
 
-# Publish or update the pre-release. The notes come from the script's folder.
-NOTES="$SCRIPT_DIR/release-notes.md"
-TAG="v$VERSION"
+# Publish or update the pre-release, with notes generated from the commits since the last version.
+NOTES="$OUT/release-notes.md"
+"$SCRIPT_DIR/release-notes.sh" "$VERSION" HEAD > "$NOTES"
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release upload "$TAG" "$DMG" --repo "$REPO" --clobber
   gh release edit "$TAG" --repo "$REPO" --notes-file "$NOTES"

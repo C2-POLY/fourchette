@@ -1,10 +1,13 @@
 //! Updates (issues #80 and #97): the check in the background, on the channel chosen in Settings,
 //! the toolbar's pill and the update dialog. The work itself is in `crate::update`; this side only
 //! polls its channels each frame and keeps the last check's outcome for the Settings section.
+//! Also "What's new" (#137): the items the release brings in the update dialog, and once after an
+//! update the "What's new in Fourchette" dialog.
 use super::*;
 use crate::settings::UpdateChannel;
-use crate::update::{self, Progress, Release, Version};
-use egui::{vec2, CornerRadius, Margin, RichText, Sense, Stroke};
+use crate::update::{self, NewsItem, Progress, Release, Section, Shown, Version};
+use egui::text::{LayoutJob, TextFormat};
+use egui::{pos2, vec2, CornerRadius, Margin, RichText, Sense, Stroke};
 use std::sync::mpsc::TryRecvError;
 
 type CheckResult = Result<Option<Release>, String>;
@@ -41,18 +44,26 @@ pub struct UpdateState {
     installing: Option<Receiver<Progress>>,
     /// The install's latest step; `Failed` stays shown in the dialog until it is closed.
     progress: Option<Progress>,
+    /// What the update just installed brought, shown once at launch until OK.
+    pub whats_new: Option<Shown>,
 }
 
 impl UpdateState {
     pub fn new(screenshot: bool) -> Self {
         let bundle = if screenshot { None } else { update::running_bundle() };
         let next_check = bundle.as_ref().map(|_| Instant::now());
-        UpdateState { bundle, next_check, ..Default::default() }
+        // Left by the install that relaunched this app; read once, then gone.
+        let whats_new = if screenshot { None } else { update::shown_file().and_then(|f| update::take_shown(&f, Version::current())) };
+        UpdateState { bundle, next_check, whats_new, ..Default::default() }
     }
 
     /// `FOURCHETTE_UPDATE=1` shows the pill with a sample release, `=dialog` also opens the
     /// dialog, `=downloading`, `=installing` and `=error` show the dialog at that step.
+    /// `FOURCHETTE_WHATS_NEW=1` shows the "What's new in Fourchette" dialog with sample items.
     pub fn apply_env(&mut self) {
+        if std::env::var("FOURCHETTE_WHATS_NEW").is_ok_and(|v| v == "1") {
+            self.whats_new = Some(update::sample_shown());
+        }
         let Ok(v) = std::env::var("FOURCHETTE_UPDATE") else { return };
         self.available = Some(update::sample());
         self.dialog = v != "1";
@@ -161,6 +172,13 @@ impl App {
         u.installing = None;
         match (&u.progress, &u.bundle) {
             (Some(Progress::Done), Some(bundle)) => {
+                // What the update brings, for the relaunched app to show once.
+                if let (Some(r), Some(file)) = (&u.available, update::shown_file()) {
+                    let news = r.news.as_deref().unwrap_or_default();
+                    if !news.is_empty() {
+                        let _ = update::save_shown(&file, r.version, news);
+                    }
+                }
                 if let Err(e) = update::relaunch_after_exit(bundle) {
                     u.progress = Some(Progress::Failed(format!("Fourchette is up to date but couldn't restart ({e}). Quit and open it again.")));
                     return;
@@ -245,14 +263,21 @@ impl App {
             Some(_) => frame.cancel(None).closable(false),
         };
         let out = frame.show(ctx, |ui| {
-            modal::caption(ui, "Release notes");
-            egui::Frame::new().fill(c.bg).stroke(Stroke::new(1.0_f32, c.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
-                egui::ScrollArea::vertical().max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
-                    let notes = update::plain_notes(&r.notes);
-                    let notes = if notes.is_empty() { "No notes for this release.".to_string() } else { notes };
-                    ui.label(RichText::new(notes).color(c.text));
-                });
-            });
+            match &r.news {
+                // The items this build lacks; the plain notes for a release without the section.
+                Some(news) => {
+                    modal::caption(ui, "What's new");
+                    news_box(ui, news, 220.0);
+                }
+                None => {
+                    modal::caption(ui, "Release notes");
+                    notes_box(ui, |ui| {
+                        let notes = update::plain_notes(&r.notes);
+                        let notes = if notes.is_empty() { "No notes for this release.".to_string() } else { notes };
+                        ui.label(RichText::new(notes).color(c.text));
+                    }, 220.0);
+                }
+            }
             match &u.progress {
                 Some(Progress::Downloading(f)) => progress_row(ui, &format!("Downloading… {:.0}%", f * 100.0), Some(*f)),
                 Some(Progress::Installing) => progress_row(ui, "Installing…", None),
@@ -277,6 +302,96 @@ impl App {
             cmds.push(Cmd::UpdateDialog(false));
         }
     }
+
+    /// Once after an update: what it brought, then OK.
+    pub(super) fn whats_new_dialog(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
+        use crate::modal::{pill, text, Hint, Modal, Width};
+        let Some(w) = &self.update.whats_new else { return };
+        let out = Modal::new("whats-new", Width::Medium, "tag", vec![text("What's new in Fourchette"), pill(w.version.to_string())])
+            .status(vec![text("Fourchette is up to date.")])
+            .hint(vec![Hint::Text("Every release's notes: Help, Release Notes".into())])
+            .cancel(None)
+            .primary("OK", false, true)
+            .show(ctx, |ui| news_box(ui, &w.items, 320.0));
+        if out.primary || out.close {
+            cmds.push(Cmd::CloseWhatsNew);
+        }
+    }
+}
+
+/// The framed, scrolling box the notes sit in.
+fn notes_box(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui), max_height: f32) {
+    let c = theme::c();
+    egui::Frame::new().fill(c.bg).stroke(Stroke::new(1.0_f32, c.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
+        egui::ScrollArea::vertical().max_height(max_height).auto_shrink([false, true]).show(ui, add);
+    });
+}
+
+/// "What's new": each section's label, then its items; a line when there is none.
+fn news_box(ui: &mut egui::Ui, news: &[NewsItem], max_height: f32) {
+    notes_box(
+        ui,
+        |ui| {
+            if news.is_empty() {
+                ui.label(RichText::new("Small fixes and internal changes.").color(theme::c().text));
+                return;
+            }
+            let mut first = true;
+            for s in Section::ALL {
+                let mut items = update::in_section(news, s).peekable();
+                if items.peek().is_none() {
+                    continue;
+                }
+                if !first {
+                    ui.add_space(10.0);
+                }
+                first = false;
+                section_label(ui, s);
+                ui.add_space(4.0);
+                for it in items {
+                    news_row(ui, it);
+                }
+            }
+        },
+        max_height,
+    );
+}
+
+/// A section's name as a small tinted pill: New in the accent, Fixed in green, Improved in amber.
+fn section_label(ui: &mut egui::Ui, s: Section) {
+    let c = theme::c();
+    let col = match s {
+        Section::New => c.accent_text,
+        Section::Fixed => c.added,
+        Section::Improved => c.modified,
+    };
+    let font = egui::FontId::proportional(theme::FS_SMALL);
+    let galley = ui.painter().layout_no_wrap(s.label().to_uppercase(), font, col);
+    let size = galley.size() + vec2(14.0, 6.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same((size.y / 2.0) as u8), theme::tint(col, c.bg, 0.16));
+    p.galley(rect.center() - galley.size() / 2.0, galley, col);
+}
+
+/// An item: a drawn bullet, its text wrapped to the box, and its pull request's number dimmed.
+fn news_row(ui: &mut egui::Ui, it: &NewsItem) {
+    const INDENT: f32 = 16.0;
+    let c = theme::c();
+    let font = theme::body();
+    let w = ui.available_width();
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = (w - INDENT).max(40.0);
+    job.append(&it.text, 0.0, TextFormat { font_id: font.clone(), color: c.text, ..Default::default() });
+    if let Some(n) = it.pr {
+        job.append(&format!("  #{n}"), 0.0, TextFormat { font_id: font.clone(), color: c.faint, ..Default::default() });
+    }
+    let galley = ui.fonts(|f| f.layout_job(job));
+    let line = ui.fonts(|f| f.row_height(&font));
+    let (rect, _) = ui.allocate_exact_size(vec2(w, galley.size().y + 2.0), Sense::hover());
+    let p = ui.painter();
+    p.circle_filled(pos2(rect.left() + 6.0, rect.top() + line / 2.0), 2.0, c.dim);
+    p.galley(rect.min + vec2(INDENT, 0.0), galley, c.text);
 }
 
 /// A step of the install: its text, and a bar for the download (a spinner otherwise).

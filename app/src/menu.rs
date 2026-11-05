@@ -43,6 +43,7 @@ pub enum Id {
     NewTag,
     ShowInFinder,
     OpenInTerminal,
+    ReleaseNotes,
     Website,
     Issues,
     NewTab,
@@ -52,7 +53,7 @@ pub enum Id {
 }
 
 impl Id {
-    pub const ALL: [Id; 36] = [
+    pub const ALL: [Id; 37] = [
         Id::About,
         Id::Settings,
         Id::OpenRepository,
@@ -83,6 +84,7 @@ impl Id {
         Id::NewTag,
         Id::ShowInFinder,
         Id::OpenInTerminal,
+        Id::ReleaseNotes,
         Id::Website,
         Id::Issues,
         Id::NewTab,
@@ -201,6 +203,11 @@ pub const APP_NAME: &str = "Fourchette";
 pub const REPO_URL: &str = "https://github.com/C2-POLY/fourchette";
 pub const ISSUES_URL: &str = "https://github.com/C2-POLY/fourchette/issues";
 
+/// Help › Release Notes: the GitHub release of this build's version.
+pub fn release_notes_url() -> String {
+    format!("{REPO_URL}/releases/tag/v{}", crate::update::VERSION)
+}
+
 fn app(title: &'static str, id: Id, key: Option<Shortcut>) -> Entry {
     Entry::Item { title, action: Action::App(id), key }
 }
@@ -309,7 +316,7 @@ pub fn bar() -> Vec<Menu> {
         },
         Menu {
             title: "Help",
-            entries: vec![app("Fourchette on GitHub", Id::Website, None), app("Report an Issue", Id::Issues, None)],
+            entries: vec![app("Release Notes", Id::ReleaseNotes, None), Separator, app("Fourchette on GitHub", Id::Website, None), app("Report an Issue", Id::Issues, None)],
         },
     ]
 }
@@ -347,7 +354,7 @@ pub fn enabled(id: Id, s: &State) -> bool {
     let overlay = free && !s.settings;
     let git = s.repo && !s.busy && free;
     match id {
-        Id::About | Id::Copy | Id::Website | Id::Issues => true,
+        Id::About | Id::Copy | Id::ReleaseNotes | Id::Website | Id::Issues => true,
         Id::Settings | Id::OpenRepository | Id::ToggleDetails | Id::DetailsRight | Id::DetailsBottom => free,
         Id::Switcher | Id::Palette => overlay,
         Id::NoRecent => false,
@@ -685,6 +692,13 @@ mod tests {
         assert_eq!(titles(&b[2]), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
         assert_eq!(titles(&b[1]), ["New Tab", "Open Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
         assert_eq!(titles(&b[5]), ["Minimize", "Zoom", "Show Previous Tab", "Show Next Tab", "Bring All to Front"]);
+        assert_eq!(titles(&b[6]), ["Release Notes", "Fourchette on GitHub", "Report an Issue"]);
+    }
+
+    #[test]
+    fn release_notes_open_this_versions_release() {
+        assert_eq!(release_notes_url(), format!("https://github.com/C2-POLY/fourchette/releases/tag/v{}", env!("CARGO_PKG_VERSION")));
+        assert!(enabled(Id::ReleaseNotes, &State { modal: true, ..State::default() }));
     }
 
     #[test]
@@ -764,7 +778,7 @@ mod tests {
             assert!(!enabled(id, &s), "{id:?}");
         }
         // Looking around the sample project still works.
-        for id in [Id::About, Id::Settings, Id::OpenRepository, Id::Switcher, Id::Palette, Id::ShowChanges, Id::ToggleDetails, Id::ShowHead, Id::Copy, Id::Website] {
+        for id in [Id::About, Id::Settings, Id::OpenRepository, Id::Switcher, Id::Palette, Id::ShowChanges, Id::ToggleDetails, Id::ShowHead, Id::Copy, Id::ReleaseNotes, Id::Website] {
             assert!(enabled(id, &s), "{id:?}");
         }
     }

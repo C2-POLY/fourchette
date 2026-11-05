@@ -5,6 +5,12 @@
 //! version built from another commit, since a day's version is published again after each merge.
 //! The install downloads the release's .dmg, checks its SHA-256, copies the app out of it next to
 //! the running one, then swaps the two by renaming, so a failure leaves the installed app as it was.
+//!
+//! What's new (#137): each release's notes carry a "What's new" section generated from the commit
+//! subjects (`scripts/release-notes.sh`). The check gathers it from every release at or above this
+//! version and keeps the items whose pull request this build doesn't hold, since a day's version
+//! is published again after each merge. After an install, those items are kept in
+//! `whats-new.json` and shown once at the next launch.
 use crate::settings::UpdateChannel;
 use serde_json::Value;
 use std::io::Read;
@@ -20,6 +26,11 @@ pub const COMMIT: &str = env!("FOURCHETTE_COMMIT");
 /// without Git still reads as one to the compiler and to Clippy.
 pub fn commit() -> Option<&'static str> {
     Some(COMMIT).filter(|c| !c.is_empty())
+}
+/// The pull requests this build holds (`build.rs`): comma-separated numbers, empty outside Git.
+pub const PRS: &str = env!("FOURCHETTE_PRS");
+pub fn prs() -> Vec<u32> {
+    PRS.split(',').filter_map(|n| n.trim().parse().ok()).collect()
 }
 /// A check at launch, then every hour.
 pub const CHECK_EVERY: Duration = Duration::from_secs(3600);
@@ -76,6 +87,173 @@ pub struct Release {
     pub sha256: Option<String>,
     /// The commit the tag points at, read by `check`.
     pub commit: String,
+    /// What this build doesn't have yet, from the "What's new" sections of the releases at or
+    /// above its version (`news_for`, filled by `check`). None when no release has the section:
+    /// the dialog then shows the plain notes.
+    pub news: Option<Vec<NewsItem>>,
+}
+
+/// The part of "What's new" an item sits in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Section {
+    New,
+    Fixed,
+    Improved,
+}
+
+impl Section {
+    pub const ALL: [Section; 3] = [Section::New, Section::Fixed, Section::Improved];
+
+    /// The heading in the notes and the label in the dialog.
+    pub fn label(self) -> &'static str {
+        match self {
+            Section::New => "New",
+            Section::Fixed => "Fixed",
+            Section::Improved => "Improved",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Section> {
+        Section::ALL.into_iter().find(|x| x.label().eq_ignore_ascii_case(s.trim()))
+    }
+}
+
+/// One line of "What's new": its text without the pull request, and that pull request's number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewsItem {
+    pub section: Section,
+    pub text: String,
+    pub pr: Option<u32>,
+}
+
+/// `Show a diff (#136)` → ("Show a diff", Some(136)); a text without `(#n)` at its end is kept whole.
+pub fn split_pr(s: &str) -> (String, Option<u32>) {
+    let s = s.trim();
+    let found = s.strip_suffix(')').and_then(|r| r.rsplit_once("(#")).and_then(|(text, n)| Some((text.trim_end(), n.parse::<u32>().ok()?)));
+    match found {
+        Some((text, n)) => (text.to_string(), Some(n)),
+        None => (s.to_string(), None),
+    }
+}
+
+/// The items of a release body's "What's new" section (a `#` or `##` heading), under its `###`
+/// headings New, Fixed and Improved (items before them, or under another heading, count as New).
+/// The section ends at the next `#` or `##` heading. None when the body has no such section.
+pub fn parse_news(md: &str) -> Option<Vec<NewsItem>> {
+    let mut found = false;
+    let mut inside = false;
+    let mut section = Section::New;
+    let mut items = Vec::new();
+    for line in md.lines() {
+        let t = line.trim();
+        let level = t.bytes().take_while(|&b| b == b'#').count();
+        if level > 0 && t[level..].starts_with(' ') {
+            let title = t[level..].trim();
+            if level <= 2 {
+                inside = title.replace('\u{2019}', "'").eq_ignore_ascii_case("what's new");
+                found |= inside;
+                section = Section::New;
+            } else if inside {
+                section = Section::parse(title).unwrap_or(Section::New);
+            }
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        if let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
+            let (text, pr) = split_pr(&rest.replace("**", "").replace('`', ""));
+            if !text.is_empty() {
+                items.push(NewsItem { section, text, pr });
+            }
+        }
+    }
+    found.then_some(items)
+}
+
+/// What a build of `current` holding the pull requests `build_prs` doesn't have yet, from the
+/// releases of its channel: the "What's new" items of every release at or above `current`
+/// (versions skipped included), newest release first, each pull request once. An item is new
+/// when its pull request isn't in the build and isn't older than all of the build's (the build
+/// only lists its last 500 commits); an item without a number only when its release's version
+/// is above the build's, since a same-version item may be in it already. A build without pull
+/// requests (made outside Git) gets every item. None when no release has the section.
+pub fn news_for(releases: &[Release], current: Version, build_prs: &[u32]) -> Option<Vec<NewsItem>> {
+    let mut rs: Vec<&Release> = releases.iter().filter(|r| r.version >= current).collect();
+    rs.sort_by_key(|r| std::cmp::Reverse(r.version));
+    let oldest = build_prs.iter().min().copied();
+    let mut found = false;
+    let mut out: Vec<NewsItem> = Vec::new();
+    for r in rs {
+        let Some(items) = parse_news(&r.notes) else { continue };
+        found = true;
+        for it in items {
+            let new = match (it.pr, oldest) {
+                (_, None) => true,
+                (Some(n), Some(low)) => n > low && !build_prs.contains(&n),
+                (None, Some(_)) => r.version > current,
+            };
+            let seen = out.iter().any(|o| match (o.pr, it.pr) {
+                (Some(a), Some(b)) => a == b,
+                (None, None) => o.text == it.text,
+                _ => false,
+            });
+            if new && !seen {
+                out.push(it);
+            }
+        }
+    }
+    found.then_some(out)
+}
+
+/// The items of `news` in `section`, in their order.
+pub fn in_section(news: &[NewsItem], section: Section) -> impl Iterator<Item = &NewsItem> {
+    news.iter().filter(move |n| n.section == section)
+}
+
+// ---------------------------------------------------------------- what's new after an update
+
+/// What an update brought, kept from the install to the next launch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shown {
+    pub version: Version,
+    pub items: Vec<NewsItem>,
+}
+
+/// `whats-new.json`, next to repos.json.
+pub fn shown_file() -> Option<PathBuf> {
+    crate::library::support_dir().map(|d| d.join("whats-new.json"))
+}
+
+/// Writes what the update brings, for the next launch to show.
+pub fn save_shown(file: &Path, version: Version, items: &[NewsItem]) -> std::io::Result<()> {
+    let items: Vec<Value> = items.iter().map(|i| serde_json::json!({"section": i.section.label(), "text": i.text, "pr": i.pr})).collect();
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(file, serde_json::to_string_pretty(&serde_json::json!({"version": version.to_string(), "items": items}))?)
+}
+
+/// Reads and removes the file `save_shown` wrote, so it shows once. None when there is none,
+/// when it is unreadable or empty, or when it was written for another version than `current`
+/// (the install didn't take, or another copy of the app was opened).
+pub fn take_shown(file: &Path, current: Version) -> Option<Shown> {
+    let s = std::fs::read_to_string(file).ok()?;
+    let _ = std::fs::remove_file(file);
+    let v: Value = serde_json::from_str(&s).ok()?;
+    let version = Version::parse(v["version"].as_str()?)?;
+    let items: Vec<NewsItem> = v["items"]
+        .as_array()?
+        .iter()
+        .filter_map(|i| {
+            Some(NewsItem {
+                section: Section::parse(i["section"].as_str()?)?,
+                text: i["text"].as_str()?.to_string(),
+                pr: i["pr"].as_u64().and_then(|n| u32::try_from(n).ok()),
+            })
+        })
+        .collect();
+    (version == current && !items.is_empty()).then_some(Shown { version, items })
 }
 
 /// `"sha256:<64 hex>"` → the lowercase hex.
@@ -109,6 +287,7 @@ pub fn parse_releases(v: &Value) -> Vec<Release> {
                 dmg_size: dmg.get("size").and_then(Value::as_u64).unwrap_or(0),
                 sha256: dmg.get("digest").and_then(Value::as_str).and_then(parse_digest),
                 commit: String::new(),
+                news: None,
             })
         })
         .filter(|r| !r.dmg_url.is_empty())
@@ -116,9 +295,15 @@ pub fn parse_releases(v: &Value) -> Vec<Release> {
 }
 
 /// The release with the highest version on `channel`: in Stable, pre-releases are left out even
-/// when they are higher; in Pre-release, every kind counts.
+/// when they are higher; in Pre-release, every kind counts. (`check` does the same on its list.)
+#[cfg(test)]
 pub fn latest(v: &Value, channel: UpdateChannel) -> Option<Release> {
-    parse_releases(v).into_iter().filter(|r| channel == UpdateChannel::Prerelease || !r.prerelease).max_by_key(|r| r.version)
+    on_channel(v, channel).into_iter().max_by_key(|r| r.version)
+}
+
+/// The installable releases `channel` offers: in Stable, the full releases only.
+pub fn on_channel(v: &Value, channel: UpdateChannel) -> Vec<Release> {
+    parse_releases(v).into_iter().filter(|r| channel == UpdateChannel::Prerelease || !r.prerelease).collect()
 }
 
 /// What `GET /repos/{repo}/git/ref/tags/{tag}` (or `git/tags/{sha}`) points at: `(sha, type)`,
@@ -196,10 +381,13 @@ fn tag_commit(tag: &str) -> Result<String, String> {
 }
 
 /// The newest release of `channel` when it is newer than this build, None when this build is up
-/// to date. Runs on a background thread; an error (no network, rate limit) is shown in Settings.
+/// to date, with what it brings (`news_for`). Runs on a background thread; an error (no network,
+/// rate limit) is shown in Settings.
 pub fn check(channel: UpdateChannel) -> Result<Option<Release>, String> {
-    let Some(mut r) = latest(&api("releases?per_page=20")?, channel) else { return Ok(None) };
+    let all = on_channel(&api("releases?per_page=20")?, channel);
+    let Some(mut r) = all.iter().max_by_key(|r| r.version).cloned() else { return Ok(None) };
     r.commit = tag_commit(&r.tag)?;
+    r.news = news_for(&all, Version::current(), &prs());
     Ok(is_newer(r.version, &r.commit, Version::current(), COMMIT).then_some(r))
 }
 
@@ -380,17 +568,24 @@ pub fn relaunch_after_exit(bundle: &Path) -> std::io::Result<()> {
 /// A release to show the pill and the dialog in screenshots (`FOURCHETTE_UPDATE`).
 pub fn sample() -> Release {
     let v = Version::current();
+    let notes = "A Git client for macOS: history graph, branches, worktrees, stashes, undo for every local action, a Claude assistant and the GitHub project of the open repository.\n\n## What's new\n\n### New\n\n- Show a file's diff side by side or whole, with a ruler of where the changes are (#136)\n- Show the local changes as a tree of folders, with a List / Tree switch above the lists, and stage or unstage a whole folder from its row (#134)\n- Merge a local branch and its remote branch into one pill, with drawn icons (#132)\n\n### Fixed\n\n- Keep branch names readable next to the PR badge and tracking (#131)\n\n## Install\n\n1. Open `Fourchette-<version>.dmg`.\n2. Drag Fourchette to Applications.\n\n## Requirements\n\n- `git` (Xcode Command Line Tools).";
     Release {
         tag: format!("v{}.{}.0", v.0, v.1 + 1),
         version: Version(v.0, v.1 + 1, 0),
         prerelease: true,
-        notes: "# Fourchette\n\nA Git client for macOS: history graph, branches, worktrees, stashes, undo for every local action, a Claude assistant and the GitHub project of the open repository.\n\n## What's new\n\n- Update Fourchette from the toolbar in one click.\n- **Settings**: choose the interface and code fonts.\n- Check out a branch by double-clicking its label in the graph.\n\n## Requirements\n\n- `git` (Xcode Command Line Tools).\n- `gh` (optional, for the GitHub project).\n- `claude` (optional, for the assistant).\n- Apple Silicon or Intel, macOS 11 or later.".into(),
+        news: parse_news(notes),
+        notes: notes.into(),
         page: format!("https://github.com/{REPO}/releases"),
         dmg_url: String::new(),
         dmg_size: 12_143_632,
         sha256: None,
         commit: "7481beae6a3715b1e55570f72ca7ff9094c58205".into(),
     }
+}
+
+/// What an update brought, for `FOURCHETTE_WHATS_NEW` screenshots.
+pub fn sample_shown() -> Shown {
+    Shown { version: Version::current(), items: sample().news.unwrap_or_default() }
 }
 
 /// Release notes as plain text: Markdown headings, bold and code marks taken out, list items
@@ -557,6 +752,184 @@ mod tests {
         assert_eq!(plain_notes(""), "");
     }
 
+    #[test]
+    fn splits_the_pull_request_off() {
+        assert_eq!(split_pr("Show a diff (#136)"), ("Show a diff".into(), Some(136)));
+        assert_eq!(split_pr("  Show a diff   (#7) "), ("Show a diff".into(), Some(7)));
+        assert_eq!(split_pr("Show a diff"), ("Show a diff".into(), None));
+        assert_eq!(split_pr("Fix (#12) in the middle"), ("Fix (#12) in the middle".into(), None));
+        assert_eq!(split_pr("Odd (#x)"), ("Odd (#x)".into(), None));
+        assert_eq!(split_pr("Two (#3) (#4)"), ("Two (#3)".into(), Some(4)));
+    }
+
+    const NOTES: &str = "A Git client.\n\n## What's new\n\n### New\n\n- Show a **diff** side by side (#136)\n- Tree of `folders` (#134)\n\n### Fixed\n\n- Readable names (#131)\n- Pushed straight to main\n\n### Improved\n\n* Faster graph (#133)\n\n## Install\n\n- Open the dmg (#1)\n";
+
+    fn item(section: Section, text: &str, pr: Option<u32>) -> NewsItem {
+        NewsItem { section, text: text.into(), pr }
+    }
+
+    #[test]
+    fn reads_the_whats_new_section() {
+        let news = parse_news(NOTES).unwrap();
+        assert_eq!(
+            news,
+            [
+                item(Section::New, "Show a diff side by side", Some(136)),
+                item(Section::New, "Tree of folders", Some(134)),
+                item(Section::Fixed, "Readable names", Some(131)),
+                item(Section::Fixed, "Pushed straight to main", None),
+                item(Section::Improved, "Faster graph", Some(133)),
+            ],
+            "the Install list after it is left out"
+        );
+        assert_eq!(in_section(&news, Section::Fixed).count(), 2);
+        // No section: None, so the dialog shows the plain notes.
+        assert_eq!(parse_news("# Fourchette\n\n## Requirements\n\n- git (#2)"), None);
+        assert_eq!(parse_news(""), None);
+        // A section with nothing in it.
+        assert_eq!(parse_news("## What's new\n\nSmall fixes and internal changes.\n\n## Install\n"), Some(vec![]));
+        // A curly apostrophe, another case, a top-level heading, items before any ### and
+        // under an unknown one count as New.
+        let loose = "# What\u{2019}s New\n- First (#5)\n### Other\n- Second (#6)\n#### Fixed\n- Third (#7)\n#Not a heading\n- Fourth";
+        let got = parse_news(loose).unwrap();
+        assert_eq!(got.iter().map(|i| (i.section, i.pr)).collect::<Vec<_>>(), [(Section::New, Some(5)), (Section::New, Some(6)), (Section::Fixed, Some(7)), (Section::Fixed, None)]);
+    }
+
+    fn rel(version: Version, notes: &str) -> Release {
+        Release { tag: format!("v{version}"), version, notes: notes.into(), ..sample() }
+    }
+
+    fn prs_of(news: &[NewsItem]) -> Vec<Option<u32>> {
+        news.iter().map(|n| n.pr).collect()
+    }
+
+    #[test]
+    fn news_is_what_the_build_lacks() {
+        let v2 = Version(0, 2, 0);
+        let today = rel(v2, NOTES);
+        // A build of the same version with #131 and #134: #136 and #133 are new; the item
+        // without a number may already be in it, so it is left out.
+        let got = news_for(std::slice::from_ref(&today), v2, &[120, 131, 134]).unwrap();
+        assert_eq!(prs_of(&got), [Some(136), Some(133)]);
+        // Merged out of order: #133 merged after #134, so a build holding #134 still lacks it,
+        // and a build with every one of them lacks nothing.
+        assert_eq!(prs_of(&news_for(std::slice::from_ref(&today), v2, &[134, 131, 120]).unwrap()), [Some(136), Some(133)]);
+        assert_eq!(news_for(std::slice::from_ref(&today), v2, &[136, 134, 133, 131]), Some(vec![]));
+        // Older than every pull request the build lists (its last 500 commits): held.
+        assert_eq!(prs_of(&news_for(std::slice::from_ref(&today), v2, &[135, 140]).unwrap()), [Some(136)]);
+        // A build made outside Git gets everything.
+        assert_eq!(news_for(std::slice::from_ref(&today), v2, &[]).unwrap().len(), 5);
+    }
+
+    #[test]
+    fn news_gathers_skipped_versions() {
+        let (v1, v2, v3) = (Version(0, 1, 0), Version(0, 2, 0), Version(0, 3, 0));
+        let releases = [
+            rel(v1, "## What's new\n\n### New\n\n- Old (#10)\n"),
+            rel(v3, "## What's new\n\n### New\n\n- Third (#150)\n\n### Fixed\n\n- Hotfix on main\n- Also in 0.2.0 (#136)\n"),
+            rel(v2, NOTES),
+        ];
+        // From 0.2.0 with #131 and #134: 0.3.0's items first (the item without a number is in a
+        // higher version, so new), then 0.2.0's, #136 once; 0.1.0 is below the build.
+        let got = news_for(&releases, v2, &[131, 134]).unwrap();
+        assert_eq!(prs_of(&got), [Some(150), None, Some(136), Some(133)]);
+        assert_eq!(got[1].text, "Hotfix on main");
+        assert_eq!(got[2].section, Section::Fixed, "the newest release's wording wins");
+        // A release without the section is skipped; none with it gives None.
+        let old_style = [rel(v2, "# Fourchette\n\n## Requirements\n"), rel(v3, "## What's new\n\n- Third (#150)\n")];
+        assert_eq!(prs_of(&news_for(&old_style, v2, &[131]).unwrap()), [Some(150)]);
+        assert_eq!(news_for(&old_style[..1], v2, &[131]), None);
+        assert_eq!(news_for(&[], v2, &[131]), None);
+    }
+
+    #[test]
+    fn the_build_lists_its_pull_requests() {
+        // build.rs reads the commits; under Git the list holds this branch's merged pull requests.
+        if commit().is_some() {
+            assert!(!prs().is_empty(), "{PRS}");
+        }
+        assert!(PRS.split(',').all(|n| n.is_empty() || n.parse::<u32>().is_ok()));
+    }
+
+    #[test]
+    fn whats_new_after_an_update_shows_once() {
+        let tmp = fresh_temp_dir().unwrap();
+        let file = tmp.0.join("support/whats-new.json");
+        let v = Version(0, 3, 0);
+        let items = parse_news(NOTES).unwrap();
+        save_shown(&file, v, &items).unwrap();
+        assert_eq!(take_shown(&file, v), Some(Shown { version: v, items }));
+        assert!(!file.exists(), "removed once read");
+        assert_eq!(take_shown(&file, v), None);
+        // Written for another version: dropped.
+        save_shown(&file, v, &parse_news(NOTES).unwrap()).unwrap();
+        assert_eq!(take_shown(&file, Version(0, 2, 0)), None);
+        assert!(!file.exists());
+        // Nothing to show, or a damaged file.
+        save_shown(&file, v, &[]).unwrap();
+        assert_eq!(take_shown(&file, v), None);
+        std::fs::write(&file, "{").unwrap();
+        assert_eq!(take_shown(&file, v), None);
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn the_sample_has_news() {
+        let s = sample();
+        assert_eq!(s.news.as_ref().map(Vec::len), Some(4));
+        assert_eq!(sample_shown().items.len(), 4);
+    }
+
+    /// scripts/release-notes.sh on a repository made here: the app reads back what it writes.
+    #[test]
+    fn the_generated_notes_read_back() {
+        let tmp = fresh_temp_dir().unwrap();
+        let git = |args: &[&str]| {
+            let out = Command::new("git").current_dir(&tmp.0).args(["-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"]).args(args).output().unwrap();
+            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        };
+        git(&["init", "-q"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "feat(old): before the last version (#1)"]);
+        git(&["tag", "v0.1.0"]);
+        git(&["tag", "v0.3.0"]);
+        for subject in [
+            "feat(diff): show a diff side by side (#20)",
+            "fix(sidebar): keep names readable (#21)",
+            "perf(graph)!: lay out the graph faster (#22)",
+            "refactor(theme): remove the variants (#23)",
+            "feat(site): add a page (#24)",
+            "chore: tidy (#25)",
+            "docs(readme): explain (#26)",
+            "Merge branch 'x'",
+            "fix: straight on main",
+        ] {
+            git(&["commit", "-q", "--allow-empty", "-m", subject]);
+        }
+        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/release-notes.sh");
+        let out = Command::new(&script).current_dir(&tmp.0).args(["0.2.0", "HEAD"]).output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let md = String::from_utf8(out.stdout).unwrap();
+        assert!(md.starts_with("A Git client for macOS"), "{md}");
+        assert!(md.contains("## Install") && md.contains("## Requirements"), "{md}");
+        assert_eq!(
+            parse_news(&md).unwrap(),
+            [
+                item(Section::New, "Show a diff side by side", Some(20)),
+                item(Section::Fixed, "Straight on main", None),
+                item(Section::Fixed, "Keep names readable", Some(21)),
+                item(Section::Improved, "Lay out the graph faster", Some(22)),
+            ],
+            "{md}"
+        );
+        // Nothing worth telling: the section says so, and holds no item.
+        git(&["tag", "v0.2.0"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "chore: tidy again (#27)"]);
+        let out = Command::new(&script).current_dir(&tmp.0).args(["0.2.1"]).output().unwrap();
+        let md = String::from_utf8(out.stdout).unwrap();
+        assert!(md.contains("Small fixes and internal changes."), "{md}");
+        assert_eq!(parse_news(&md), Some(vec![]));
+    }
+
     /// The whole install against a disk image made here and read through a file:// URL: the
     /// app in place is replaced, a bad checksum leaves it untouched. Offline, but hdiutil takes
     /// about ten seconds, so it runs on its own: `cargo test installs_from -- --ignored`.
@@ -592,6 +965,7 @@ mod tests {
             dmg_size: std::fs::metadata(&dmg).unwrap().len(),
             sha256: Some("0".repeat(64)),
             commit: String::new(),
+            news: None,
         };
         let marker = || std::fs::read_to_string(installed.join("Contents/Resources/marker")).unwrap();
         let siblings = || std::fs::read_dir(installed.parent().unwrap()).unwrap().count();

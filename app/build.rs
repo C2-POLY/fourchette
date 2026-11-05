@@ -2,7 +2,9 @@
 //! its capital) when the app runs straight from `target/`, outside an .app bundle.
 //!
 //! Also embeds the commit the app is built from as `FOURCHETTE_COMMIT` (empty outside a Git
-//! checkout), so the update check can tell two builds of the same version apart.
+//! checkout), so the update check can tell two builds of the same version apart, and the pull
+//! requests it holds as `FOURCHETTE_PRS`: the `(#n)` ending each of the last 500 commit subjects
+//! (squash merges), comma-separated, so the update dialog shows only what this build lacks.
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -16,6 +18,9 @@ fn main() {
 
     let commit = git(dir, &["rev-parse", "HEAD"]).unwrap_or_default();
     println!("cargo:rustc-env=FOURCHETTE_COMMIT={commit}");
+    let subjects = git(dir, &["log", "-n", "500", "--format=%s", "HEAD"]).unwrap_or_default();
+    let prs: Vec<String> = subjects.lines().filter_map(trailing_pr).map(|n| n.to_string()).collect();
+    println!("cargo:rustc-env=FOURCHETTE_PRS={}", prs.join(","));
     // Build again when HEAD moves: a checkout changes HEAD, a commit changes the branch's ref
     // (a loose file, or packed-refs once packed). Only files that exist are watched, since
     // cargo reruns the script every time for a missing one.
@@ -41,4 +46,11 @@ fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git").current_dir(dir).args(args).output().ok()?;
     let s = String::from_utf8(out.stdout).ok()?.trim().to_string();
     (out.status.success() && !s.is_empty()).then_some(s)
+}
+
+/// The pull request number a squash merge's subject ends with: `feat(x): y (#12)` gives 12.
+fn trailing_pr(subject: &str) -> Option<u32> {
+    let s = subject.trim_end().strip_suffix(')')?;
+    let (_, n) = s.rsplit_once("(#")?;
+    n.parse().ok()
 }
