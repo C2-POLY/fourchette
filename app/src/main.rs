@@ -9,6 +9,7 @@ mod graph;
 mod icon;
 mod library;
 mod menu;
+mod merge;
 mod modal;
 mod preview;
 mod pull;

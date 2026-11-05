@@ -42,6 +42,8 @@ const FIRST_WAIT: f64 = 0.25;
 pub enum Outcome {
     FastForward,
     Merge,
+    /// A merge commit even though the branch has nothing of its own (`merge --no-ff`).
+    NoFastForward,
     /// One new single-parent commit with the upstream's changes.
     Squash,
     Rebase,
@@ -50,7 +52,7 @@ pub enum Outcome {
 }
 
 impl Outcome {
-    pub const ALL: [Outcome; 6] = [Outcome::FastForward, Outcome::Merge, Outcome::Squash, Outcome::Rebase, Outcome::Reset, Outcome::Stay];
+    pub const ALL: [Outcome; 7] = [Outcome::FastForward, Outcome::Merge, Outcome::NoFastForward, Outcome::Squash, Outcome::Rebase, Outcome::Reset, Outcome::Stay];
 
     pub fn of(a: SyncAction, m: MergeStyle) -> Self {
         match a {
@@ -154,6 +156,27 @@ impl Preview {
         Self::new(&sync.branch, &sync.upstream, sync.ahead, sync.behind, Outcome::of(action, merge))
     }
 
+    /// The Merge dialog's: `branch` merged into the checked-out `head`, which has `ours` commits
+    /// of its own; `branch` has `theirs`. The merged branch is drawn as the upstream is, its
+    /// commits and label in that colour, and `head` is checked out in both scenes.
+    pub fn merge(head: &str, branch: &str, ours: usize, theirs: usize, outcome: Outcome) -> Self {
+        let mut p = Self::new(head, branch, ours, theirs, outcome);
+        let theirs_msg = format!("Commit on {branch}");
+        let ours_msg = format!("Commit on {head}");
+        for c in p.before.commits.iter_mut().chain(p.after.commits.iter_mut()) {
+            if (100..200).contains(&c.id) {
+                c.message = theirs_msg.clone();
+            } else if (200..300).contains(&c.id) {
+                c.message = ours_msg.clone();
+            }
+        }
+        p.before.head = p.before.labels.first().map(|l| l.at);
+        // As tall as its tallest merge, not a rebase this dialog never shows.
+        let merges = [Outcome::FastForward, Outcome::Merge, Outcome::NoFastForward, Outcome::Squash];
+        p.rows = merges.iter().map(|o| Self::scenes(head, branch, ours, theirs, *o).1.rows()).chain([p.before.rows()]).max().unwrap_or(MAX_ROWS);
+        p
+    }
+
     /// `ahead` commits only the branch has, `behind` only its upstream has.
     pub fn new(branch: &str, upstream: &str, ahead: usize, behind: usize, outcome: Outcome) -> Self {
         let (before, after) = Self::scenes(branch, upstream, ahead, behind, outcome);
@@ -215,7 +238,7 @@ impl Preview {
                 after.labels[0].at = SQUASH;
                 after.head = Some(SQUASH);
             }
-            Outcome::Merge => {
+            Outcome::Merge | Outcome::NoFastForward => {
                 // A merge commit joins both at the top; everything else moves one row down.
                 for c in after.commits.iter_mut() {
                     c.row += 1;
@@ -715,6 +738,31 @@ mod tests {
         let mid = blend_head(Some(end), &rebased.after, 0.5).unwrap();
         assert_eq!(mid.vis, 1.0);
         assert_eq!(blend_head(Some(end), &p.before, 1.0), None);
+    }
+
+    #[test]
+    fn no_fast_forward_makes_a_merge_commit_even_without_commits_of_its_own() {
+        let p = Preview::new("main", "feature", 0, 3, Outcome::NoFastForward);
+        let m = p.after.commit(MERGE).unwrap();
+        assert!(m.merge && m.row == 0);
+        assert_eq!(m.parents, vec![BASE, up(0)]);
+        assert_eq!(names(&p.after), vec![("main", MERGE), ("feature", up(0))]);
+        // Diverged, it is the same as a merge.
+        assert_eq!(diverged(Outcome::NoFastForward), diverged(Outcome::Merge));
+    }
+
+    #[test]
+    fn the_merge_preview_names_both_branches_and_starts_checked_out() {
+        let p = Preview::merge("main", "feature", 2, 3, Outcome::Merge);
+        assert_eq!(p.before.commit(up(0)).unwrap().message, "Commit on feature");
+        assert_eq!(p.after.commit(mine(0)).unwrap().message, "Commit on main");
+        assert_eq!(p.after.commit(MERGE).unwrap().message, "Merge feature into main");
+        assert_eq!(p.before.head, Some(mine(0)));
+        assert_eq!(p.after.head, Some(MERGE));
+        assert_eq!(Preview::merge("main", "feature", 0, 3, Outcome::FastForward).before.head, Some(BASE));
+        // Sized for its merges only: diverged, a merge commit on top of both sides.
+        assert_eq!(p.rows, 2 * SIDE + 2);
+        assert_eq!(Preview::merge("main", "feature", 0, 3, Outcome::FastForward).rows, SIDE + 2);
     }
 
     #[test]

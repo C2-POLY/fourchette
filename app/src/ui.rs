@@ -722,8 +722,8 @@ pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], work
         }
     }
     if !b.is_head && !current.is_empty() {
-        if ui.button(format!("Merge {} into {}", b.name, current)).clicked() {
-            cmds.push(Cmd::Git { label: format!("Merged {}", b.name), args: vec!["merge".into(), "--no-edit".into(), b.name.clone()], network: false });
+        if ui.button(format!("Merge {} into {}…", b.name, current)).clicked() {
+            cmds.push(Cmd::AskMerge { name: b.name.clone(), remote: false });
         }
         if ui.button(format!("Rebase {} onto {}", current, b.name)).clicked() {
             cmds.push(Cmd::Dialog(Dialog::Confirm {

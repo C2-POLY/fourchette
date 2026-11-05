@@ -470,6 +470,8 @@ impl Tab {
                 }
             }
             Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
+            Cmd::AskMerge { name, remote } => self.ask_merge(&name, remote),
+            Cmd::Merge { merge, way } => self.merge(&merge, way),
             Cmd::PullFrom { source, args } => self.pull_with(ctx, source, args),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
@@ -656,6 +658,53 @@ impl Tab {
             Err(e) => self.notify(e, true),
         }
         // Several Git steps ran as one: the toast offers to take them all back while it shows.
+        if let Some(n) = &mut self.notice {
+            n.undo = self.undo.len() > steps;
+        }
+    }
+
+    /// Opens the Merge dialog for `name`, and starts the conflict check in a thread (none for a
+    /// fast-forward, which cannot conflict).
+    fn ask_merge(&mut self, name: &str, remote: bool) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        match crate::merge::Merge::read(r, name, remote) {
+            Ok(merge) => {
+                use crate::merge::{Check, Test};
+                let check = if merge.up_to_date() || merge.can_fast_forward() { Check::done(Test::Clean) } else { Check::start(r.root.clone(), name.to_string()) };
+                self.dialog = Some(Dialog::Merge { merge, style: Default::default(), no_ff: false, check });
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// The Merge dialog's choice under one snapshot. A merge stopped on conflicts is kept too
+    /// (Undo aborts it); a squash stopped on conflicts as well, though `record` cannot see it.
+    fn merge(&mut self, merge: &crate::merge::Merge, way: crate::merge::Way) {
+        let Some(r) = &self.repo else { return };
+        if self.busy.is_some() {
+            self.notify("Please wait for the current operation to finish.", true);
+            return;
+        }
+        let snap = r.snapshot(&merge.title(way), false, false);
+        let res = crate::merge::run(r, merge, way);
+        let squash_stopped = way == crate::merge::Way::Squash && r.operation().is_none() && !r.conflicted_files().is_empty();
+        let steps = self.undo.len();
+        if squash_stopped {
+            let mut snap = snap;
+            r.after(&mut snap);
+            snap.left = Some(crate::undo::SQUASH.into());
+            self.push_undo(snap);
+        } else {
+            self.record(Some(snap));
+        }
+        self.reload();
+        match res {
+            Ok(msg) => self.notify(msg, false),
+            Err(e) => self.notify(e, true),
+        }
         if let Some(n) = &mut self.notice {
             n.undo = self.undo.len() > steps;
         }

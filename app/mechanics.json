@@ -56,6 +56,8 @@
     {"name": "pull rebases by default", "group": "settings", "value": false, "source": "function 0x10031b7cc"},
     {"name": "pull stashes and reapplies by default", "group": "settings", "value": false, "source": "function 0x10031b7cc"},
     {"name": "pull command", "group": "git", "value": "pull --no-edit --no-rebase|--rebase [--autostash] <remote> <branch>", "estimated": true},
+    {"name": "merge no fast-forward flag", "group": "git", "value": "--no-ff", "source": "MergeWindowController.nib noFastForwardCheckBox, ev_12829593"},
+    {"name": "merge conflict check", "group": "git", "value": "merge-tree --write-tree --name-only --no-messages HEAD <branch>", "source": "MergeTestGitCommand.swift, ev_9be9b63c; the command is the rebuild's", "estimated": true},
     {"name": "row height", "group": "layout", "value": 28, "unit": "px", "estimated": true},
     {"name": "undo depth", "group": "new features", "value": 30, "unit": "actions", "source": "new feature (person's request for an edge)"},
     {"name": "undo a commit keeps changes staged", "group": "new features", "value": true, "source": "new feature (person's request for an edge)"},

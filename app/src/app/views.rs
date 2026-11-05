@@ -230,8 +230,8 @@ impl Tab {
                             if ui.button("Check out").clicked() {
                                 cmds.push(checkout_remote(r));
                             }
-                            if ui.button(format!("Merge {} into current branch", r.name)).clicked() {
-                                cmds.push(Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false });
+                            if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
+                                cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
                             }
                             if ui.button("Copy name").clicked() {
                                 cmds.push(Cmd::Copy(r.name.clone()));
@@ -1197,6 +1197,103 @@ impl Tab {
                 }
                 out.primary || out.close
             }
+            Some(Dialog::Merge { merge, style, no_ff, check }) => {
+                // The original's MergeWindowController: the branch, Merge commit or Squash, "No
+                // fast-forward", and MergeTestGitCommand's answer before anything is run. Laid
+                // out like the Check out dialog: the result's title and Now / After, the styles
+                // beside the animated graph, the sentence, then the conflict check.
+                use crate::checkout::MergeStyle;
+                use crate::merge::Merge;
+                use crate::preview;
+                const LIST_W: f32 = 190.0;
+                if check.poll() {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+                let enabled = [true; 2];
+                let cur = MergeStyle::ALL.iter().position(|m| m == style).unwrap_or(0);
+                if let Some(i) = modal::choice_keys(ctx, &enabled, cur) {
+                    *style = MergeStyle::ALL[i];
+                }
+                let way = merge.way(*style, *no_ff);
+                let branch_seg = if merge.remote { remote(merge.branch.as_str()) } else { pill(merge.branch.as_str()) };
+                let mut hint = vec![Hint::Key(Cap::Up), Hint::Key(Cap::Down), Hint::Text("choose".into())];
+                hint.extend(modal::undo_hint());
+                let out = Modal::new("merge", Width::Large, "branch", vec![text("Merge"), branch_seg, text("into"), pill(merge.head.as_str())])
+                    .status(vec![text(merge.counts())])
+                    .hint(hint)
+                    .primary(Merge::button(way), false, !merge.up_to_date())
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            // The title, then Now / After on its right.
+                            let view_id = egui::Id::new("merge_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("merge_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &merge.title(way), egui::FontId::proportional(theme::FS_TITLE), k.strong, title_w);
+                            // The styles and the graph, between two rules, on the same rows.
+                            let preview = merge.preview(*style, *no_ff);
+                            let block_h = preview::height(preview.rows.max(MergeStyle::ALL.len()));
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(10.0);
+                            let (block, _) = ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
+                            let list = Rect::from_min_size(block.min, vec2(LIST_W, block_h));
+                            let mut left = ui.new_child(egui::UiBuilder::new().id_salt("merge_styles").max_rect(list).layout(Layout::top_down(Align::Min)));
+                            left.spacing_mut().item_spacing.y = 0.0;
+                            for (i, m) in MergeStyle::ALL.iter().enumerate() {
+                                if modal::list_row(&mut left, m.short(), Some(i + 1), m == style, false, None, preview::ROW).clicked() {
+                                    *style = *m;
+                                }
+                            }
+                            let x = list.right() + 16.0;
+                            ui.painter().vline(x, block.y_range(), Stroke::new(1.0_f32, k.border));
+                            let graph = Rect::from_min_max(pos2(x + 16.0, block.top()), block.max);
+                            let mut right = ui.new_child(egui::UiBuilder::new().id_salt("merge_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
+                            preview::show(&mut right, egui::Id::new("merge_preview"), &preview, after);
+                            ui.add_space(10.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The sentence, in a room as tall as the longest one.
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let mut texts = vec![merge.summary()];
+                            for m in MergeStyle::ALL {
+                                for n in [false, true] {
+                                    texts.push(merge.explain(m, n));
+                                }
+                            }
+                            let room = texts.iter().map(|t| ui.painter().layout(t.clone(), font.clone(), k.dim, w).size().y).fold(0.0, f32::max);
+                            let sentence = if after { merge.explain(*style, *no_ff) } else { merge.summary() };
+                            ui.allocate_ui_with_layout(vec2(w, room), Layout::top_down(Align::Min), |ui| {
+                                ui.set_min_size(vec2(w, room));
+                                ui.label(RichText::new(sentence).color(k.dim));
+                            });
+                            // What the check foresees, unless there is nothing to merge.
+                            if !merge.up_to_date() {
+                                ui.add_space(12.0);
+                                merge_check(ui, &check.test, w);
+                            }
+                            if merge.can_fast_forward() {
+                                ui.add_space(12.0);
+                                modal::check_row(ui, no_ff, "No fast-forward: always create a merge commit", Some("--no-ff"));
+                            }
+                        });
+                    });
+                if out.primary {
+                    cmds.push(Cmd::Merge { merge: merge.clone(), way });
+                }
+                out.primary || out.close
+            }
             Some(Dialog::Pull { pull, mode, stash, dirty }) => {
                 // The original's PullWindowController: the remote branch, "Rebase instead of
                 // merge", "Stash and reapply local changes", "Pull". Here the mode is a switch and
@@ -1703,5 +1800,52 @@ impl eframe::App for App {
         self.run(cmds, ctx);
         self.menu_sync(ctx);
         self.screenshot_step(ctx);
+    }
+}
+
+/// The Merge dialog's line about conflicts, `w` wide: checking, none, the files that would
+/// conflict, or why it could not tell.
+fn merge_check(ui: &mut Ui, test: &crate::merge::Test, w: f32) {
+    use crate::merge::Test;
+    const SHOWN: usize = 5;
+    let k = theme::c();
+    // A sign on the left, then a line of text.
+    let line = |ui: &mut Ui, text: &str, col: egui::Color32, sign: &dyn Fn(&egui::Painter, Pos2)| {
+        let (rect, _) = ui.allocate_exact_size(vec2(w, 22.0), Sense::hover());
+        sign(ui.painter(), pos2(rect.left() + 9.0, rect.center().y));
+        crate::ui::fit_text(ui.painter(), pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, text, theme::body(), col, w - 26.0);
+    };
+    match test {
+        Test::Checking => {
+            let t = ui.input(|i| i.time) as f32;
+            line(ui, "Checking for conflicts…", k.faint, &|p, c| {
+                // A turning arc, drawn: the font has no spinner glyph.
+                let pts: Vec<Pos2> = (0..=16).map(|i| c + egui::Vec2::angled(t * 5.0 + i as f32 / 16.0 * 4.5) * 6.0).collect();
+                p.add(Shape::line(pts, Stroke::new(1.6_f32, k.faint)));
+            });
+        }
+        Test::Clean => line(ui, "No conflicts: Git can merge it on its own.", k.text, &|p, c| {
+            p.circle_filled(c, 8.0, theme::tint(k.added, k.bg, 0.2));
+            crate::ui::check_mark(p, c, k.added);
+        }),
+        Test::Conflicts(files) => {
+            crate::modal::note(ui, k.modified, |ui| {
+                ui.spacing_mut().item_spacing.y = 4.0;
+                let n = files.len();
+                let head = if n == 1 { "Will cause conflicts in 1 file".to_string() } else { format!("Will cause conflicts in {n} files") };
+                ui.label(RichText::new(head).color(k.strong).strong());
+                for f in files.iter().take(SHOWN) {
+                    ui.add(egui::Label::new(RichText::new(f).font(theme::mono()).color(k.text)).truncate());
+                }
+                if n > SHOWN {
+                    ui.label(RichText::new(format!("and {} more", n - SHOWN)).color(k.faint));
+                }
+                ui.label(RichText::new("You can still merge, then resolve them in a terminal; ⌘Z takes it all back.").color(k.dim));
+            });
+        }
+        Test::Unknown(why) => line(ui, why, k.faint, &|p, c| {
+            p.circle_stroke(c, 7.0, Stroke::new(1.4_f32, k.faint));
+            p.text(c, Align2::CENTER_CENTER, "?", FontId::proportional(11.0), k.faint);
+        }),
     }
 }
