@@ -12,7 +12,6 @@ pub struct Commit {
     pub author: String,
     pub email: String,
     pub time: i64,
-    pub date: String,
     pub subject: String,
 }
 
@@ -296,16 +295,16 @@ impl Repo {
     }
 
     pub fn commits(&self, limit: usize) -> Vec<Commit> {
-        let fmt = format!("--pretty=format:%H{SEP}%P{SEP}%aN{SEP}%aE{SEP}%at{SEP}%ad{SEP}%s");
+        let fmt = format!("--pretty=format:%H{SEP}%P{SEP}%aN{SEP}%aE{SEP}%at{SEP}%s");
         let n = format!("-n{limit}");
         let out = self
-            .git(&["log", "--branches", "--remotes", "--tags", "HEAD", "--topo-order", &n, "--date=format:%d %b %Y, %H:%M", &fmt])
-            .or_else(|_| self.git(&["log", "--branches", "--remotes", "--tags", "--topo-order", &n, "--date=format:%d %b %Y, %H:%M", &fmt]))
+            .git(&["log", "--branches", "--remotes", "--tags", "HEAD", "--topo-order", &n, &fmt])
+            .or_else(|_| self.git(&["log", "--branches", "--remotes", "--tags", "--topo-order", &n, &fmt]))
             .unwrap_or_default();
         out.lines()
             .filter_map(|l| {
-                let f: Vec<&str> = l.splitn(7, SEP).collect();
-                if f.len() < 7 {
+                let f: Vec<&str> = l.splitn(6, SEP).collect();
+                if f.len() < 6 {
                     return None;
                 }
                 Some(Commit {
@@ -314,8 +313,7 @@ impl Repo {
                     author: f[2].to_string(),
                     email: f[3].to_string(),
                     time: f[4].parse().unwrap_or(0),
-                    date: f[5].to_string(),
-                    subject: f[6].to_string(),
+                    subject: f[5].to_string(),
                 })
             })
             .collect()

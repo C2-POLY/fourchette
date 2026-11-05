@@ -16,6 +16,11 @@ pub const REPO: &str = "C2-POLY/fourchette";
 /// The version and commit this binary is built from (`build.rs`); the commit is empty outside Git.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("FOURCHETTE_COMMIT");
+/// The commit, or None when the build was made outside a Git checkout. A function, so a build
+/// without Git still reads as one to the compiler and to Clippy.
+pub fn commit() -> Option<&'static str> {
+    Some(COMMIT).filter(|c| !c.is_empty())
+}
 /// A check at launch, then every hour.
 pub const CHECK_EVERY: Duration = Duration::from_secs(3600);
 /// The API calls give up after this; the download after `DOWNLOAD_TIMEOUT`.
