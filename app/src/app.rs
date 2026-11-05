@@ -131,8 +131,6 @@ pub enum Cmd {
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
     ToggleDetails,
-    /// The app's colours and icon, chosen in the palette.
-    SetVariant(theme::Variant),
     /// Open or close the Settings window (⌘,).
     Settings,
     /// Keep the settings chosen in the Settings window; they apply at once.
@@ -291,8 +289,7 @@ impl App {
         let library = crate::library::Library::load();
         // FOURCHETTE_APPEARANCE=light|dark|system shows a mode for a screenshot without saving it.
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
-        // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
-        theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
+        theme::apply(&cc.egui_ctx, appearance);
         // FOURCHETTE_FONTS=<ui>,<code> (for example `sf,menlo`) shows fonts for a screenshot without saving them.
         let (ui_font, code_font) = fonts_from_env(&library.settings);
         theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
@@ -592,12 +589,6 @@ impl App {
                 }
                 Cmd::SetDetails(l) => self.set_details(l),
                 Cmd::ToggleDetails => self.set_details(self.tab().details_layout.toggled()),
-                Cmd::SetVariant(v) => {
-                    self.library.variant = v;
-                    self.library.save();
-                    theme::set_variant(ctx, v);
-                    crate::icon::show(ctx, v);
-                }
                 Cmd::Switcher => {
                     self.switcher = if self.switcher.is_some() { None } else { Some(repos::Switcher::default()) };
                 }

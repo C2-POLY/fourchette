@@ -1,7 +1,7 @@
 //! The person's repositories: where they are, how they're grouped, which are favourites.
 //! Kept in `~/Library/Application Support/Fourchette/repos.json`.
 use crate::settings::Settings;
-use crate::theme::{Appearance, Variant};
+use crate::theme::Appearance;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -144,8 +144,6 @@ pub struct Library {
     pub appearance: Appearance,
     /// Everything else chosen in the Settings window.
     pub settings: Settings,
-    /// The app's colours and icon, chosen in Settings or the palette.
-    pub variant: Variant,
     /// The repositories open in tabs, in order, brought back at launch.
     pub tabs: Vec<PathBuf>,
     /// The tab on screen, an index of `tabs`.
@@ -223,11 +221,10 @@ impl Library {
             .unwrap_or_default();
         let appearance = legacy_setting(&v, "appearance", Appearance::parse).unwrap_or_default();
         let settings = Settings::from_json(&v["settings"]);
-        let variant = legacy_setting(&v, "variant", Variant::parse).unwrap_or_default();
         // "tabs": {"open": [paths], "active": n}; files written before tabs (issue #59) have none.
         let tabs = v["tabs"]["open"].as_array().map(|a| a.iter().filter_map(|p| p.as_str()).map(PathBuf::from).collect()).unwrap_or_default();
         let active_tab = v["tabs"]["active"].as_u64().unwrap_or(0) as usize;
-        Library { entries, appearance, variant, settings, tabs, active_tab, file: Some(file.to_path_buf()) }
+        Library { entries, appearance, settings, tabs, active_tab, file: Some(file.to_path_buf()) }
     }
 
     pub fn save(&self) {
@@ -247,10 +244,10 @@ impl Library {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        // The appearance and the variant sit under "settings" with the rest of the Settings window.
+        // The appearance sits under "settings" with the rest of the Settings window. The "variant"
+        // of older files (issue #125 removed the variants) is not written back.
         let mut settings = self.settings.to_json();
         settings["appearance"] = json!(self.appearance.key());
-        settings["variant"] = json!(self.variant.key());
         let tabs = json!({"open": self.tabs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(), "active": self.active_tab});
         let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs})).unwrap_or_default());
     }
@@ -567,28 +564,37 @@ mod tests {
     }
 
     #[test]
-    fn variant_survives_a_save_and_defaults_to_classic() {
+    fn an_old_file_with_a_variant_loads_and_drops_it_on_save() {
         let d = tmp("variant");
         let file = d.join("repos.json");
-        assert_eq!(Library::read(&file).variant, Variant::Classic);
-        let mut lib = Library::read(&file);
-        lib.add(&d.join("a"));
-        lib.appearance = Appearance::Dark;
-        lib.variant = Variant::Neon;
+        // Written while the variants existed (issues #14, #52): one at the top level, one under "settings".
+        std::fs::write(
+            &file,
+            r#"{"version": 1, "variant": "gold", "settings": {"appearance": "dark", "variant": "neon", "ui_font": "sf", "auto_fetch": false},
+                "repos": [{"path": "/code/a", "favorite": true}], "tabs": {"open": ["/code/a"], "active": 0}}"#,
+        )
+        .unwrap();
+        let lib = Library::read(&file);
+        let check = |lib: &Library| {
+            assert_eq!(lib.appearance, Appearance::Dark);
+            assert_eq!(lib.settings, Settings { ui_font: crate::settings::UiFont::SanFrancisco, auto_fetch: false, ..Settings::default() });
+            assert_eq!(lib.entries.len(), 1);
+            assert!(lib.entries[0].favorite);
+            assert_eq!(lib.tabs, [PathBuf::from("/code/a")]);
+        };
+        check(&lib);
         lib.save();
-        let back = Library::read(&file);
-        assert_eq!((back.variant, back.appearance), (Variant::Neon, Appearance::Dark));
-        assert_eq!(back.entries.len(), 1);
-        std::fs::write(&file, r#"{"version": 1, "variant": "sepia", "repos": []}"#).unwrap();
-        assert_eq!(Library::read(&file).variant, Variant::Classic);
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert!(v.get("variant").is_none() && v["settings"].get("variant").is_none(), "no variant left: {v}");
+        check(&Library::read(&file));
         let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
-    fn an_old_file_moves_appearance_and_variant_under_settings_without_loss() {
+    fn an_old_file_moves_appearance_under_settings_without_loss() {
         let d = tmp("migrate");
         let file = d.join("repos.json");
-        // The layout before issue #52: appearance and variant at the top level.
+        // The layout before issue #52: appearance (and the variant, since removed) at the top level.
         std::fs::write(
             &file,
             r#"{"version": 1, "appearance": "light", "variant": "neon", "settings": {"auto_fetch": false, "fetch_minutes": 30},
@@ -598,7 +604,7 @@ mod tests {
         .unwrap();
         let lib = Library::read(&file);
         let check = |lib: &Library| {
-            assert_eq!((lib.appearance, lib.variant), (Appearance::Light, Variant::Neon));
+            assert_eq!(lib.appearance, Appearance::Light);
             assert_eq!(lib.settings, Settings { auto_fetch: false, fetch_minutes: 30, ..Settings::default() });
             assert_eq!(lib.entries.len(), 2);
             let api = lib.get(Path::new("/code/work/api")).unwrap();
@@ -614,7 +620,6 @@ mod tests {
             v["settings"],
             json!({
                 "appearance": "light",
-                "variant": "neon",
                 "ui_font": "inter",
                 "code_font": "jetbrains",
                 "auto_fetch": false,
@@ -646,20 +651,20 @@ mod tests {
             std::fs::write(&file, format!(r#"{{"version": 1, {body} "repos": [{{"path": "/x/y"}}]}}"#)).unwrap();
             let lib = Library::read(&file);
             assert_eq!(lib.entries.len(), 1, "{body}");
-            (lib.appearance, lib.variant)
+            lib.appearance
         };
         // Both places: the new one wins.
-        assert_eq!(read(r#""appearance": "light", "variant": "forest", "settings": {"appearance": "dark", "variant": "gold"},"#), (Appearance::Dark, Variant::Gold));
+        assert_eq!(read(r#""appearance": "light", "settings": {"appearance": "dark"},"#), Appearance::Dark);
         // Only the new place.
-        assert_eq!(read(r#""settings": {"appearance": "light", "variant": "forest"},"#), (Appearance::Light, Variant::Forest));
+        assert_eq!(read(r#""settings": {"appearance": "light"},"#), Appearance::Light);
         // An invalid value in the new place falls back to a valid one at the top level.
-        assert_eq!(read(r#""appearance": "light", "variant": "forest", "settings": {"appearance": "sepia", "variant": 3},"#), (Appearance::Light, Variant::Forest));
-        // Invalid or missing everywhere: the defaults.
-        assert_eq!(read(r#""appearance": 1, "variant": "sepia", "settings": {"appearance": null},"#), (Appearance::System, Variant::Classic));
-        assert_eq!(read(""), (Appearance::System, Variant::Classic));
+        assert_eq!(read(r#""appearance": "light", "settings": {"appearance": "sepia"},"#), Appearance::Light);
+        // Invalid or missing everywhere: the default.
+        assert_eq!(read(r#""appearance": 1, "settings": {"appearance": null},"#), Appearance::System);
+        assert_eq!(read(""), Appearance::System);
         // "settings" of the wrong shape: the top level still counts, the other settings take their defaults.
         for bad in [r#""fast""#, "[1, 2]", "null"] {
-            assert_eq!(read(&format!(r#""appearance": "dark", "variant": "gold", "settings": {bad},"#)), (Appearance::Dark, Variant::Gold), "{bad}");
+            assert_eq!(read(&format!(r#""appearance": "dark", "settings": {bad},"#)), Appearance::Dark, "{bad}");
             assert_eq!(Library::read(&file).settings, Settings::default(), "{bad}");
         }
         let _ = std::fs::remove_dir_all(&d);

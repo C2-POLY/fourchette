@@ -49,9 +49,7 @@ fn main() -> eframe::Result<()> {
         .with_fullsize_content_view(true)
         .with_titlebar_shown(false)
         .with_title_shown(false);
-    // The Dock icon of the saved variant (or of FOURCHETTE_VARIANT); `icon::show` swaps it later.
-    let variant = theme::Variant::from_env_or(library::Library::load().variant);
-    if let Some(icon) = icon::data(variant) {
+    if let Some(icon) = icon::data() {
         viewport = viewport.with_icon(icon);
     }
     let options = eframe::NativeOptions { viewport, ..Default::default() };

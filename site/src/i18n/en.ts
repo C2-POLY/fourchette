@@ -87,10 +87,10 @@ const en = {
     },
     {
       kicker: 'Yours',
-      title: 'Dark, light, four colour variants, your fonts',
-      text: 'Follow macOS or pick a mode, choose Classic, Gold, Neon or Forest, your interface and code fonts, Claude’s model, and how Fourchette pulls, fetches and shows diffs.',
+      title: 'Dark, light, your fonts',
+      text: 'Follow macOS or pick a mode, choose your interface and code fonts, Claude’s model, and how Fourchette pulls, fetches and shows diffs.',
       shot: 'settings',
-      alt: 'The Settings window: appearance mode, interface and code fonts, and the four colour variants',
+      alt: 'The Settings window: appearance mode, and interface and code fonts',
     },
   ],
   teams: {

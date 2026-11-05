@@ -87,10 +87,10 @@ const fr: typeof import('./en').default = {
     },
     {
       kicker: 'À votre goût',
-      title: 'Sombre, clair, quatre variantes, vos polices',
-      text: 'Suivez macOS ou choisissez un mode, prenez Classic, Gold, Neon ou Forest, vos polices d’interface et de code, le modèle de Claude, et réglez comment Fourchette fait ses pull, ses fetch et ses diffs.',
+      title: 'Sombre, clair, vos polices',
+      text: 'Suivez macOS ou choisissez un mode, prenez vos polices d’interface et de code, le modèle de Claude, et réglez comment Fourchette fait ses pull, ses fetch et ses diffs.',
       shot: 'settings',
-      alt: 'La fenêtre Réglages : le mode d’apparence, les polices d’interface et de code, et les quatre variantes de couleurs',
+      alt: 'La fenêtre Réglages : le mode d’apparence et les polices d’interface et de code',
     },
   ],
   teams: {
