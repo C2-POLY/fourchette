@@ -247,19 +247,6 @@ impl Tab {
         let keep = |n: &str| f.is_empty() || n.to_lowercase().contains(&f);
 
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            let n_changes = self.status.staged.len() + self.status.unstaged.len();
-            let in_project = self.board.open;
-            if side_item(ui, "changes", "Local Changes", Some(n_changes), self.sel == Sel::Wip && !in_project, None, false).clicked() {
-                cmds.push(Cmd::Select(Sel::Wip));
-            }
-            let in_history = matches!(self.sel, Sel::Commit(_)) && !in_project;
-            if side_item(ui, "history", "All Commits", Some(self.commits.len()), in_history, None, false).clicked() && !self.commits.is_empty() {
-                cmds.push(Cmd::SelectHash(self.head.clone()));
-            }
-            if side_item(ui, "project", "Project", Some(self.project_open_count()), in_project, None, false).on_hover_text("The GitHub project of this repository (⌘B)").clicked() && !in_project {
-                cmds.push(Cmd::Board);
-            }
-            ui.add_space(6.0);
 
             let filtering = !f.is_empty();
             let remote_names: Vec<String> = self.remotes.iter().map(|r| r.0.clone()).collect();
@@ -1978,6 +1965,7 @@ impl eframe::App for App {
         let t = &mut self.tabs[self.active];
         egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
             keep_panel_edges_free(ui);
+            t.view_tabs(ui, &mut cmds);
             if board_open {
                 t.board_view(ui, &mut cmds);
                 return;
