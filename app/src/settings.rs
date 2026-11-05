@@ -205,6 +205,39 @@ impl CommitLanguage {
     }
 }
 
+/// Which releases the update check offers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UpdateChannel {
+    /// Only full releases: a pre-release is never offered, even when its version is higher.
+    Stable,
+    /// Every published release, pre-releases included (all of them are pre-releases for now).
+    #[default]
+    Prerelease,
+}
+
+impl UpdateChannel {
+    pub const ALL: [UpdateChannel; 2] = [UpdateChannel::Stable, UpdateChannel::Prerelease];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            UpdateChannel::Stable => "stable",
+            UpdateChannel::Prerelease => "prerelease",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            UpdateChannel::Stable => "Stable",
+            UpdateChannel::Prerelease => "Pre-release",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<UpdateChannel> {
+        Self::ALL.into_iter().find(|c| c.key() == key)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// The font of the interface (`UiFont::Inter` by default).
@@ -233,6 +266,8 @@ pub struct Settings {
     pub claude_model: ClaudeModel,
     /// The language of the commit messages Claude writes.
     pub commit_language: CommitLanguage,
+    /// The releases the update check offers.
+    pub update_channel: UpdateChannel,
 }
 
 impl Default for Settings {
@@ -251,6 +286,7 @@ impl Default for Settings {
             max_commits: DEFAULT_MAX_COMMITS,
             claude_model: ClaudeModel::Default,
             commit_language: CommitLanguage::Auto,
+            update_channel: UpdateChannel::default(),
         }
     }
 }
@@ -279,6 +315,7 @@ impl Settings {
             max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
             claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
             commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
+            update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
         }
     }
 
@@ -297,6 +334,7 @@ impl Settings {
             "max_commits": self.max_commits,
             "claude_model": self.claude_model.key(),
             "commit_language": self.commit_language.key(),
+            "update_channel": self.update_channel.key(),
         })
     }
 
@@ -442,6 +480,24 @@ mod tests {
             assert_eq!(s, Settings { commit_language: CommitLanguage::French, ..Settings::default() }, "{bad}");
             let s = Settings::from_json(&json!({"claude_model": "haiku", "commit_language": bad}));
             assert_eq!(s, Settings { claude_model: ClaudeModel::Haiku, ..Settings::default() }, "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_update_channel_defaults_to_pre_release_and_round_trips() {
+        let d = Settings::default();
+        assert_eq!(d.update_channel, UpdateChannel::Prerelease);
+        assert_eq!(UpdateChannel::ALL.map(UpdateChannel::label), ["Stable", "Pre-release"]);
+        for c in UpdateChannel::ALL {
+            let s = Settings { update_channel: c, ..d };
+            assert_eq!(Settings::from_json(&s.to_json()), s, "{c:?}");
+        }
+        // A file saved before this setting existed gets Pre-release and keeps the rest.
+        assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
+        // An unknown name, another case or another type goes back to Pre-release; the valid one next to it is kept.
+        for bad in [json!("beta"), json!("Stable"), json!(""), json!(1), json!(true), json!(null)] {
+            let s = Settings::from_json(&json!({"update_channel": bad, "pull_rebase": true}));
+            assert_eq!(s, Settings { pull_rebase: true, ..d }, "{bad}");
         }
     }
 

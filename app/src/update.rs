@@ -1,10 +1,11 @@
 //! Updates: the releases of C2-POLY/fourchette on GitHub, read and installed in the background.
 //!
 //! The check reads the public releases API with `curl` (no `gh`, no token: `gh` is optional for
-//! people who use the app). A release is newer when its version is higher, or when it is the same
+//! people who use the app), and offers the releases of the channel chosen in Settings. A release is newer when its version is higher, or when it is the same
 //! version built from another commit, since a day's version is published again after each merge.
 //! The install downloads the release's .dmg, checks its SHA-256, copies the app out of it next to
 //! the running one, then swaps the two by renaming, so a failure leaves the installed app as it was.
+use crate::settings::UpdateChannel;
 use serde_json::Value;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -15,8 +16,8 @@ pub const REPO: &str = "C2-POLY/fourchette";
 /// The version and commit this binary is built from (`build.rs`); the commit is empty outside Git.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("FOURCHETTE_COMMIT");
-/// A check at launch, then every 6 hours.
-pub const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// A check at launch, then every hour.
+pub const CHECK_EVERY: Duration = Duration::from_secs(3600);
 /// The API calls give up after this; the download after `DOWNLOAD_TIMEOUT`.
 const API_TIMEOUT: &str = "20";
 const DOWNLOAD_TIMEOUT: &str = "900";
@@ -59,6 +60,8 @@ impl std::fmt::Display for Version {
 pub struct Release {
     pub tag: String,
     pub version: Version,
+    /// Marked as a pre-release on GitHub: only offered on the Pre-release channel.
+    pub prerelease: bool,
     pub notes: String,
     /// The release's page, for a manual download when the install fails.
     pub page: String,
@@ -94,6 +97,7 @@ pub fn parse_releases(v: &Value) -> Vec<Release> {
             Some(Release {
                 tag,
                 version,
+                prerelease: r.get("prerelease").and_then(Value::as_bool).unwrap_or(false),
                 notes: s(r, "body"),
                 page: s(r, "html_url"),
                 dmg_url: s(dmg, "browser_download_url"),
@@ -106,9 +110,10 @@ pub fn parse_releases(v: &Value) -> Vec<Release> {
         .collect()
 }
 
-/// The release with the highest version.
-pub fn latest(v: &Value) -> Option<Release> {
-    parse_releases(v).into_iter().max_by_key(|r| r.version)
+/// The release with the highest version on `channel`: in Stable, pre-releases are left out even
+/// when they are higher; in Pre-release, every kind counts.
+pub fn latest(v: &Value, channel: UpdateChannel) -> Option<Release> {
+    parse_releases(v).into_iter().filter(|r| channel == UpdateChannel::Prerelease || !r.prerelease).max_by_key(|r| r.version)
 }
 
 /// What `GET /repos/{repo}/git/ref/tags/{tag}` (or `git/tags/{sha}`) points at: `(sha, type)`,
@@ -185,10 +190,10 @@ fn tag_commit(tag: &str) -> Result<String, String> {
     Ok(sha)
 }
 
-/// The newest release when it is newer than this build, None when this build is up to date.
-/// Runs on a background thread; an error (no network, rate limit) is meant to be ignored.
-pub fn check() -> Result<Option<Release>, String> {
-    let Some(mut r) = latest(&api("releases?per_page=20")?) else { return Ok(None) };
+/// The newest release of `channel` when it is newer than this build, None when this build is up
+/// to date. Runs on a background thread; an error (no network, rate limit) is shown in Settings.
+pub fn check(channel: UpdateChannel) -> Result<Option<Release>, String> {
+    let Some(mut r) = latest(&api("releases?per_page=20")?, channel) else { return Ok(None) };
     r.commit = tag_commit(&r.tag)?;
     Ok(is_newer(r.version, &r.commit, Version::current(), COMMIT).then_some(r))
 }
@@ -373,6 +378,7 @@ pub fn sample() -> Release {
     Release {
         tag: format!("v{}.{}.0", v.0, v.1 + 1),
         version: Version(v.0, v.1 + 1, 0),
+        prerelease: true,
         notes: "# Fourchette\n\nA Git client for macOS: history graph, branches, worktrees, stashes, undo for every local action, a Claude assistant and the GitHub project of the open repository.\n\n## What's new\n\n- Update Fourchette from the toolbar in one click.\n- **Settings**: choose the interface and code fonts.\n- Check out a branch by double-clicking its label in the graph.\n\n## Requirements\n\n- `git` (Xcode Command Line Tools).\n- `gh` (optional, for the GitHub project).\n- `claude` (optional, for the assistant).\n- Apple Silicon or Intel, macOS 11 or later.".into(),
         page: format!("https://github.com/{REPO}/releases"),
         dmg_url: String::new(),
@@ -468,8 +474,9 @@ mod tests {
         let all = parse_releases(&releases());
         assert_eq!(all.iter().map(|r| r.tag.as_str()).collect::<Vec<_>>(), ["v0.2.0", "v0.1.0"]);
         assert_eq!(all[1].sha256, None);
+        assert_eq!(all.iter().map(|r| r.prerelease).collect::<Vec<_>>(), [true, false]);
 
-        let r = latest(&releases()).unwrap();
+        let r = latest(&releases(), UpdateChannel::Prerelease).unwrap();
         assert_eq!(r.version, Version(0, 2, 0));
         assert_eq!(r.notes, "## New\n- Updates");
         assert_eq!(r.page, "https://github.com/C2-POLY/fourchette/releases/tag/v0.2.0");
@@ -478,8 +485,26 @@ mod tests {
         assert_eq!(r.sha256.as_deref(), Some("71f3daaf6110503ad2694bd3c7b03361819daffbae48e71ba1b7579c96c31245"));
         assert!(r.commit.is_empty());
 
-        assert_eq!(latest(&json!([])), None);
-        assert_eq!(latest(&json!({"message": "API rate limit exceeded"})), None);
+        for channel in UpdateChannel::ALL {
+            assert_eq!(latest(&json!([]), channel), None);
+            assert_eq!(latest(&json!({"message": "API rate limit exceeded"}), channel), None);
+        }
+    }
+
+    #[test]
+    fn the_channel_picks_the_release() {
+        // Pre-release: the highest version of any kind, the draft above it still left out.
+        let pre = latest(&releases(), UpdateChannel::Prerelease).unwrap();
+        assert_eq!((pre.tag.as_str(), pre.prerelease), ("v0.2.0", true));
+        // Stable: v0.2.0 is a pre-release, so the full release v0.1.0 is offered though lower.
+        let stable = latest(&releases(), UpdateChannel::Stable).unwrap();
+        assert_eq!((stable.tag.as_str(), stable.prerelease), ("v0.1.0", false));
+        // Only pre-releases: nothing for Stable. A missing flag reads as a full release.
+        let only_pre = json!([{"tag_name": "v0.5.0", "prerelease": true, "assets": [dmg("0.5.0", None)]}]);
+        assert_eq!(latest(&only_pre, UpdateChannel::Stable), None);
+        assert_eq!(latest(&only_pre, UpdateChannel::Prerelease).map(|r| r.version), Some(Version(0, 5, 0)));
+        let no_flag = json!([{"tag_name": "v0.5.0", "assets": [dmg("0.5.0", None)]}]);
+        assert_eq!(latest(&no_flag, UpdateChannel::Stable).map(|r| r.prerelease), Some(false));
     }
 
     #[test]
@@ -555,6 +580,7 @@ mod tests {
         let mut release = Release {
             tag: "v9.0.0".into(),
             version: Version(9, 0, 0),
+            prerelease: false,
             notes: String::new(),
             page: String::new(),
             dmg_url: format!("file://{}", dmg.display()),

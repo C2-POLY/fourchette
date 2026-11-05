@@ -252,7 +252,7 @@ pub fn branch_name(item: &Item) -> String {
     name
 }
 
-fn gh(exe: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn gh(exe: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new(exe).args(args).env("GH_PROMPT_DISABLED", "1").env("NO_COLOR", "1").output().map_err(|e| format!("Couldn't start the GitHub command line: {e}"))?;
     if out.status.success() {
         return Ok(String::from_utf8_lossy(&out.stdout).into_owned());

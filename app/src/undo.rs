@@ -28,6 +28,8 @@ pub struct Snapshot {
     pub worktree: Option<String>,
     /// A new file that was moved to the Trash: (path in the repository, path in the Trash).
     pub trashed: Option<(String, PathBuf)>,
+    /// A new file the action wrote (CHANGELOG.md): Undo moves it to the Trash.
+    pub written: Option<String>,
     /// Worktrees removed by the action (with their saved uncommitted work).
     pub worktrees: Vec<crate::worktree::Removed>,
     /// Uncommitted changes before a pull or a checkout-and-sync (`git stash create`). One that
@@ -58,7 +60,7 @@ impl Repo {
 
     pub fn snapshot(&self, label: &str, soft: bool, save_worktree: bool) -> Snapshot {
         let worktree = if save_worktree { self.stash_create() } else { None };
-        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
+        Snapshot { label: label.to_string(), state: self.state(), soft, worktree, trashed: None, written: None, worktrees: Vec::new(), dirty: None, dirty_after: None, left: None }
     }
 
     /// Notes, right after the action, what Undo needs to know of its result: the operation it
@@ -73,6 +75,12 @@ impl Repo {
     /// Put the repository back to the snapshot. Returns what was undone.
     pub fn undo(&self, s: &Snapshot) -> Result<String, String> {
         let old = &s.state;
+        // A file the action wrote goes to the Trash, then one it replaced comes back.
+        if let Some(path) = &s.written {
+            if self.root.join(path).exists() {
+                crate::git::trash(&self.root, path)?;
+            }
+        }
         // A new file sent to the Trash comes back first.
         if let Some((path, in_trash)) = &s.trashed {
             let dst = self.root.join(path);

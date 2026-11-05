@@ -1,5 +1,6 @@
 mod assistant;
 mod board;
+mod changelog;
 mod palette;
 mod project;
 mod repos;
@@ -112,6 +113,8 @@ pub enum Cmd {
     AiCommitMessage,
     AiExplain(String),
     AiDeleteSelected,
+    /// Claude writes the changelog, for the audience chosen in its window.
+    AiChangelog,
     /// Worktrees.
     AskDeleteBranch(String),
     DeleteBranch { name: String, force: bool, also_worktree: bool },
@@ -147,6 +150,8 @@ pub enum Cmd {
     UpdateDialog(bool),
     /// The update dialog's "Update and Restart".
     InstallUpdate,
+    /// Settings' "Check now": check for an update at once, unless a check is running.
+    UpdateCheckNow,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
 }
@@ -274,6 +279,11 @@ impl App {
         // FOURCHETTE_TABS=<n> shows the sample project in n tabs, so the strip shows.
         if let Some(n) = std::env::var("FOURCHETTE_TABS").ok().and_then(|v| v.trim().parse::<usize>().ok()) {
             app.sample_tabs(n);
+        }
+        // FOURCHETTE_CHANGELOG=<developers|product|leadership|users> shows the changelog window.
+        if let Ok(v) = std::env::var("FOURCHETTE_CHANGELOG") {
+            let a = crate::changelog::Audience::ALL.into_iter().find(|a| a.label().to_lowercase().starts_with(&v.to_lowercase())).unwrap_or_default();
+            app.tab_mut().changelog_sample(a);
         }
         if let Ok(v) = std::env::var("FOURCHETTE_CLEANUP_PREVIEW") {
             let a = |name: &str, action: &str, reason: &str, merged: bool| crate::ai::Advice {
@@ -497,6 +507,10 @@ impl App {
                     if (s.ui_font, s.code_font) != (self.library.settings.ui_font, self.library.settings.code_font) {
                         theme::set_fonts(ctx, s.ui_font, s.code_font);
                     }
+                    // Another channel: check on it at once, so the pill shows what it offers.
+                    if s.update_channel != self.library.settings.update_channel {
+                        self.update.check_now(s.update_channel);
+                    }
                     self.library.settings = s;
                     self.library.save();
                 }
@@ -542,6 +556,7 @@ impl App {
                 Cmd::Board => self.board_toggle(),
                 Cmd::UpdateDialog(open) => self.update_dialog_open(open),
                 Cmd::InstallUpdate => self.update_install(ctx),
+                Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel),
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);

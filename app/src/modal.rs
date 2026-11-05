@@ -546,6 +546,58 @@ pub fn button(ui: &mut Ui, text: &str, kind: Kind, enabled: bool) -> Response {
     }
 }
 
+/// One choice of a dialog: a card with a radio dot, a title, an explanation line and its number
+/// key. The selected card is in the accent (red when `danger`); a disabled one is dimmed and says
+/// why instead.
+pub fn choice(ui: &mut Ui, title: &str, line: &str, key: Option<usize>, selected: bool, danger: bool, disabled: Option<&str>) -> Response {
+    let k = theme::c();
+    let w = ui.available_width();
+    let tc = if danger { k.deleted } else { k.strong };
+    let title_g = ui.painter().layout_no_wrap(title.to_string(), theme::body(), tc);
+    let (sub, sc) = match disabled {
+        Some(why) => (why, k.faint),
+        None => (line, k.dim),
+    };
+    let sub_g = ui.painter().layout(sub.to_string(), theme::secondary(), sc, w - 38.0 - 12.0);
+    let h = 10.0 + title_g.size().y + 2.0 + sub_g.size().y + 10.0;
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, h), if disabled.is_some() { Sense::hover() } else { Sense::click() });
+    let mut p = ui.painter().clone();
+    if disabled.is_some() {
+        p.multiply_opacity(0.45);
+    }
+    let col = if danger { k.deleted } else { k.accent };
+    let rr = CornerRadius::same(10);
+    let hot = disabled.is_none() && resp.hovered();
+    if selected {
+        p.rect_stroke(rect.expand(3.0), CornerRadius::same(13), Stroke::new(3.0_f32, col.gamma_multiply(0.18)), StrokeKind::Inside);
+        p.rect(rect, rr, theme::tint(col, k.input, 0.12), Stroke::new(1.0_f32, col), StrokeKind::Inside);
+    } else {
+        p.rect(rect, rr, k.input, Stroke::new(1.0_f32, if hot { k.widget_hover_border } else { k.border_strong }), StrokeKind::Inside);
+    }
+    let dot = pos2(rect.left() + 20.0, rect.top() + 10.0 + title_g.size().y / 2.0);
+    if selected {
+        p.circle_filled(dot, 7.0, col);
+        p.circle_filled(dot, 5.5, k.elevated);
+        p.circle_filled(dot, 3.0, col);
+    } else {
+        p.circle_stroke(dot, 6.5, Stroke::new(1.5_f32, k.faint));
+    }
+    let tx = rect.left() + 38.0;
+    p.galley(pos2(tx, rect.top() + 10.0), title_g.clone(), tc);
+    p.galley(pos2(tx, rect.top() + 12.0 + title_g.size().y), sub_g, sc);
+    if let Some(n) = key {
+        let g = p.layout_no_wrap(n.to_string(), theme::small(), k.faint);
+        let kr = Rect::from_center_size(pos2(rect.right() - 20.0, dot.y), vec2(g.size().x + 10.0, 16.0));
+        p.rect_stroke(kr, CornerRadius::same(4), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+        p.galley(kr.center() - g.size() / 2.0, g, k.faint);
+    }
+    if disabled.is_none() {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    } else {
+        resp
+    }
+}
+
 /// One choice of a list, `h` points tall, flat like a row of the sidebar: a radio dot, its name and
 /// its number key. The selected one on the accent's soft colour (its name red when `danger`), a
 /// disabled one dimmed, saying why in a tooltip. Rows the same height as a graph's rows line up

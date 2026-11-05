@@ -74,6 +74,7 @@ impl App {
             v.push(item("Commands", "Show local changes", "", Cmd::Select(Sel::Wip)));
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));
+            v.push(item("Assistant", "Write the changelog with Claude", "AI · for developers, product, leadership or users", Cmd::AiChangelog));
             if !t.status.staged.is_empty() {
                 v.push(item("Assistant", "Suggest a commit message with Claude", "AI · from staged changes", Cmd::AiCommitMessage));
             }

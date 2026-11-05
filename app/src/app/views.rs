@@ -108,6 +108,9 @@ impl Tab {
                         cmds.push(Cmd::AiExplain(h));
                     }
                 }
+                if ui.button("📝  Write the changelog…").clicked() {
+                    cmds.push(Cmd::AiChangelog);
+                }
                 if crate::ai::find_claude().is_none() {
                     ui.separator();
                     ui.label(RichText::new("Claude Code isn't installed on this Mac.").small().color(theme::c().modified));
@@ -1583,6 +1586,7 @@ impl eframe::App for App {
         let t = self.tab_mut();
         t.dialogs(ctx, &mut cmds);
         t.cleanup_window(ctx, &mut cmds);
+        t.changelog_window(ctx);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
