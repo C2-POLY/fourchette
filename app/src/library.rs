@@ -75,6 +75,19 @@ impl DetailsLayout {
         DetailsLayout { hidden: !self.hidden, ..self }
     }
 
+    /// A click on the status bar button: from the right to the bottom and back, or shown
+    /// again at its last place when it is hidden.
+    pub fn clicked(self) -> DetailsLayout {
+        if self.hidden {
+            DetailsLayout::shown(self.place)
+        } else {
+            DetailsLayout::shown(match self.place {
+                DetailsPlace::Right => DetailsPlace::Bottom,
+                DetailsPlace::Bottom => DetailsPlace::Right,
+            })
+        }
+    }
+
     pub fn hide(self) -> DetailsLayout {
         DetailsLayout { hidden: true, ..self }
     }
@@ -545,6 +558,12 @@ mod tests {
         assert_eq!(bottom.toggled().toggled(), bottom);
         assert_eq!(bottom.hide().label(), "Hidden");
         assert_eq!(bottom.label(), "Bottom");
+        // A click on the status bar button moves it, or shows it again where it was.
+        let right = DetailsLayout::shown(DetailsPlace::Right);
+        assert_eq!(right.clicked(), bottom);
+        assert_eq!(bottom.clicked(), right);
+        assert_eq!(bottom.hide().clicked(), bottom);
+        assert_eq!(right.hide().clicked(), right);
     }
 
     #[test]
