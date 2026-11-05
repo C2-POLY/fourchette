@@ -97,21 +97,17 @@ impl App {
         let screen = ctx.screen_rect();
         let left = screen.center().x - SWITCHER_W * 0.5 - 12.0;
         let top = (screen.top() + 70.0).max(screen.center().y - 330.0);
+        let t = crate::modal::appear(ctx, egui::Id::new("switcher"));
         egui::Area::new(egui::Id::new("switcher_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
             let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, theme::shadow(0.8));
+            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
             if resp.clicked() {
                 close = true;
             }
         });
-        egui::Area::new(egui::Id::new("switcher")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(theme::c().elevated)
-                .stroke(Stroke::new(1.0_f32, theme::c().border_strong))
-                .corner_radius(CornerRadius::same(10))
-                .inner_margin(Margin::same(12))
-                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: theme::shadow(1.0) })
-                .show(ui, |ui| {
+        let area = egui::Area::new(egui::Id::new("switcher")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
+            ui.multiply_opacity(t);
+            crate::modal::card(ui, crate::modal::RADIUS, Margin::same(12), |ui| {
                     ui.set_width(SWITCHER_W);
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut sw.query)
@@ -177,11 +173,13 @@ impl App {
                                 chosen = Some(k);
                             }
                             resp.on_hover_text(e.path.display().to_string()).context_menu(|ui| {
+                                crate::ui::menu_rows(ui);
                                 ui.set_min_width(220.0);
                                 if ui.button(if e.favorite { "☆  Remove from favorites" } else { "★  Add to favorites" }).clicked() {
                                     cmds.push(Cmd::RepoFavorite(e.path.clone()));
                                 }
                                 ui.menu_button("Move to group", |ui| {
+                                    crate::ui::menu_rows(ui);
                                     for g in &groups {
                                         if ui.add_enabled(e.group.as_deref() != Some(g.as_str()), egui::Button::new(g)).clicked() {
                                             cmds.push(Cmd::RepoGroup(e.path.clone(), Some(g.clone())));
@@ -219,21 +217,33 @@ impl App {
                             ui.label(RichText::new(msg).color(theme::c().faint));
                         }
                     });
-                    ui.add_space(8.0);
-                    ui.separator();
+                    ui.add_space(10.0);
+                    let line = ui.cursor().top() - 0.5;
+                    ui.painter().hline(ui.max_rect().x_range(), line, Stroke::new(1.0_f32, theme::c().border));
+                    ui.add_space(10.0);
                     ui.horizontal(|ui| {
-                        if ui.button("+  Add a repository…").clicked() {
+                        use crate::modal::{button, Cap, Kind};
+                        if button(ui, "Add a repository…", Kind::Plain, true).clicked() {
                             cmds.push(Cmd::OpenDialog);
                         }
-                        if ui.button("📂  Add every repository in a folder…").clicked() {
+                        if button(ui, "Add every repository in a folder…", Kind::Plain, true).clicked() {
                             cmds.push(Cmd::ScanFolder);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add(egui::Label::new(RichText::new("Enter to open · right-click to organise · Esc").size(theme::FS_SMALL).color(theme::c().faint)).truncate());
+                            // Right to left: the last hint first.
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            let faint = |t: &str| RichText::new(t).size(theme::FS_SECONDARY).color(theme::c().faint);
+                            ui.label(faint("close"));
+                            crate::modal::keycap(ui, Cap::Text("Esc"));
+                            ui.add_space(6.0);
+                            ui.label(faint("open"));
+                            crate::modal::keycap(ui, Cap::Text("Enter"));
                         });
                     });
+                    ui.label(RichText::new("Right-click a repository to organise it.").size(theme::FS_SMALL).color(theme::c().faint));
                 });
         });
+        crate::modal::animate_layer(ctx, area.response.layer_id, area.response.rect.center(), t);
         if let Some(k) = chosen {
             if let Some(row) = rows.get(k) {
                 if row.entry.path.exists() {

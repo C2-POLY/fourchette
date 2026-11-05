@@ -542,11 +542,12 @@ fn visuals(k: &Colors, dark: bool) -> Visuals {
     v.selection.bg_fill = k.accent_soft;
     v.selection.stroke = Stroke::new(1.0_f32, k.accent);
     v.hyperlink_color = k.accent_text;
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
+    // Windows and menus share the dialogs' frame (crate::modal): rounder corners, a soft shadow.
+    v.window_corner_radius = CornerRadius::same(14);
+    v.menu_corner_radius = CornerRadius::same(10);
     v.window_stroke = Stroke::new(1.0_f32, k.border_strong);
-    v.window_shadow = Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(k.shadow) };
-    v.popup_shadow = Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha((k.shadow as f32 * 0.85) as u8) };
+    v.window_shadow = Shadow { offset: [0, 24], blur: 64, spread: 0, color: Color32::from_black_alpha(k.shadow) };
+    v.popup_shadow = Shadow { offset: [0, 10], blur: 30, spread: 0, color: Color32::from_black_alpha((k.shadow as f32 * 0.8) as u8) };
     v.text_cursor.stroke = Stroke::new(1.5_f32, k.accent_text);
 
     let r = CornerRadius::same(6);

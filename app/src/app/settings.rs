@@ -27,7 +27,7 @@ const LANG_W: f32 = 240.0;
 const SEG_H: f32 = 28.0;
 const FONT_W: f32 = 200.0;
 const TILE_H: f32 = 64.0;
-const RADIUS: u8 = 12;
+const RADIUS: u8 = crate::modal::RADIUS;
 
 /// What a section draws with: the choices on screen, and where changes go.
 pub(super) struct Pane<'a> {
@@ -506,18 +506,19 @@ impl App {
 
         let screen = ctx.screen_rect();
         let min = pos2((screen.center().x - WIN_W * 0.5).round(), (screen.top() + 56.0).max(screen.center().y - WIN_H * 0.5).round());
+        let t = crate::modal::appear(ctx, egui::Id::new("settings"));
         egui::Area::new(egui::Id::new("settings_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
             let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, theme::shadow(0.8));
+            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
             if resp.clicked() {
                 close = true;
             }
         });
         egui::Area::new(egui::Id::new("settings")).order(egui::Order::Foreground).fixed_pos(min).show(ctx, |ui| {
+            ui.multiply_opacity(t);
             let (win, _) = ui.allocate_exact_size(vec2(WIN_W, WIN_H), Sense::hover());
             let p = ui.painter().clone();
-            p.add(egui::epaint::Shadow { offset: [0, 12], blur: 36, spread: 0, color: theme::shadow(1.0) }.as_shape(win, CornerRadius::same(RADIUS)));
-            p.rect_filled(win, CornerRadius::same(RADIUS), k.elevated);
+            crate::modal::paint_card(&p, win);
             let side = Rect::from_min_size(win.min, vec2(SIDEBAR_W, WIN_H));
             p.rect_filled(side, CornerRadius { nw: RADIUS, sw: RADIUS, ne: 0, se: 0 }, k.sidebar);
             p.vline(side.right(), side.y_range(), Stroke::new(1.0_f32, k.border));
@@ -557,10 +558,17 @@ impl App {
                 let mut pane = Pane { appearance: self.library.appearance, variant: theme::variant(), settings: &mut s, cmds };
                 (sec.body)(ui, &mut pane);
             });
-            p.text(pos2(content.left() + PAD, content.bottom() - footer_h * 0.5), Align2::LEFT_CENTER, "Changes apply and are saved right away · Esc to close", theme::small(), k.faint);
+            // Footer, as in every dialog: a hairline, a darker strip and the hint.
+            let foot = Rect::from_min_max(pos2(content.left(), content.bottom() - footer_h), content.max);
+            p.rect_filled(foot, CornerRadius { nw: 0, ne: 0, sw: 0, se: RADIUS }, theme::tint(k.sidebar, k.elevated, 0.6));
+            p.hline(foot.x_range(), foot.top(), Stroke::new(1.0_f32, k.border));
+            let mut fui = ui.new_child(UiBuilder::new().id_salt("settings_footer").max_rect(foot.shrink2(vec2(PAD, 0.0))).layout(Layout::left_to_right(Align::Center)));
+            crate::modal::hint_row(&mut fui, &[crate::modal::Hint::Text("Changes apply and are saved right away".into()), crate::modal::Hint::Key(crate::modal::Cap::Text("Esc")), crate::modal::Hint::Text("to close".into())]);
 
-            p.rect_stroke(win, CornerRadius::same(RADIUS), Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+            crate::modal::paint_edge(&p, win);
         });
+        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("settings"));
+        crate::modal::animate_layer(ctx, layer, Rect::from_min_size(min, vec2(WIN_W, WIN_H)).center(), t);
         self.settings_section = section;
         if s != self.library.settings {
             cmds.push(Cmd::SetSettings(s));

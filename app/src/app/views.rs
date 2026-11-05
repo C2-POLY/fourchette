@@ -223,6 +223,7 @@ impl Tab {
                             cmds.push(checkout_remote(r));
                         }
                         resp.context_menu(|ui| {
+                            crate::ui::menu_rows(ui);
                             if ui.button("Check out").clicked() {
                                 cmds.push(checkout_remote(r));
                             }
@@ -245,6 +246,7 @@ impl Tab {
                         cmds.push(Cmd::SelectHash(t.target.clone()));
                     }
                     resp.context_menu(|ui| {
+                        crate::ui::menu_rows(ui);
                         if ui.button("Copy name").clicked() {
                             cmds.push(Cmd::Copy(t.name.clone()));
                         }
@@ -280,6 +282,7 @@ impl Tab {
                         }
                     }
                     resp.context_menu(|ui| {
+                        crate::ui::menu_rows(ui);
                         if !w.missing && ui.button("Open as repository").clicked() {
                             cmds.push(Cmd::Open(w.path.clone()));
                         }
@@ -302,6 +305,7 @@ impl Tab {
                 for s in &stashes {
                     let resp = side_item(ui, "stash", &s.message, None, false, None, false).on_hover_text(&s.name);
                     resp.context_menu(|ui| {
+                        crate::ui::menu_rows(ui);
                         if ui.button("Apply").clicked() {
                             cmds.push(Cmd::ApplyStash(s.name.clone()));
                         }
@@ -717,6 +721,7 @@ impl Tab {
                         cmds.push(Cmd::Diff(DiffReq::Worktree { path: f.path.clone(), staged, untracked: f.code == '?' }));
                     }
                     resp.context_menu(|ui| {
+                        crate::ui::menu_rows(ui);
                         if !staged {
                             if ui.button("Stage").clicked() {
                                 cmds.push(Cmd::Git { label: format!("Staged {}", f.path), args: vec!["add".into(), "-A".into(), "--".into(), f.path.clone()], network: false });
@@ -937,209 +942,215 @@ impl Tab {
     // ---------------------------------------------------------------- dialogs, keys, screenshot
 
     fn dialogs(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
-        let mut close = false;
-        match &mut self.dialog {
+        use crate::modal::{self, pill, remote, text, Cap, Hint, Modal, Width};
+        // Files with changes, for the Check out dialog's "Stash and reapply".
+        let changed = {
+            let mut paths: Vec<&str> = self.status.staged.iter().chain(&self.status.unstaged).map(|f| f.path.as_str()).collect();
+            paths.sort_unstable();
+            paths.dedup();
+            paths.len()
+        };
+        let close = match &mut self.dialog {
             None => return,
             Some(Dialog::NewRef { at, label, name, checkout, tag }) => {
-                egui::Modal::new(egui::Id::new("newref")).show(ctx, |ui| {
-                    ui.set_width(380.0);
-                    ui.heading(if *tag { "New tag" } else { "New branch" });
-                    ui.label(RichText::new(format!("Starting at {label}")).color(theme::c().dim));
-                    ui.add_space(8.0);
-                    ui.add(egui::TextEdit::singleline(name).hint_text(faint_hint(if *tag { "v1.0.0" } else { "feature/my-idea" })).desired_width(f32::INFINITY)).request_focus();
+                let n = name.trim().to_string();
+                let ok = !n.is_empty() && !n.contains(' ');
+                let (title, icon, go) = match (*tag, *checkout) {
+                    (true, _) => ("New tag", "tag", "Create tag"),
+                    (false, true) => ("New branch", "branch", "Create and check out"),
+                    (false, false) => ("New branch", "branch", "Create branch"),
+                };
+                // "commit abc1234" and branch names as pills, "the current commit" as words.
+                let mut status = vec![text("Starting at")];
+                match label.strip_prefix("commit ") {
+                    Some(h) => status.extend([text("commit"), pill(h)]),
+                    None if at.as_str() == "HEAD" => status.push(text(label.as_str())),
+                    None => status.push(pill(label.as_str())),
+                }
+                let hint = if n.contains(' ') { vec![Hint::Text("Names can't contain spaces".into())] } else { vec![Hint::Key(Cap::Text("Enter")), Hint::Text("creates it".into())] };
+                let out = Modal::new("newref", Width::Small, icon, vec![text(title)]).status(status).hint(hint).primary(go, false, ok).show(ctx, |ui| {
+                    modal::text_field(ui, name, if *tag { "v1.0.0" } else { "feature/my-idea" }).request_focus();
                     if !*tag {
-                        ui.checkbox(checkout, "Switch to the new branch");
+                        ui.add_space(8.0);
+                        modal::check_row(ui, checkout, "Switch to the new branch", None);
                     }
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        let ok = !name.trim().is_empty() && !name.trim().contains(' ');
-                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::c().on_accent)).fill(theme::c().accent).stroke(Stroke::new(1.0_f32, theme::c().accent))).clicked();
-                        if create || (ok && ui.input(|i| i.key_pressed(Key::Enter))) {
-                            let n = name.trim().to_string();
-                            let args = if *tag {
-                                vec!["tag".into(), n.clone(), at.clone()]
-                            } else if *checkout {
-                                vec!["checkout".into(), "-b".into(), n.clone(), at.clone()]
-                            } else {
-                                vec!["branch".into(), n.clone(), at.clone()]
-                            };
-                            cmds.push(Cmd::Git { label: format!("Created {n}"), args, network: false });
-                            close = true;
-                        }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
-                        }
-                    });
                 });
+                if out.primary {
+                    let args = if *tag {
+                        vec!["tag".into(), n.clone(), at.clone()]
+                    } else if *checkout {
+                        vec!["checkout".into(), "-b".into(), n.clone(), at.clone()]
+                    } else {
+                        vec!["branch".into(), n.clone(), at.clone()]
+                    };
+                    cmds.push(Cmd::Git { label: format!("Created {n}"), args, network: false });
+                }
+                out.primary || out.close
             }
             Some(Dialog::DeleteBranch { name, merged, force, worktree, dirty, also_worktree }) => {
-                // Layout and wording of the original's delete-branch sheet (sub_100070d94).
-                egui::Modal::new(egui::Id::new("delete_branch")).show(ctx, |ui| {
-                    ui.set_width(420.0);
-                    ui.label(RichText::new("Delete Branch").size(theme::FS_TITLE).color(theme::c().strong));
-                    ui.label(RichText::new("Delete local branch from your repository").color(theme::c().dim));
-                    ui.add_space(8.0);
-                    ui.label(RichText::new(name.as_str()).monospace().color(theme::c().text));
-                    if let Some(w) = worktree.as_ref() {
-                        ui.add_space(8.0);
-                        egui::Frame::new().fill(theme::tint(theme::c().modified, theme::c().elevated, 0.1)).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(10)).show(ui, |ui| {
-                            ui.set_width(ui.available_width());
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new("⚠").color(theme::c().modified));
-                                ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(theme::c().text)).on_hover_text(w.path.display().to_string());
+                // Wording of the original's delete-branch sheet (sub_100070d94).
+                let ok = (worktree.is_none() || *also_worktree) && (*merged || *force);
+                let go = if worktree.is_some() && *also_worktree { "Delete branch and worktree" } else { "Delete branch" };
+                let out = Modal::new("delete_branch", Width::Medium, "trash", vec![text("Delete branch"), pill(name.as_str())])
+                    .danger(true)
+                    .status(vec![text("Delete local branch from your repository")])
+                    .hint(modal::undo_hint())
+                    .primary(go, true, ok)
+                    .show(ctx, |ui| {
+                        if let Some(w) = worktree.as_ref() {
+                            let k = theme::c();
+                            modal::note(ui, k.modified, |ui| {
+                                ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(k.text)).on_hover_text(w.path.display().to_string());
+                                if *dirty && *also_worktree {
+                                    ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").size(theme::FS_SECONDARY).color(k.dim));
+                                }
+                                if !*also_worktree {
+                                    ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").size(theme::FS_SECONDARY).color(k.deleted));
+                                }
                             });
-                            ui.checkbox(also_worktree, "Also delete worktree");
-                            if *dirty && *also_worktree {
-                                ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::c().modified));
-                            }
-                            if !*also_worktree {
-                                ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").small().color(theme::c().deleted));
-                            }
-                        });
-                    }
-                    if !*merged {
-                        ui.add_space(6.0);
-                        ui.checkbox(force, "Delete even though it isn't merged into the current branch");
-                    }
-                    ui.add_space(6.0);
-                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").small().color(theme::c().faint));
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        let ok = (worktree.is_none() || *also_worktree) && (*merged || *force);
-                        if ui.add_enabled(ok, egui::Button::new(RichText::new("Delete").color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
-                            cmds.push(Cmd::DeleteBranch { name: name.clone(), force: *force, also_worktree: *also_worktree });
-                            close = true;
+                            ui.add_space(8.0);
+                            modal::check_row(ui, also_worktree, "Also delete worktree", None);
                         }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
+                        if !*merged {
+                            ui.add_space(8.0);
+                            modal::check_row(ui, force, "Delete even though it isn't merged into the current branch", None);
+                        }
+                        if worktree.is_none() && *merged {
+                            ui.label(RichText::new("It's merged into the current branch, so no work is lost.").color(theme::c().dim));
                         }
                     });
-                });
+                if out.primary {
+                    cmds.push(Cmd::DeleteBranch { name: name.clone(), force: *force, also_worktree: *also_worktree });
+                }
+                out.primary || out.close
             }
             Some(Dialog::DeleteWorktree { wt, dirty }) => {
                 // The original's wording (sub_1002008ec).
-                egui::Modal::new(egui::Id::new("delete_worktree")).show(ctx, |ui| {
-                    ui.set_width(420.0);
-                    ui.label(RichText::new(format!("Delete worktree '{}'", wt.name())).size(theme::FS_TITLE).color(theme::c().strong));
-                    ui.label(RichText::new(format!("Do you want to delete worktree '{}'?", wt.name())).color(theme::c().text));
-                    ui.label(RichText::new(wt.path.display().to_string()).small().color(theme::c().faint));
-                    if *dirty {
-                        ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").small().color(theme::c().modified));
-                    }
-                    if let Some(b) = &wt.branch {
-                        ui.label(RichText::new(format!("The branch “{b}” is kept.")).small().color(theme::c().dim));
-                    }
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new("Delete").color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
-                            cmds.push(Cmd::DeleteWorktree(wt.path.clone()));
-                            close = true;
-                        }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
-                        }
-                    });
-                });
-            }
-            Some(Dialog::Confirm { title, message, label, args, network }) => {
-                // Same layout as the original's alerts (sub_1003b95c0, sub_10026d55c…): a question,
-                // an informative line, then the action's verb and Cancel. The original says
-                // "You can't undo this action"; here every local action can be undone.
-                let verb = title.split_whitespace().next().unwrap_or("Continue").to_string();
-                egui::Modal::new(egui::Id::new("confirm")).show(ctx, |ui| {
-                    ui.set_width(400.0);
-                    ui.label(RichText::new(message.as_str()).size(theme::FS_TITLE).color(theme::c().strong));
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("You can take this back with Undo (⌘Z).").color(theme::c().dim));
-                    ui.add_space(12.0);
-                    ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new(verb).color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8)))).clicked() {
-                            cmds.push(Cmd::Git { label: label.clone(), args: args.clone(), network: *network });
-                            close = true;
-                        }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
-                        }
-                    });
-                });
-            }
-            Some(Dialog::NewGroup { path, name }) => {
-                egui::Modal::new(egui::Id::new("new_group")).show(ctx, |ui| {
-                    ui.set_width(360.0);
-                    ui.heading("New group");
-                    let repo = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                    ui.label(RichText::new(format!("{repo} goes into it")).color(theme::c().dim));
-                    ui.add_space(8.0);
-                    ui.add(egui::TextEdit::singleline(name).hint_text(faint_hint("Clients, Side projects…")).desired_width(f32::INFINITY)).request_focus();
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        let ok = !name.trim().is_empty();
-                        let create = ui.add_enabled(ok, egui::Button::new(RichText::new("Create").color(theme::c().on_accent)).fill(theme::c().accent).stroke(Stroke::new(1.0_f32, theme::c().accent))).clicked();
-                        if create || (ok && ui.input(|i| i.key_pressed(Key::Enter))) {
-                            cmds.push(Cmd::RepoGroup(path.clone(), Some(name.trim().to_string())));
-                            close = true;
-                        }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
-                        }
-                    });
-                });
-            }
-            Some(Dialog::CheckoutSync { sync, action, stash, dirty }) => {
-                // The original's CheckoutAndSyncController: "Checkout Branch", "Branch:", an
-                // "Action:" choice, "Stash and reapply local changes", "Checkout".
-                use crate::checkout::SyncAction;
-                egui::Modal::new(egui::Id::new("checkout_sync")).show(ctx, |ui| {
-                    ui.set_width(420.0);
-                    ui.label(RichText::new("Check Out Branch").size(theme::FS_TITLE).color(theme::c().strong));
-                    ui.label(RichText::new(sync.summary()).color(theme::c().dim));
-                    ui.add_space(10.0);
-                    egui::Grid::new("checkout_sync_refs").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
-                        ui.label(RichText::new("Branch").color(theme::c().dim));
-                        ui.label(RichText::new(sync.branch.as_str()).monospace().color(theme::c().text));
-                        ui.end_row();
-                        ui.label(RichText::new("Upstream").color(theme::c().dim));
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(sync.upstream.as_str()).monospace().color(theme::c().text));
-                            ui.label(RichText::new(sync.counts()).small().color(theme::c().faint));
-                        });
-                        ui.end_row();
-                    });
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Action").color(theme::c().dim));
-                    ui.add_space(2.0);
-                    for a in sync.actions() {
-                        let reset = a == SyncAction::Reset;
-                        let col = if reset { theme::c().deleted } else { theme::c().text };
-                        ui.radio_value(action, a, RichText::new(sync.text(a)).color(col));
-                        if reset {
+                let out = Modal::new("delete_worktree", Width::Medium, "folder", vec![text("Delete worktree"), pill(wt.name())])
+                    .danger(true)
+                    .status(vec![text(format!("Do you want to delete worktree '{}'?", wt.name()))])
+                    .hint(modal::undo_hint())
+                    .primary("Delete worktree", true, true)
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        ui.label(RichText::new(wt.path.display().to_string()).font(theme::mono()).color(k.faint));
+                        if let Some(b) = &wt.branch {
                             ui.horizontal(|ui| {
-                                ui.add_space(24.0);
-                                ui.label(RichText::new(sync.reset_warning()).small().color(theme::tint(theme::c().deleted, theme::c().dim, 0.6)));
+                                ui.spacing_mut().item_spacing.x = 5.0;
+                                ui.label(RichText::new("The branch").color(k.dim));
+                                modal::pill_ui(ui, b, false, theme::FS_BODY);
+                                ui.label(RichText::new("is kept.").color(k.dim));
                             });
                         }
-                    }
-                    if *dirty {
-                        ui.add_space(8.0);
-                        ui.checkbox(stash, "Stash and reapply local changes");
-                    }
-                    ui.add_space(6.0);
-                    ui.label(RichText::new("Undo takes it all back in one step.").small().color(theme::c().faint));
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        let fill = if *action == SyncAction::Reset { theme::tint(theme::c().deleted, theme::c().elevated, 0.8) } else { theme::c().accent };
-                        let go = ui.add(egui::Button::new(RichText::new("Check out").color(theme::c().on_accent)).fill(fill).stroke(Stroke::new(1.0_f32, fill))).clicked();
-                        if go || ui.input(|i| i.key_pressed(Key::Enter)) {
-                            cmds.push(Cmd::CheckoutSync { sync: sync.clone(), action: *action, stash: *stash && *dirty });
-                            close = true;
-                        }
-                        if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
-                            close = true;
+                        if *dirty {
+                            ui.add_space(6.0);
+                            modal::note(ui, k.modified, |ui| {
+                                ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").color(k.text));
+                            });
                         }
                     });
-                });
+                if out.primary {
+                    cmds.push(Cmd::DeleteWorktree(wt.path.clone()));
+                }
+                out.primary || out.close
             }
-        }
+            Some(Dialog::Confirm { title, message, label, args, network }) => {
+                // The original's alerts (sub_1003b95c0, sub_10026d55c…): a question and the action.
+                // The original says "You can't undo this action"; here every local action can be undone.
+                let verb = title.split_whitespace().next().unwrap_or("Continue");
+                let (icon, danger) = match verb {
+                    "Delete" | "Discard" => ("trash", true),
+                    "Reset" => ("undo", true),
+                    "Rebase" | "Checkout" => ("branch", false),
+                    _ => ("warning", true),
+                };
+                let out = Modal::new("confirm", Width::Small, icon, vec![text(title.as_str())]).danger(danger).hint(modal::undo_hint()).primary(title.as_str(), danger, true).show(ctx, |ui| {
+                    ui.label(RichText::new(message.as_str()).color(theme::c().text));
+                });
+                if out.primary {
+                    cmds.push(Cmd::Git { label: label.clone(), args: args.clone(), network: *network });
+                }
+                out.primary || out.close
+            }
+            Some(Dialog::NewGroup { path, name }) => {
+                let repo = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let ok = !name.trim().is_empty();
+                let out = Modal::new("new_group", Width::Small, "folder", vec![text("New group")])
+                    .status(vec![pill(repo), text("goes into it")])
+                    .hint(vec![Hint::Key(Cap::Text("Enter")), Hint::Text("creates it".into())])
+                    .primary("Create group", false, ok)
+                    .show(ctx, |ui| {
+                        modal::text_field(ui, name, "Clients, Side projects…").request_focus();
+                    });
+                if out.primary {
+                    cmds.push(Cmd::RepoGroup(path.clone(), Some(name.trim().to_string())));
+                }
+                out.primary || out.close
+            }
+            Some(Dialog::CheckoutSync { sync, action, stash, dirty }) => {
+                // The original's CheckoutAndSyncController: the branch, its upstream, a choice of
+                // action, "Stash and reapply local changes", "Checkout".
+                use crate::checkout::{Sync, SyncAction};
+                let cards = Sync::cards();
+                let enabled: Vec<bool> = cards.iter().map(|a| sync.unavailable(*a).is_none()).collect();
+                let cur = cards.iter().position(|a| a == action).unwrap_or(0);
+                if let Some(i) = modal::choice_keys(ctx, &enabled, cur) {
+                    *action = cards[i];
+                }
+                let status = if sync.diverged() {
+                    vec![text("has diverged from"), remote(sync.upstream.as_str()), text(sync.counts())]
+                } else {
+                    vec![text(format!("is {} behind", if sync.behind == 1 { "1 commit".to_string() } else { format!("{} commits", sync.behind) })), remote(sync.upstream.as_str())]
+                };
+                let hint = vec![Hint::Key(Cap::Up), Hint::Key(Cap::Down), Hint::Text("choose".into()), Hint::Key(Cap::Text("⌘Z")), Hint::Text("takes it all back".into())];
+                let reset = *action == SyncAction::Reset;
+                let out = Modal::new("checkout_sync", Width::Large, "branch", vec![text("Check out"), pill(sync.branch.as_str())])
+                    .status(status)
+                    .hint(hint)
+                    .primary(sync.label(*action), reset, true)
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = 16.0;
+                            // The choices, and the stash option under them.
+                            ui.allocate_ui_with_layout(vec2(300.0, 0.0), Layout::top_down(Align::Min), |ui| {
+                                ui.set_width(300.0);
+                                ui.spacing_mut().item_spacing.y = 7.0;
+                                for (i, a) in cards.iter().enumerate() {
+                                    let why = sync.unavailable(*a);
+                                    if modal::choice(ui, Sync::short(*a), &sync.hint(*a), Some(i + 1), a == action, *a == SyncAction::Reset, why.as_deref()).clicked() {
+                                        *action = *a;
+                                    }
+                                }
+                                if *dirty {
+                                    ui.add_space(5.0);
+                                    let side = if changed == 1 { "1 file".to_string() } else { format!("{changed} files") };
+                                    modal::check_row(ui, stash, "Stash and reapply changes", Some(&side));
+                                }
+                            });
+                            // What the choice does. Room for the animated preview of #92.
+                            let inner = Width::Large.px() - 2.0 * modal::PAD - 300.0 - 16.0 - 2.0 * 14.0;
+                            egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                                ui.set_width(inner);
+                                ui.set_min_height(236.0);
+                                ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                                ui.spacing_mut().item_spacing.y = 8.0;
+                                modal::caption(ui, "What happens");
+                                ui.label(RichText::new(sync.summary()).color(k.dim));
+                                ui.add_space(6.0);
+                                let col = if reset { k.deleted } else { k.strong };
+                                ui.label(RichText::new(sync.text(*action)).color(col));
+                                ui.label(RichText::new(sync.explain(*action)).color(k.dim));
+                                });
+                            });
+                        });
+                    });
+                if out.primary {
+                    cmds.push(Cmd::CheckoutSync { sync: sync.clone(), action: *action, stash: *stash && *dirty });
+                }
+                out.primary || out.close
+            }
+        };
         if close {
             self.dialog = None;
         }
@@ -1344,6 +1355,12 @@ impl eframe::App for App {
     /// copies text selected in a label), the others as the `Cmd` of their button.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let text = ctx.wants_keyboard_input();
+        // FOURCHETTE_MENU: a right-click, pressed then released, a while before the screenshot.
+        if let (Some(pos), true) = (self.shot_menu, self.frame == 40 || self.frame == 41) {
+            let pressed = self.frame == 40;
+            raw.events.push(egui::Event::PointerMoved(pos));
+            raw.events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() });
+        }
         // Tab keys, taken before egui sees them (⌃Tab would otherwise move the focus). A dialog
         // or the Settings window keeps the keyboard, as it greys out the menu items.
         if !self.modal() && !self.settings_open {
@@ -1532,18 +1549,7 @@ impl eframe::App for App {
 
         if let Some((msg, err, at)) = &self.toast {
             if at.elapsed().as_secs_f32() < 4.0 {
-                egui::Area::new(egui::Id::new("toast")).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0)).show(ctx, |ui| {
-                    egui::Frame::new()
-                        .fill(theme::c().elevated)
-                        .stroke(Stroke::new(1.0_f32, theme::tint(if *err { theme::c().deleted } else { theme::c().added }, theme::c().elevated, 0.6)))
-                        .shadow(ctx.style().visuals.popup_shadow)
-                        .corner_radius(CornerRadius::same(8))
-                        .inner_margin(Margin::symmetric(14, 8))
-                        .show(ui, |ui| {
-                            ui.set_max_width(520.0);
-                            ui.label(RichText::new(msg.as_str()).color(theme::c().strong));
-                        });
-                });
+                crate::modal::toast(ctx, msg, *err, at.elapsed().as_secs_f64());
                 ctx.request_repaint_after(std::time::Duration::from_millis(250));
             } else {
                 self.toast = None;

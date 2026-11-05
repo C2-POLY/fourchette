@@ -3,7 +3,7 @@
 use super::*;
 use crate::ai::{self, Advice, BranchFacts};
 use crate::settings::CommitLanguage;
-use egui::{vec2, Align, CornerRadius, Layout, Margin, RichText, Stroke};
+use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Stroke};
 use serde_json::Value;
 
 pub enum AiJob {
@@ -183,88 +183,100 @@ impl Tab {
 
     /// The clean-up review window.
     pub(super) fn cleanup_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
-        let mut close = false;
+        use crate::modal::{self, pill, text, Modal, Width};
         let Some(view) = self.ai.cleanup.as_mut() else { return };
-        egui::Modal::new(egui::Id::new("ai_cleanup")).show(ctx, |ui| {
-            ui.set_width(620.0);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("✨").size(theme::FS_TITLE).color(theme::c().accent_text));
-                ui.label(RichText::new("Branch clean-up").size(theme::FS_TITLE).color(theme::c().strong));
-                ui.label(RichText::new(format!("compared with {}", view.base)).color(theme::c().dim));
-            });
-            ui.add_space(6.0);
-            if view.loading {
-                ui.add_space(20.0);
+        let k = theme::c();
+        let frame = Modal::new("ai_cleanup", Width::Large, "ai", vec![text("Branch clean-up")]).status(vec![text("compared with"), pill(view.base.as_str())]);
+        let out = if view.loading {
+            let n = view.count;
+            frame.show(ctx, |ui| {
+                ui.add_space(24.0);
                 ui.vertical_centered(|ui| {
                     ui.spinner();
-                    ui.add_space(6.0);
-                    ui.label(RichText::new(format!("Claude is looking at {} branch{}…", view.count, if view.count == 1 { "" } else { "es" })).color(theme::c().dim));
-                    ui.label(RichText::new("It only reads the list and gives advice — nothing is deleted until you choose.").small().color(theme::c().faint));
+                    ui.add_space(8.0);
+                    ui.label(RichText::new(format!("Claude is looking at {n} branch{}…", if n == 1 { "" } else { "es" })).color(k.dim));
+                    ui.label(RichText::new("It only reads the list and gives advice — nothing is deleted until you choose.").size(theme::FS_SECONDARY).color(k.faint));
                 });
-                ui.add_space(20.0);
-                if ui.button("Cancel").clicked() {
-                    close = true;
-                }
-                return;
-            }
-            if !view.summary.is_empty() {
-                egui::Frame::new().fill(theme::c().accent_soft).corner_radius(CornerRadius::same(8)).inner_margin(Margin::same(10)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.label(RichText::new(&view.summary).color(theme::c().text));
-                });
-                ui.add_space(8.0);
-            }
-            egui::ScrollArea::vertical().max_height(380.0).show(ui, |ui| {
-                for a in view.advice.iter_mut() {
-                    let (col, tag) = match a.action.as_str() {
-                        "delete" => (theme::c().deleted, "Delete"),
-                        "keep" => (theme::c().added, "Keep"),
-                        _ => (theme::c().modified, "Review"),
-                    };
-                    egui::Frame::new().fill(theme::c().input).corner_radius(CornerRadius::same(8)).inner_margin(Margin::symmetric(10, 8)).stroke(Stroke::new(1.0_f32, if a.selected { theme::tint(col, theme::c().input, 0.6) } else { theme::c().border })).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut a.selected, "");
-                            ui.label(RichText::new(&a.name).color(theme::c().strong));
-                            if !a.merged {
-                                ui.label(RichText::new("has unmerged work").small().color(theme::c().modified));
-                            }
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                egui::Frame::new().fill(theme::tint(col, theme::c().input, 0.16)).corner_radius(CornerRadius::same(4)).inner_margin(Margin::symmetric(6, 2)).show(ui, |ui| {
-                                    ui.label(RichText::new(tag).size(theme::FS_SMALL).color(col));
-                                });
-                            });
-                        });
-                        ui.label(RichText::new(&a.reason).color(theme::c().dim));
-                        if let Some(w) = &a.worktree {
-                            let (text, col) = if w.missing {
-                                (format!("⚠ Its worktree folder “{}” is gone — it will be cleaned up first", w.name()), theme::c().faint)
-                            } else if a.worktree_dirty {
-                                (format!("⚠ Checked out in worktree “{}”, which has uncommitted changes. It will be removed first; its changes are kept for Undo.", w.name()), theme::c().modified)
-                            } else {
-                                (format!("⚠ Checked out in worktree “{}” — it will be removed first", w.name()), theme::c().accent_text)
-                            };
-                            ui.label(RichText::new(text).small().color(col)).on_hover_text(w.path.display().to_string());
-                        }
-                    });
-                    ui.add_space(4.0);
-                }
-            });
-            ui.add_space(8.0);
+                ui.add_space(24.0);
+            })
+        } else {
             let n = view.advice.iter().filter(|a| a.selected).count();
-            ui.horizontal(|ui| {
-                let label = if n == 0 { "Tick the branches to delete".to_string() } else { format!("Delete {n} branch{}", if n == 1 { "" } else { "es" }) };
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(label).color(theme::c().on_accent)).fill(theme::tint(theme::c().deleted, theme::c().elevated, 0.8)).stroke(Stroke::new(1.0_f32, theme::tint(theme::c().deleted, theme::c().elevated, 0.8))).min_size(vec2(0.0, 30.0))).clicked() {
-                    cmds.push(Cmd::AiDeleteSelected);
+            let label = if n == 0 { "Tick the branches to delete".to_string() } else { format!("Delete {n} branch{}", if n == 1 { "" } else { "es" }) };
+            frame.hint(modal::undo_hint()).cancel(Some("Close")).primary(label, true, n > 0).show(ctx, |ui| {
+                if !view.summary.is_empty() {
+                    egui::Frame::new().fill(k.accent_soft).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new(&view.summary).color(k.text));
+                    });
+                    ui.add_space(10.0);
                 }
-                if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    close = true;
-                }
-                ui.label(RichText::new("You can take it back with Undo (⌘Z).").small().color(theme::c().faint));
-            });
-        });
-        if close {
+                egui::ScrollArea::vertical().max_height(380.0).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 7.0;
+                    for (i, a) in view.advice.iter_mut().enumerate() {
+                        advice_card(ui, i, a);
+                    }
+                });
+            })
+        };
+        if out.primary {
+            cmds.push(Cmd::AiDeleteSelected);
+        }
+        if out.close {
             self.ai.cleanup = None;
         }
     }
+}
+
+/// One branch of the clean-up: a card to tick, its name, Claude's advice and its reason.
+fn advice_card(ui: &mut egui::Ui, i: usize, a: &mut crate::ai::Advice) {
+    let k = theme::c();
+    let (col, tag) = match a.action.as_str() {
+        "delete" => (k.deleted, "Delete"),
+        "keep" => (k.added, "Keep"),
+        _ => (k.modified, "Review"),
+    };
+    let (fill, stroke) = if a.selected { (theme::tint(k.deleted, k.input, 0.08), theme::tint(k.deleted, k.input, 0.7)) } else { (k.input, k.border_strong) };
+    let resp = egui::Frame::new()
+        .fill(fill)
+        .stroke(Stroke::new(1.0_f32, stroke))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin { left: 38, right: 12, top: 10, bottom: 10 })
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 3.0;
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(&a.name).font(theme::mono()).color(k.strong));
+                if !a.merged {
+                    ui.label(RichText::new("has unmerged work").size(theme::FS_SECONDARY).color(k.modified));
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    egui::Frame::new().fill(theme::tint(col, k.input, 0.16)).corner_radius(CornerRadius::same(5)).inner_margin(Margin::symmetric(7, 2)).show(ui, |ui| {
+                        ui.label(RichText::new(tag).size(theme::FS_SMALL).color(col));
+                    });
+                });
+            });
+            ui.label(RichText::new(&a.reason).size(theme::FS_SECONDARY).color(k.dim));
+            if let Some(w) = &a.worktree {
+                let (text, col) = if w.missing {
+                    (format!("Its worktree folder “{}” is gone — it will be cleaned up first", w.name()), k.faint)
+                } else if a.worktree_dirty {
+                    (format!("Checked out in worktree “{}”, which has uncommitted changes. It will be removed first; its changes are kept for Undo.", w.name()), k.modified)
+                } else {
+                    (format!("Checked out in worktree “{}” — it will be removed first", w.name()), k.accent_text)
+                };
+                ui.horizontal_top(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 15.0), Sense::hover());
+                    crate::ui::glyph(ui.painter(), r.center(), "warning", 13.0, 1.4, col);
+                    ui.add(egui::Label::new(RichText::new(text).size(theme::FS_SMALL).color(col)).wrap()).on_hover_text(w.path.display().to_string());
+                });
+            }
+        })
+        .response;
+    let rect = resp.rect;
+    crate::modal::check_box(ui.painter(), egui::pos2(rect.left() + 20.0, rect.top() + 21.0), a.selected);
+    let click = ui.interact(rect, ui.id().with(("advice", i)), Sense::click());
+    if click.clicked() {
+        a.selected = !a.selected;
+    }
+    click.on_hover_cursor(egui::CursorIcon::PointingHand);
 }

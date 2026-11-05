@@ -493,7 +493,8 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
 }
 
 /// One of the toolbar's outline icons ("fetch", "ai", "undo", "pull", "push", "branch", "board",
-/// "stash", "pop") centred on `c`, `size` points wide, drawn with lines `width` thick.
+/// "stash", "pop"), or the dialogs' ("tag", "trash", "folder", "warning"), centred on `c`, `size`
+/// points wide, drawn with lines `width` thick.
 pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col: Color32) {
     let k = Ink { p, c, s: Stroke::new(width, col), scale: size / 24.0 };
     match icon {
@@ -572,6 +573,29 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
             k.line(&body);
             k.line(&[(12.0, 15.0), (12.0, 3.0)]);
             k.line(&[(7.5, 7.5), (12.0, 3.0), (16.5, 7.5)]);
+        }
+        // a label with a hole, pointing up-left
+        "tag" => {
+            k.closed([(4.0, 4.0), (11.5, 4.0), (20.5, 13.0), (13.0, 20.5), (4.0, 11.5)].iter().map(|&(x, y)| k.t(x, y)).collect());
+            k.ring(8.5, 8.5, 1.5);
+        }
+        // a bin with its lid and handle
+        "trash" => {
+            k.line(&[(4.0, 7.0), (20.0, 7.0)]);
+            k.line(&[(9.0, 7.0), (9.5, 4.0), (14.5, 4.0), (15.0, 7.0)]);
+            k.line(&[(6.0, 7.0), (7.0, 20.0), (17.0, 20.0), (18.0, 7.0)]);
+            k.line(&[(10.0, 11.0), (10.0, 16.0)]);
+            k.line(&[(14.0, 11.0), (14.0, 16.0)]);
+        }
+        // a folder with its tab
+        "folder" => {
+            k.closed([(3.0, 6.0), (3.0, 19.0), (21.0, 19.0), (21.0, 8.5), (12.0, 8.5), (10.0, 5.0), (4.0, 5.0)].iter().map(|&(x, y)| k.t(x, y)).collect());
+        }
+        // a triangle with an exclamation mark
+        "warning" => {
+            k.closed([(12.0, 3.5), (21.5, 20.0), (2.5, 20.0)].iter().map(|&(x, y)| k.t(x, y)).collect());
+            k.line(&[(12.0, 9.5), (12.0, 14.0)]);
+            k.p.circle_filled(k.t(12.0, 17.0), k.s.width * 0.75, k.s.color);
         }
         _ => {}
     }
@@ -673,7 +697,14 @@ pub fn fast_forward(b: &GitRef, refs: &[GitRef], worktrees: &[crate::worktree::W
     Some(FastForward { text: format!("Fast-forward to '{}'", b.upstream), count, action })
 }
 
+/// Roomier rows in a context menu than egui's own (2 points either side): call it first.
+pub fn menu_rows(ui: &mut Ui) {
+    ui.spacing_mut().button_padding = vec2(8.0, 3.0);
+    ui.set_min_width(180.0);
+}
+
 pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
+    menu_rows(ui);
     if !b.is_head && ui.button("Check out").clicked() {
         cmds.push(Cmd::Checkout { name: b.name.clone(), remote: false });
     }
@@ -720,6 +751,7 @@ pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], work
 }
 
 pub fn commit_menu(ui: &mut Ui, hash: &str, subject: &str, branch: Option<&str>, cmds: &mut Vec<Cmd>) {
+    menu_rows(ui);
     let s = short(hash).to_string();
     if ui.button("New branch here…").clicked() {
         cmds.push(Cmd::Dialog(Dialog::NewRef { at: hash.into(), label: format!("commit {s}"), name: String::new(), checkout: true, tag: false }));
@@ -745,6 +777,7 @@ pub fn commit_menu(ui: &mut Ui, hash: &str, subject: &str, branch: Option<&str>,
     }
     if let Some(b) = branch {
         ui.menu_button(format!("Reset {b} to here"), |ui| {
+            crate::ui::menu_rows(ui);
             for (mode, explain) in [("soft", "keep all changes staged"), ("mixed", "keep changes, unstaged"), ("hard", "throw away all changes")] {
                 if ui.button(format!("{mode} — {explain}")).clicked() {
                     cmds.push(Cmd::Dialog(Dialog::Confirm {

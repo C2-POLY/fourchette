@@ -8,6 +8,7 @@ mod graph;
 mod icon;
 mod library;
 mod menu;
+mod modal;
 mod settings;
 mod theme;
 mod titlebar;

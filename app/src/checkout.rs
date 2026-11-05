@@ -85,7 +85,7 @@ impl Sync {
         }
     }
 
-    /// The dialog's line under its title.
+    /// Where the branch stands, at the top of the dialog's explanation.
     pub fn summary(&self) -> String {
         if self.diverged() {
             format!("{} and {} have diverged: {} here, {} there.", self.branch, self.upstream, commits(self.ahead), commits(self.behind))
@@ -112,6 +112,57 @@ impl Sync {
             SyncAction::Rebase => format!("Rebase {b} onto {up}"),
             SyncAction::Reset => format!("Reset {b} to {up}"),
             SyncAction::JustCheckout => "Just check out".into(),
+        }
+    }
+
+    /// Every choice the dialog shows as a card, in its order: Fast-forward too when the branch has
+    /// diverged, greyed out with `unavailable`'s reason.
+    pub fn cards() -> [SyncAction; 5] {
+        use SyncAction::*;
+        [FastForward, Merge, Rebase, Reset, JustCheckout]
+    }
+
+    /// Why a card is greyed out, when it is.
+    pub fn unavailable(&self, a: SyncAction) -> Option<String> {
+        (!self.actions().contains(&a)).then(|| format!("Not possible: {} has commits of its own", self.branch))
+    }
+
+    /// A card's title.
+    pub fn short(a: SyncAction) -> &'static str {
+        match a {
+            SyncAction::FastForward => "Fast-forward",
+            SyncAction::Merge => "Merge",
+            SyncAction::Rebase => "Rebase",
+            SyncAction::Reset => "Reset",
+            SyncAction::JustCheckout => "Just check out",
+        }
+    }
+
+    /// A card's line under its title.
+    pub fn hint(&self, a: SyncAction) -> String {
+        let (b, up) = (&self.branch, &self.upstream);
+        match a {
+            SyncAction::FastForward => format!("Move {b} up to {up}"),
+            SyncAction::Merge => "One merge commit joins both".into(),
+            SyncAction::Rebase => "Replay your commits on top".into(),
+            SyncAction::Reset => format!("Match {up} exactly"),
+            SyncAction::JustCheckout => format!("Leave {b} as it is"),
+        }
+    }
+
+    /// What a choice does to the branch, in a sentence or two, beside the cards.
+    pub fn explain(&self, a: SyncAction) -> String {
+        let (b, up) = (&self.branch, &self.upstream);
+        let (mine, theirs) = (commits(self.ahead), commits(self.behind));
+        match (a, self.diverged()) {
+            (SyncAction::FastForward, _) => format!("{b} slides up to {up}. No new commit, nothing rewritten."),
+            (SyncAction::Merge, true) => format!("A new merge commit on {b} joins its {mine} with the {theirs} of {up}. Nothing is rewritten."),
+            (SyncAction::Merge, false) => format!("Nothing to merge: {b} has no commits of its own, so this is a fast-forward too."),
+            (SyncAction::Rebase, true) => format!("Your {mine} are replayed on top of {up} as new commits. The old ones leave the branch."),
+            (SyncAction::Rebase, false) => format!("Nothing to replay: {b} has no commits of its own, so this is a fast-forward too."),
+            (SyncAction::Reset, _) => self.reset_warning(),
+            (SyncAction::JustCheckout, true) => format!("You switch to {b} as it is: still {} ahead and {} behind.", self.ahead, self.behind),
+            (SyncAction::JustCheckout, false) => format!("You switch to {b} as it is, {theirs} behind."),
         }
     }
 
@@ -306,6 +357,13 @@ mod tests {
         assert_eq!(diverged.default_action(), Merge);
         assert_eq!(diverged.summary(), "main and origin/main have diverged: 1 commit here, 3 commits there.");
         assert_eq!(diverged.reset_warning(), "Removes the 1 commit that main has and origin/main doesn't.");
+        // The dialog shows every choice as a card; the impossible fast-forward greyed out.
+        assert_eq!(Sync::cards().iter().map(|a| behind.unavailable(*a).is_none()).collect::<Vec<_>>(), [true; 5]);
+        assert_eq!(diverged.unavailable(FastForward).as_deref(), Some("Not possible: main has commits of its own"));
+        assert_eq!(Sync::cards().iter().filter(|a| diverged.unavailable(**a).is_none()).copied().collect::<Vec<_>>(), diverged.actions());
+        assert_eq!(diverged.hint(Reset), "Match origin/main exactly");
+        assert_eq!(diverged.explain(Merge), "A new merge commit on main joins its 1 commit with the 3 commits of origin/main. Nothing is rewritten.");
+        assert_eq!(behind.explain(JustCheckout), "You switch to main as it is, 3 commits behind.");
         let args = |a| diverged.args(a).map(|v| v.join(" "));
         assert_eq!(args(FastForward).as_deref(), Some("merge --ff-only refs/remotes/origin/main"));
         assert_eq!(args(Merge).as_deref(), Some("merge --no-edit origin/main"));
