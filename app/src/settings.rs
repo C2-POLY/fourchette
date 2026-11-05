@@ -30,8 +30,187 @@ pub const DEFAULT_MAX_COMMITS: usize = 100_000;
 /// The commit counts the Settings window offers.
 pub const MAX_COMMITS: [usize; 4] = [1_000, 10_000, 50_000, 100_000];
 
+/// The interface font: Inter is built into the app, the others are read from the system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum UiFont {
+    #[default]
+    Inter,
+    SanFrancisco,
+    HelveticaNeue,
+    AvenirNext,
+}
+
+impl UiFont {
+    pub const ALL: [UiFont; 4] = [UiFont::Inter, UiFont::SanFrancisco, UiFont::HelveticaNeue, UiFont::AvenirNext];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            UiFont::Inter => "inter",
+            UiFont::SanFrancisco => "sf",
+            UiFont::HelveticaNeue => "helvetica",
+            UiFont::AvenirNext => "avenir",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            UiFont::Inter => "Inter",
+            UiFont::SanFrancisco => "San Francisco",
+            UiFont::HelveticaNeue => "Helvetica Neue",
+            UiFont::AvenirNext => "Avenir Next",
+        }
+    }
+
+    /// The system file (face 0 for a .ttc), none for the built-in font.
+    pub fn path(self) -> Option<&'static str> {
+        match self {
+            UiFont::Inter => None,
+            UiFont::SanFrancisco => Some("/System/Library/Fonts/SFNS.ttf"),
+            UiFont::HelveticaNeue => Some("/System/Library/Fonts/HelveticaNeue.ttc"),
+            UiFont::AvenirNext => Some("/System/Library/Fonts/Avenir Next.ttc"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<UiFont> {
+        UiFont::ALL.into_iter().find(|f| f.key() == s.trim().to_lowercase())
+    }
+}
+
+/// The code font: JetBrains Mono is built into the app, the others are read from the system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum CodeFont {
+    #[default]
+    JetBrainsMono,
+    SfMono,
+    Menlo,
+    Monaco,
+}
+
+impl CodeFont {
+    pub const ALL: [CodeFont; 4] = [CodeFont::JetBrainsMono, CodeFont::SfMono, CodeFont::Menlo, CodeFont::Monaco];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            CodeFont::JetBrainsMono => "jetbrains",
+            CodeFont::SfMono => "sfmono",
+            CodeFont::Menlo => "menlo",
+            CodeFont::Monaco => "monaco",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CodeFont::JetBrainsMono => "JetBrains Mono",
+            CodeFont::SfMono => "SF Mono",
+            CodeFont::Menlo => "Menlo",
+            CodeFont::Monaco => "Monaco",
+        }
+    }
+
+    pub fn path(self) -> Option<&'static str> {
+        match self {
+            CodeFont::JetBrainsMono => None,
+            CodeFont::SfMono => Some("/System/Library/Fonts/SFNSMono.ttf"),
+            CodeFont::Menlo => Some("/System/Library/Fonts/Menlo.ttc"),
+            CodeFont::Monaco => Some("/System/Library/Fonts/Monaco.ttf"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CodeFont> {
+        CodeFont::ALL.into_iter().find(|f| f.key() == s.trim().to_lowercase())
+    }
+}
+
+/// The model Claude Code answers with (`claude -p --model <alias>`), for every Claude request.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClaudeModel {
+    /// Claude Code's own choice: no `--model`.
+    #[default]
+    Default,
+    Haiku,
+    Sonnet,
+    Opus,
+    Fable,
+}
+
+impl ClaudeModel {
+    pub const ALL: [ClaudeModel; 5] = [ClaudeModel::Default, ClaudeModel::Haiku, ClaudeModel::Sonnet, ClaudeModel::Opus, ClaudeModel::Fable];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            ClaudeModel::Default => "default",
+            ClaudeModel::Haiku => "haiku",
+            ClaudeModel::Sonnet => "sonnet",
+            ClaudeModel::Opus => "opus",
+            ClaudeModel::Fable => "fable",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ClaudeModel::Default => "Default",
+            ClaudeModel::Haiku => "Haiku",
+            ClaudeModel::Sonnet => "Sonnet",
+            ClaudeModel::Opus => "Opus",
+            ClaudeModel::Fable => "Fable",
+        }
+    }
+
+    /// What `--model` gets; none for Claude Code's own choice.
+    pub fn alias(self) -> Option<&'static str> {
+        match self {
+            ClaudeModel::Default => None,
+            m => Some(m.key()),
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<ClaudeModel> {
+        Self::ALL.into_iter().find(|m| m.key() == key)
+    }
+}
+
+/// The language Claude writes commit messages in (only commit messages).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CommitLanguage {
+    /// The language of the branch's last commit subjects, English when there is none.
+    #[default]
+    Auto,
+    English,
+    French,
+}
+
+impl CommitLanguage {
+    pub const ALL: [CommitLanguage; 3] = [CommitLanguage::Auto, CommitLanguage::English, CommitLanguage::French];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            CommitLanguage::Auto => "auto",
+            CommitLanguage::English => "english",
+            CommitLanguage::French => "french",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CommitLanguage::Auto => "Automatic",
+            CommitLanguage::English => "English",
+            CommitLanguage::French => "French",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<CommitLanguage> {
+        Self::ALL.into_iter().find(|l| l.key() == key)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    /// The font of the interface (`UiFont::Inter` by default).
+    pub ui_font: UiFont,
+    /// The font of code, diffs and hashes (`CodeFont::JetBrainsMono` by default).
+    pub code_font: CodeFont,
     /// Fetch the open repository's remote in the background.
     pub auto_fetch: bool,
     /// One of `FETCH_MINUTES`.
@@ -50,11 +229,17 @@ pub struct Settings {
     pub subject_high: usize,
     /// How many commits the history loads (`settings maxCommitCount <n>` in the palette sets it too).
     pub max_commits: usize,
+    /// The model of every Claude request.
+    pub claude_model: ClaudeModel,
+    /// The language of the commit messages Claude writes.
+    pub commit_language: CommitLanguage,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            ui_font: UiFont::default(),
+            code_font: CodeFont::default(),
             auto_fetch: DEFAULT_AUTO_FETCH,
             fetch_minutes: DEFAULT_FETCH_MINUTES,
             pull_rebase: DEFAULT_PULL_REBASE,
@@ -64,6 +249,8 @@ impl Default for Settings {
             subject_low: DEFAULT_SUBJECT_LOW,
             subject_high: DEFAULT_SUBJECT_HIGH,
             max_commits: DEFAULT_MAX_COMMITS,
+            claude_model: ClaudeModel::Default,
+            commit_language: CommitLanguage::Auto,
         }
     }
 }
@@ -79,6 +266,8 @@ impl Settings {
             _ => (d.subject_low, d.subject_high),
         };
         Settings {
+            ui_font: v["ui_font"].as_str().and_then(UiFont::parse).unwrap_or(d.ui_font),
+            code_font: v["code_font"].as_str().and_then(CodeFont::parse).unwrap_or(d.code_font),
             auto_fetch: v["auto_fetch"].as_bool().unwrap_or(d.auto_fetch),
             fetch_minutes: v["fetch_minutes"].as_u64().map(|m| m as u32).filter(|m| FETCH_MINUTES.contains(m)).unwrap_or(d.fetch_minutes),
             pull_rebase: v["pull_rebase"].as_bool().unwrap_or(d.pull_rebase),
@@ -88,11 +277,15 @@ impl Settings {
             subject_low: limits.0,
             subject_high: limits.1,
             max_commits: n("max_commits").map(|m| m as usize).unwrap_or(d.max_commits),
+            claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
+            commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
         }
     }
 
     pub fn to_json(self) -> Value {
         json!({
+            "ui_font": self.ui_font.key(),
+            "code_font": self.code_font.key(),
             "auto_fetch": self.auto_fetch,
             "fetch_minutes": self.fetch_minutes,
             "pull_rebase": self.pull_rebase,
@@ -102,6 +295,8 @@ impl Settings {
             "subject_low": self.subject_low,
             "subject_high": self.subject_high,
             "max_commits": self.max_commits,
+            "claude_model": self.claude_model.key(),
+            "commit_language": self.commit_language.key(),
         })
     }
 
@@ -222,9 +417,67 @@ mod tests {
     }
 
     #[test]
+    fn claude_settings_default_to_claude_codes_model_and_automatic() {
+        let d = Settings::default();
+        assert_eq!((d.claude_model, d.commit_language), (ClaudeModel::Default, CommitLanguage::Auto));
+        assert_eq!(ClaudeModel::ALL.map(ClaudeModel::label), ["Default", "Haiku", "Sonnet", "Opus", "Fable"]);
+        assert_eq!(ClaudeModel::ALL.map(ClaudeModel::alias), [None, Some("haiku"), Some("sonnet"), Some("opus"), Some("fable")]);
+        assert_eq!(CommitLanguage::ALL.map(CommitLanguage::label), ["Automatic", "English", "French"]);
+    }
+
+    #[test]
+    fn claude_settings_survive_a_round_trip_and_fall_back_one_by_one() {
+        for m in ClaudeModel::ALL {
+            for l in CommitLanguage::ALL {
+                let s = Settings { claude_model: m, commit_language: l, ..Settings::default() };
+                assert_eq!(Settings::from_json(&s.to_json()), s, "{m:?} {l:?}");
+            }
+        }
+        // A file saved before these settings existed gets the defaults and keeps the rest.
+        let old = Settings::from_json(&json!({"auto_fetch": false, "max_commits": 5_000}));
+        assert_eq!(old, Settings { auto_fetch: false, max_commits: 5_000, ..Settings::default() });
+        // An unknown name, another case or another type goes back to its default; the valid one next to it is kept.
+        for bad in [json!("gpt"), json!("Opus"), json!(""), json!(2), json!(null), json!(["opus"])] {
+            let s = Settings::from_json(&json!({"claude_model": bad, "commit_language": "french"}));
+            assert_eq!(s, Settings { commit_language: CommitLanguage::French, ..Settings::default() }, "{bad}");
+            let s = Settings::from_json(&json!({"claude_model": "haiku", "commit_language": bad}));
+            assert_eq!(s, Settings { claude_model: ClaudeModel::Haiku, ..Settings::default() }, "{bad}");
+        }
+    }
+
+    #[test]
     fn counts_read_with_thousands_separators() {
         assert_eq!(MAX_COMMITS.map(count_label), ["1,000", "10,000", "50,000", "100,000"]);
         assert_eq!(count_label(7), "7");
         assert_eq!(count_label(123_456_789), "123,456,789");
+    }
+
+    #[test]
+    fn fonts_default_to_the_built_in_ones_and_round_trip() {
+        let d = Settings::default();
+        assert_eq!((d.ui_font, d.code_font), (UiFont::Inter, CodeFont::JetBrainsMono));
+        assert!(UiFont::Inter.path().is_none() && CodeFont::JetBrainsMono.path().is_none());
+        for u in UiFont::ALL {
+            for c in CodeFont::ALL {
+                let s = Settings { ui_font: u, code_font: c, ..d };
+                assert_eq!(Settings::from_json(&s.to_json()), s);
+            }
+        }
+        // The others come from /System/Library/Fonts.
+        assert!(UiFont::ALL[1..].iter().all(|f| f.path().is_some_and(|p| p.starts_with("/System/Library/Fonts/"))));
+        assert!(CodeFont::ALL[1..].iter().all(|f| f.path().is_some_and(|p| p.starts_with("/System/Library/Fonts/"))));
+    }
+
+    #[test]
+    fn invalid_fonts_fall_back_one_by_one() {
+        let d = Settings::default();
+        for bad in [json!("comic"), json!(3), json!(null), json!("")] {
+            let s = Settings::from_json(&json!({"ui_font": bad, "code_font": "menlo", "auto_fetch": false}));
+            assert_eq!(s, Settings { code_font: CodeFont::Menlo, auto_fetch: false, ..d }, "{bad}");
+        }
+        // A code font's key in the interface slot is not valid there.
+        assert_eq!(Settings::from_json(&json!({"ui_font": "menlo"})).ui_font, UiFont::Inter);
+        // An older file without these keys gets the defaults.
+        assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
     }
 }

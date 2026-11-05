@@ -10,7 +10,7 @@ A Git client for macOS in Rust and egui: the history graph, branches, worktrees,
 
 ## Stack
 
-Rust 2021 (rust-version 1.85), eframe and egui 0.32, `rfd` for file dialogs, `serde_json`, `image`. Git, Claude Code and GitHub are reached through their command lines (`git`, `claude`, `gh`), never through a library or a token kept by the app.
+Rust 2021 (rust-version 1.85), eframe and egui 0.32, `rfd` for file dialogs, `serde_json`, `image`. Git, Claude Code and GitHub are reached through their command lines (`git`, `claude`, `gh`), never through a library or a token kept by the app. One exception: the update check reads the public releases API and downloads the .dmg with `curl` (no `gh`, which is optional for people who use the app, and no token).
 
 ## Commands
 
@@ -23,7 +23,7 @@ cargo run -- /path/to/repo
 # Unit tests (fast, offline)
 cargo test
 
-# Live tests: they call Claude Code and GitHub for real
+# Live and slow tests: they call Claude Code and GitHub for real, and install an update from a disk image made on the spot
 cargo test -- --ignored --nocapture
 
 # Lints: a change adds no warning to the 5 that main has (dead code in git.rs twice, three style hints in palette.rs, git.rs and library.rs)
@@ -33,7 +33,22 @@ cargo clippy
 (cd /tmp && <app>/target/debug/fourchette --screenshot <out.png>)
 ```
 
-Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window (`FOURCHETTE_SETTINGS=<section>` at that section: `appearance`, `fetch`), `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_VARIANT=classic|gold|neon|forest` a variant, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_LIST=1` the board as a list, `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's detail open, `FOURCHETTE_BOARD_DRAG=<n>` the board with card #n lifted mid-drag over the next column. `FOURCHETTE_TABS=<n>` shows the sample project in n tabs, so the tab strip shows. The window is 1360x840 points (2720x1680 pixels on a Retina screen).
+Release (macOS), from `app/`:
+
+```bash
+# Build the universal .app and .dmg into target/release-bundle/
+scripts/release.sh
+
+# Create or update the GitHub pre-release v<version> (clean main only)
+scripts/release.sh --publish
+
+# Re-render the .dmg window background after changing assets/dmg/background.svg (needs Chrome)
+scripts/dmg-background.sh
+```
+
+The .dmg is laid out by `dmgbuild` (installed by `release.sh` in `target/dmgbuild`), from `scripts/dmg-settings.py`: the background, the window size and where the two icons sit.
+
+Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` opens the palette, `FOURCHETTE_SWITCHER=1` the repository switcher, `FOURCHETTE_SETTINGS=1` the Settings window (`FOURCHETTE_SETTINGS=<section>` at that section: `appearance`, `fetch`), `FOURCHETTE_APPEARANCE=dark|light|system` shows a mode without saving it, `FOURCHETTE_VARIANT=classic|gold|neon|forest` a variant, `FOURCHETTE_FONTS=<ui>,<code>` (for example `sf,menlo`; keys `inter|sf|helvetica|avenir` and `jetbrains|sfmono|menlo|monaco`) the fonts, `FOURCHETTE_CLEANUP_PREVIEW=1` the branch clean-up window, `FOURCHETTE_BOARD=1` the project board (`FOURCHETTE_BOARD=all` with the whole project), `FOURCHETTE_BOARD_LIST=1` the board as a list, `FOURCHETTE_BOARD_DETAIL=<n>` the board with card #n's drawer open, `FOURCHETTE_BOARD_DRAG=<n>` the board with card #n lifted mid-drag over the next column, `FOURCHETTE_CHECKOUT_SYNC=1` the Check out dialog of a branch behind its upstream (`FOURCHETTE_CHECKOUT_SYNC=diverged` one that has diverged). `FOURCHETTE_TABS=<n>` shows the sample project in n tabs, so the tab strip shows. `FOURCHETTE_UPDATE=1` shows the toolbar's "Update available" pill with a sample release, `FOURCHETTE_UPDATE=dialog` also opens the update dialog (`=downloading`, `=installing`, `=error` at that step). The window is 1360x840 points (2720x1680 pixels on a Retina screen).
 
 ## Architecture
 
@@ -41,10 +56,12 @@ Screenshot views, set before `--screenshot`: `FOURCHETTE_PALETTE="<query>"` open
 - `app.rs`: the state (`App`), the actions (`Cmd`, run once per frame by `App::run`) and the dialogs (`Dialog`). The views push `Cmd`s, never change the repository themselves.
 - `app/views.rs` (toolbar, sidebar, history, details, diff, dialogs, keys), `app/palette.rs` (Cmd+K), `app/repos.rs` (Cmd+O), `app/project.rs` (the Project section), `app/board.rs` (the full-screen project board, Cmd+B; Esc closes its drawer then the board), `app/tab.rs` (one open repository's state), `app/tabs.rs` (opening, closing and switching tabs, the strip shown from two tabs, the tabs kept in `repos.json`), `app/assistant.rs` (Claude).
 - `git.rs`, `worktree.rs`, `undo.rs`: Git through its command line. Every local action takes a `Snapshot` first, so Cmd+Z takes it back.
+- `checkout.rs`: checking out a branch behind its upstream: instant checkout or the Check out dialog (`plan`), its actions, and the Git sequence run as one undo step (`run`).
 - `menu.rs`: the macOS menu bar (Fourchette, File, Edit, View, Repository, Window, Help, laid out like the original's): a tested model of titles, shortcuts and greyed-out rules, and the AppKit menu. A pick is queued and turned into the `Cmd` of its button in `App::raw_input_hook` (Edit items go to the focused text field). `build.rs` links `assets/Info.plist` into the binary so the menu says "Fourchette" outside an .app bundle.
 - `titlebar.rs`: no title bar strip, like the original. The content fills the window, the toolbar is its top edge (dragging its empty background moves the window, a double-click zooms it), and on macOS the red, yellow and green buttons are moved onto the toolbar's centre line, with `INSET` left free for them. `--screenshot` shows the egui content only, without those buttons.
 - `library.rs`: the repository list (`~/Library/Application Support/Fourchette/repos.json`): groups, favourites, last opened, the chosen GitHub project.
 - `github.rs`: the GitHub project through `gh` in a background thread: the projects of the repository, then the project's items in the project's order through `gh api graphql` (types, labels, fields, sub-issues, linked pull requests), shared by the sidebar section and the board. A card dragged on the board or moved with "Move to" changes at once on screen; its Status and its position are then written (`updateProjectV2ItemFieldValue`, `updateProjectV2ItemPosition`) by one thread in order, and a refused write puts it back with the reason. Nothing else is ever written.
+- `update.rs`: updates from the GitHub releases (pre-releases included), with `curl`: checked at launch then every 6 hours, only when the app runs from an .app bundle (not under `cargo run`). A release is newer when its version is higher, or the same version with its tag on another commit than the build's (`build.rs` embeds it as `FOURCHETTE_COMMIT`). The install checks the .dmg's SHA-256, copies the app next to the installed one, swaps them by renaming and relaunches; `app/updater.rs` holds the toolbar pill, the dialog and the polling.
 - `ai.rs`: Claude Code through the person's subscription (`claude -p`, no tools, API keys hidden).
 - `graph.rs`, `ui.rs`, `theme.rs`: the graph layout, drawn widgets and colours.
 - Network and AI work never block the window: a thread and a channel polled each frame (`App::spawn`, `ai_poll`, `project_poll`).
@@ -76,7 +93,7 @@ Project ids for `gh project item-edit`: project `PVT_kwDODd-WqM4BqKPF`, Status f
 - The version lives only in `app/Cargo.toml` (`version`), as `MAJOR.MINOR.PATCH`.
 - One working day is one minor version (0.x while the app is not distributed). Bump it in the first commit of the day that changes something visible in the app, inside that commit. A day that only fixes bugs bumps the patch instead. Commits that only touch docs or tooling do not bump it.
 - Never put the version number in a commit message.
-- After each merge into `main`, move the current version's tag to `main`. Tags only ever point at `main`:
+- After each merge into `main`, move the current version's tag to `main`, then re-run `scripts/release.sh --publish` to update its pre-release. Tags only ever point at `main`:
 
 ```bash
 git fetch --tags

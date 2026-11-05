@@ -596,6 +596,8 @@ mod tests {
             json!({
                 "appearance": "light",
                 "variant": "neon",
+                "ui_font": "inter",
+                "code_font": "jetbrains",
                 "auto_fetch": false,
                 "fetch_minutes": 30,
                 "pull_rebase": false,
@@ -605,6 +607,8 @@ mod tests {
                 "subject_low": 50,
                 "subject_high": 70,
                 "max_commits": 100_000,
+                "claude_model": "default",
+                "commit_language": "auto",
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");

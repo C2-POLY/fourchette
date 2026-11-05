@@ -48,6 +48,9 @@ pub struct Tab {
     /// The diff context and the subject limits of the settings, copied here each frame by `poll_tabs`.
     pub(super) diff_context: u32,
     pub(super) subject_limits: (usize, usize),
+    /// The Claude model and the commit-message language of the settings, copied the same way.
+    pub(super) claude_model: crate::settings::ClaudeModel,
+    pub(super) commit_language: crate::settings::CommitLanguage,
     /// What the open diff shows, to draw it again when the context changes.
     pub(super) diff_req: Option<DiffReq>,
     pub(super) ai: assistant::AiState,
@@ -113,6 +116,8 @@ impl Tab {
             commit_limit: COMMIT_LIMIT,
             diff_context: git::DIFF_CONTEXT,
             subject_limits: (SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH),
+            claude_model: Default::default(),
+            commit_language: Default::default(),
             diff_req: None,
             ai: assistant::AiState::default(),
             worktrees: Vec::new(),
@@ -190,6 +195,8 @@ impl Tab {
     /// commit limit reads the history again.
     fn apply_settings(&mut self, s: crate::settings::Settings) {
         self.subject_limits = (s.subject_low, s.subject_high);
+        self.claude_model = s.claude_model;
+        self.commit_language = s.commit_language;
         if self.diff_context != s.diff_context {
             self.diff_context = s.diff_context;
             if let Some(req) = self.diff_req.clone().filter(|_| self.diff.is_some()) {
@@ -400,6 +407,12 @@ impl Tab {
                 self.record(snap);
             }
             Cmd::Git { label, args, network } => self.git(label, args, network, ctx),
+            Cmd::Checkout { name, remote } => {
+                if let Some(c) = self.checkout(&name, remote) {
+                    self.run(c, ctx);
+                }
+            }
+            Cmd::CheckoutSync { sync, action, stash } => self.checkout_sync(&sync, action, stash),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
             Cmd::Discard { path, untracked } => {
@@ -511,7 +524,9 @@ impl Tab {
             | Cmd::OpenTab(_)
             | Cmd::SelectTab(_)
             | Cmd::CloseTab(_)
-            | Cmd::ShowTab { .. } => {}
+            | Cmd::ShowTab { .. }
+            | Cmd::UpdateDialog(_)
+            | Cmd::InstallUpdate => {}
             Cmd::ProjectMove(m) => self.project_move(m),
         }
     }
@@ -537,6 +552,41 @@ impl Tab {
                 Ok(_) => self.notify(label, false),
                 Err(e) => self.notify(e, true),
             }
+        }
+    }
+
+    /// Checks out `name` (`remote`: a remote branch). Returns the plain checkout to run, or opens
+    /// the Check out dialog, with fresh local changes, when the branch is behind its upstream.
+    pub(super) fn checkout(&mut self, name: &str, remote: bool) -> Option<Cmd> {
+        match crate::checkout::plan(name, remote, &self.refs, &self.worktrees) {
+            crate::checkout::Plan::Now { label, args } => Some(Cmd::Git { label, args, network: false }),
+            crate::checkout::Plan::Ask(sync) => {
+                self.refresh_status();
+                let action = sync.default_action();
+                self.dialog = Some(Dialog::CheckoutSync { sync, action, stash: false, dirty: !self.status.is_empty() });
+                None
+            }
+        }
+    }
+
+    /// The Check out dialog's choice: the whole sequence under one snapshot, which also keeps the
+    /// uncommitted changes, so one Undo takes back the branch, HEAD and the changes.
+    fn checkout_sync(&mut self, sync: &crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        if self.busy.is_some() {
+            self.notify("Please wait for the current operation to finish.", true);
+            return;
+        }
+        let snap = Snapshot { dirty: r.stash_create(), ..r.snapshot(&sync.label(action), false, false) };
+        let res = crate::checkout::run(r, sync, action, stash);
+        self.reload();
+        self.record(Some(snap));
+        match res {
+            Ok(msg) => self.notify(msg, false),
+            Err(e) => self.notify(e, true),
         }
     }
 
@@ -819,10 +869,12 @@ mod tests {
     #[test]
     fn settings_reach_every_tab_the_limit_included() {
         let mut t = tabs(2);
-        let s = crate::settings::Settings { max_commits: 5_000, subject_low: 40, subject_high: 60, ..Default::default() };
+        use crate::settings::{ClaudeModel, CommitLanguage};
+        let s = crate::settings::Settings { max_commits: 5_000, subject_low: 40, subject_high: 60, claude_model: ClaudeModel::Opus, commit_language: CommitLanguage::French, ..Default::default() };
         poll_tabs(&mut t, &egui::Context::default(), s, false);
         for tab in &t {
             assert_eq!((tab.commit_limit, tab.subject_limits), (5_000, (40, 60)));
+            assert_eq!((tab.claude_model, tab.commit_language), (ClaudeModel::Opus, CommitLanguage::French));
         }
     }
 }

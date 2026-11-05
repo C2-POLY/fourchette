@@ -6,6 +6,7 @@ mod repos;
 mod settings;
 mod tab;
 mod tabs;
+mod updater;
 mod views;
 
 use crate::git::{self, Commit, CommitDetails, GitRef, RefKind, Repo, Stash, Status};
@@ -58,10 +59,18 @@ pub enum Dialog {
     Confirm { title: String, message: String, label: String, args: Vec<String>, network: bool },
     /// Put a repository in a group the person names.
     NewGroup { path: PathBuf, name: String },
+    /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
+    /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
     Git { label: String, args: Vec<String>, network: bool },
+    /// Check out a local branch, or (`remote`) a remote one: at once, or through the Check out
+    /// dialog when it is behind its upstream (`checkout::plan`).
+    Checkout { name: String, remote: bool },
+    /// The Check out dialog's choice, run as one undo step.
+    CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, stash: bool },
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
@@ -133,6 +142,10 @@ pub enum Cmd {
     SelectTab(usize),
     /// Close the n-th tab; the last one stays.
     CloseTab(usize),
+    /// Open (true) or close the update dialog of the toolbar's "Update available".
+    UpdateDialog(bool),
+    /// The update dialog's "Update and Restart".
+    InstallUpdate,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
 }
@@ -193,6 +206,8 @@ pub struct App {
     palette: Option<Palette>,
     /// Actions picked in the macOS menu bar, run with the next frame's.
     menu_cmds: Vec<Cmd>,
+    /// New releases on GitHub: the check, the pill, the dialog and the install.
+    update: updater::UpdateState,
 }
 
 pub fn short(h: &str) -> &str {
@@ -220,6 +235,7 @@ impl App {
             was_focused: true,
             palette: None,
             menu_cmds: Vec::new(),
+            update: updater::UpdateState::default(),
         }
     }
 
@@ -229,7 +245,13 @@ impl App {
         let appearance = std::env::var("FOURCHETTE_APPEARANCE").ok().and_then(|a| theme::Appearance::parse(&a)).unwrap_or(library.appearance);
         // FOURCHETTE_VARIANT=classic|gold|neon|forest does the same for a variant.
         theme::apply(&cc.egui_ctx, appearance, theme::Variant::from_env_or(library.variant));
+        // FOURCHETTE_FONTS=<ui>,<code> (for example `sf,menlo`) shows fonts for a screenshot without saving them.
+        let (ui_font, code_font) = fonts_from_env(&library.settings);
+        theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
         let mut app = App::with_library(library, screenshot);
+        app.update = updater::UpdateState::new(app.screenshot.is_some());
+        // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release.
+        app.update.apply_env();
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
         // The tabs open at the last quit come back (not in a screenshot); without any, the
@@ -314,6 +336,15 @@ impl App {
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
             t.details_layout = l;
         }
+        // FOURCHETTE_CHECKOUT_SYNC=1 opens the Check out dialog on `main`, 3 commits behind
+        // origin/main; FOURCHETTE_CHECKOUT_SYNC=diverged with 2 commits of its own as well.
+        if let Ok(v) = std::env::var("FOURCHETTE_CHECKOUT_SYNC") {
+            if let Some(b) = t.refs.iter_mut().find(|r| r.name == "main" && r.kind == RefKind::Local) {
+                (b.upstream, b.behind, b.ahead) = ("origin/main".into(), 3, if v == "diverged" { 2 } else { 0 });
+            }
+            let now = t.checkout("main", false);
+            debug_assert!(now.is_none(), "main should ask");
+        }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
             app.settings_open = true;
@@ -329,6 +360,11 @@ impl App {
 
     fn tab_mut(&mut self) -> &mut Tab {
         &mut self.tabs[self.active]
+    }
+
+    /// A dialog takes the window: the tab's, or the update dialog.
+    fn modal(&self) -> bool {
+        self.tab().dialog.is_some() || self.update.dialog
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -410,6 +446,9 @@ impl App {
                     }
                 }
                 Cmd::SetSettings(s) => {
+                    if (s.ui_font, s.code_font) != (self.library.settings.ui_font, self.library.settings.code_font) {
+                        theme::set_fonts(ctx, s.ui_font, s.code_font);
+                    }
                     self.library.settings = s;
                     self.library.save();
                 }
@@ -453,6 +492,8 @@ impl App {
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
                 Cmd::Board => self.board_toggle(),
+                Cmd::UpdateDialog(open) => self.update_dialog_open(open),
+                Cmd::InstallUpdate => self.update_install(ctx),
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);
@@ -495,4 +536,14 @@ impl App {
             found.is_empty(),
         );
     }
+}
+
+/// The saved fonts, or those of `FOURCHETTE_FONTS=<ui>,<code>` (either part may be left out).
+fn fonts_from_env(saved: &crate::settings::Settings) -> (crate::settings::UiFont, crate::settings::CodeFont) {
+    use crate::settings::{CodeFont, UiFont};
+    let v = std::env::var("FOURCHETTE_FONTS").unwrap_or_default();
+    let mut parts = v.split(',');
+    let ui = parts.next().and_then(UiFont::parse).unwrap_or(saved.ui_font);
+    let code = parts.next().and_then(CodeFont::parse).unwrap_or(saved.code_font);
+    (ui, code)
 }
