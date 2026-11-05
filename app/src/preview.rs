@@ -42,6 +42,8 @@ const FIRST_WAIT: f64 = 0.25;
 pub enum Outcome {
     FastForward,
     Merge,
+    /// A merge commit even though the branch has nothing of its own (`merge --no-ff`).
+    NoFastForward,
     /// One new single-parent commit with the upstream's changes.
     Squash,
     Rebase,
@@ -50,7 +52,7 @@ pub enum Outcome {
 }
 
 impl Outcome {
-    pub const ALL: [Outcome; 6] = [Outcome::FastForward, Outcome::Merge, Outcome::Squash, Outcome::Rebase, Outcome::Reset, Outcome::Stay];
+    pub const ALL: [Outcome; 7] = [Outcome::FastForward, Outcome::Merge, Outcome::NoFastForward, Outcome::Squash, Outcome::Rebase, Outcome::Reset, Outcome::Stay];
 
     pub fn of(a: SyncAction, m: MergeStyle) -> Self {
         match a {
@@ -154,6 +156,27 @@ impl Preview {
         Self::new(&sync.branch, &sync.upstream, sync.ahead, sync.behind, Outcome::of(action, merge))
     }
 
+    /// The Merge dialog's: `branch` merged into the checked-out `head`, which has `ours` commits
+    /// of its own; `branch` has `theirs`. The merged branch is drawn as the upstream is, its
+    /// commits and label in that colour, and `head` is checked out in both scenes.
+    pub fn merge(head: &str, branch: &str, ours: usize, theirs: usize, outcome: Outcome) -> Self {
+        let mut p = Self::new(head, branch, ours, theirs, outcome);
+        let theirs_msg = format!("Commit on {branch}");
+        let ours_msg = format!("Commit on {head}");
+        for c in p.before.commits.iter_mut().chain(p.after.commits.iter_mut()) {
+            if (100..200).contains(&c.id) {
+                c.message = theirs_msg.clone();
+            } else if (200..300).contains(&c.id) {
+                c.message = ours_msg.clone();
+            }
+        }
+        p.before.head = p.before.labels.first().map(|l| l.at);
+        // As tall as its tallest merge, not a rebase this dialog never shows.
+        let merges = [Outcome::FastForward, Outcome::Merge, Outcome::NoFastForward, Outcome::Squash];
+        p.rows = merges.iter().map(|o| Self::scenes(head, branch, ours, theirs, *o).1.rows()).chain([p.before.rows()]).max().unwrap_or(MAX_ROWS);
+        p
+    }
+
     /// `ahead` commits only the branch has, `behind` only its upstream has.
     pub fn new(branch: &str, upstream: &str, ahead: usize, behind: usize, outcome: Outcome) -> Self {
         let (before, after) = Self::scenes(branch, upstream, ahead, behind, outcome);
@@ -215,7 +238,7 @@ impl Preview {
                 after.labels[0].at = SQUASH;
                 after.head = Some(SQUASH);
             }
-            Outcome::Merge => {
+            Outcome::Merge | Outcome::NoFastForward => {
                 // A merge commit joins both at the top; everything else moves one row down.
                 for c in after.commits.iter_mut() {
                     c.row += 1;
@@ -253,6 +276,47 @@ impl Preview {
         } else {
             &self.before
         }
+    }
+}
+
+impl Preview {
+    /// A push of `branch` to `remote_ref` ("origin/main"), which exists or not, `ahead` commits
+    /// only the branch has and `behind` only the remote branch has. The branch is checked out in
+    /// both scenes. After, the remote label moves up to the branch; with `force`, the remote's own
+    /// commits turn into ghosts; without it, a diverged push is refused and nothing moves.
+    pub fn push(branch: &str, remote_ref: &str, exists: bool, ahead: usize, behind: usize, force: bool) -> Self {
+        let nm = if !exists || ahead > 0 { SIDE } else { 0 };
+        let nu = if exists && behind > 0 { SIDE } else { 0 };
+        let commit = |id: Id, message: String, lane: usize, row: usize, tone: Tone, parent: Id| Commit { id, message, lane, row, tone, parents: vec![parent], ghost: false, merge: false, from: None };
+        let mut commits: Vec<Commit> = (0..nm).map(|i| commit(mine(i), "Commit to push".into(), 0, i, Tone::Local, if i + 1 < nm { mine(i + 1) } else { BASE })).collect();
+        let lane = if nm > 0 { 1 } else { 0 };
+        commits.extend((0..nu).map(|i| commit(up(i), format!("Only on {remote_ref}"), lane, nm + i, Tone::Upstream, if i + 1 < nu { up(i + 1) } else { BASE })));
+        let base = match (exists, nu > 0) {
+            (false, _) => "Earlier commit".to_string(),
+            (true, true) => "Common ancestor".to_string(),
+            (true, false) => format!("Already on {remote_ref}"),
+        };
+        commits.push(Commit { parents: vec![], ..commit(BASE, base, 0, nm + nu, Tone::Base, BASE) });
+        let own_tip = if nm > 0 { mine(0) } else { BASE };
+        let label = |name: &str, remote: bool, at: Id| Label { name: name.into(), remote, at };
+        let mut labels = vec![label(branch, false, own_tip)];
+        if exists {
+            labels.push(label(remote_ref, true, if nu > 0 { up(0) } else { BASE }));
+        }
+        let before = Scene { commits, labels, head: Some(own_tip) };
+        let mut after = before.clone();
+        let refused = nu > 0 && !force;
+        if !refused {
+            match after.labels.get_mut(1) {
+                Some(l) => l.at = own_tip,
+                None => after.labels.push(label(remote_ref, true, own_tip)),
+            }
+            for c in after.commits.iter_mut().filter(|c| (100..200).contains(&c.id)) {
+                c.ghost = true;
+            }
+        }
+        let rows = before.rows();
+        Preview { before, after, rows }
     }
 }
 
@@ -482,7 +546,8 @@ fn paint(ui: &Ui, rect: Rect, scene: &Scene, left: &Scene, pose: &Pose, spots: &
         let col = if n.ghost { c.faint } else if after && scene.head == Some(cm.id) { c.strong } else { c.text };
         let col = col.gamma_multiply(n.o);
         let pos = pos2(x, rect.min.y + n.y);
-        let r = painter.text(pos, Align2::LEFT_CENTER, &cm.message, font.clone(), col);
+        // Cut with "…" when long labels leave it little room.
+        let r = crate::ui::fit_text(&painter, pos, Align2::LEFT_CENTER, &cm.message, font.clone(), col, rect.right() - x);
         if n.ghost {
             painter.line_segment([pos2(r.left(), r.center().y), pos2(r.right(), r.center().y)], Stroke::new(1.0_f32, col));
         }
@@ -718,6 +783,31 @@ mod tests {
     }
 
     #[test]
+    fn no_fast_forward_makes_a_merge_commit_even_without_commits_of_its_own() {
+        let p = Preview::new("main", "feature", 0, 3, Outcome::NoFastForward);
+        let m = p.after.commit(MERGE).unwrap();
+        assert!(m.merge && m.row == 0);
+        assert_eq!(m.parents, vec![BASE, up(0)]);
+        assert_eq!(names(&p.after), vec![("main", MERGE), ("feature", up(0))]);
+        // Diverged, it is the same as a merge.
+        assert_eq!(diverged(Outcome::NoFastForward), diverged(Outcome::Merge));
+    }
+
+    #[test]
+    fn the_merge_preview_names_both_branches_and_starts_checked_out() {
+        let p = Preview::merge("main", "feature", 2, 3, Outcome::Merge);
+        assert_eq!(p.before.commit(up(0)).unwrap().message, "Commit on feature");
+        assert_eq!(p.after.commit(mine(0)).unwrap().message, "Commit on main");
+        assert_eq!(p.after.commit(MERGE).unwrap().message, "Merge feature into main");
+        assert_eq!(p.before.head, Some(mine(0)));
+        assert_eq!(p.after.head, Some(MERGE));
+        assert_eq!(Preview::merge("main", "feature", 0, 3, Outcome::FastForward).before.head, Some(BASE));
+        // Sized for its merges only: diverged, a merge commit on top of both sides.
+        assert_eq!(p.rows, 2 * SIDE + 2);
+        assert_eq!(Preview::merge("main", "feature", 0, 3, Outcome::FastForward).rows, SIDE + 2);
+    }
+
+    #[test]
     fn it_builds_from_a_sync() {
         let sync = Sync { branch: "main".into(), upstream: "origin/main".into(), upstream_ref: "refs/remotes/origin/main".into(), ahead: 1, behind: 1 };
         let p = Preview::from_sync(&sync, SyncAction::Merge, MergeStyle::Commit);
@@ -735,5 +825,55 @@ mod tests {
         assert_eq!((r.x, r.y, r.o), (from[&mine(0)].x, from[&mine(0)].y, 0.0));
         let end = blend(&from, &p.after, &p.before, 1.0);
         assert_eq!(end, pose_of(&p.after));
+    }
+
+    fn remote_at(s: &Scene) -> Option<Id> {
+        s.labels.iter().find(|l| l.remote).map(|l| l.at)
+    }
+
+    #[test]
+    fn a_push_moves_the_remote_label_up_to_the_branch() {
+        let p = Preview::push("main", "origin/main", true, 3, 0, false);
+        assert_eq!(ids(&p.before), vec![mine(0), mine(1), BASE]);
+        assert_eq!(names(&p.before), vec![("main", mine(0)), ("origin/main", BASE)]);
+        assert_eq!(names(&p.after), vec![("main", mine(0)), ("origin/main", mine(0))]);
+        assert_eq!((p.before.head, p.after.head), (Some(mine(0)), Some(mine(0))));
+        assert!(p.after.commits.iter().all(|c| !c.ghost));
+        assert_eq!(p.rows, 3);
+        // The same with force: nothing is replaced.
+        assert_eq!(Preview::push("main", "origin/main", true, 3, 0, true), p);
+    }
+
+    #[test]
+    fn a_new_remote_branch_appears_on_the_branch() {
+        let p = Preview::push("feature", "origin/feature", false, 0, 0, false);
+        assert_eq!(names(&p.before), vec![("feature", mine(0))]);
+        assert_eq!(names(&p.after), vec![("feature", mine(0)), ("origin/feature", mine(0))]);
+        assert_eq!(p.after.labels[1].remote, true);
+    }
+
+    #[test]
+    fn a_diverged_push_is_refused_unless_forced_and_then_the_remote_commits_go() {
+        let refused = Preview::push("main", "origin/main", true, 2, 3, false);
+        assert_eq!(refused.after, refused.before);
+        assert_eq!(ids(&refused.before), vec![mine(0), mine(1), up(0), up(1), BASE]);
+        assert!(refused.before.commits.iter().filter(|c| (100..200).contains(&c.id)).all(|c| c.lane == 1 && c.tone == Tone::Upstream));
+        let forced = Preview::push("main", "origin/main", true, 2, 3, true);
+        assert_eq!(remote_at(&forced.after), Some(mine(0)));
+        let ghosts: Vec<Id> = forced.after.commits.iter().filter(|c| c.ghost).map(|c| c.id).collect();
+        assert_eq!(ghosts, vec![up(0), up(1)]);
+        assert_eq!(forced.rows, 5);
+        assert!(forced.rows <= MAX_ROWS);
+        // Only behind: forced, the remote goes back to the branch's commit.
+        let back = Preview::push("main", "origin/main", true, 0, 2, true);
+        assert_eq!(remote_at(&back.after), Some(BASE));
+        assert!(back.before.commits.iter().all(|c| c.lane == 0));
+    }
+
+    #[test]
+    fn up_to_date_is_one_commit_with_both_labels() {
+        let p = Preview::push("main", "origin/main", true, 0, 0, false);
+        assert_eq!(ids(&p.before), vec![BASE]);
+        assert_eq!(p.after, p.before);
     }
 }

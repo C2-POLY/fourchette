@@ -62,7 +62,9 @@ impl App {
             v.push(item("Commands", "Fetch all remotes", "", Cmd::Fetch { all: true, quiet: false }));
             let pull = if self.library.settings.pull_rebase { "rebase onto the upstream branch" } else { "merge the upstream branch" };
             v.push(item("Commands", "Pull", pull, Cmd::Pull));
+            v.push(item("Commands", "Pull…", "choose the remote branch, merge or rebase", Cmd::PullDialog));
             v.push(item("Commands", "Push", "send your commits", Cmd::Push));
+            v.push(item("Commands", "Push…", "⇧⌘P · remote branch, force, tags", Cmd::AskPush));
             v.push(item(
                 "Commands",
                 "New branch…",
@@ -115,7 +117,7 @@ impl App {
                 RefKind::Local if !r.is_head => {
                     v.push(item("Branches", format!("Check out {}", r.name), "branch", Cmd::Checkout { name: r.name.clone(), remote: false }));
                     if !checkout_only && !cur.is_empty() {
-                        v.push(item("Branches", format!("Merge {} into {cur}", r.name), "branch", Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false }));
+                        v.push(item("Branches", format!("Merge {} into {cur}…", r.name), "branch", Cmd::AskMerge { name: r.name.clone(), remote: false }));
                     }
                 }
                 RefKind::Remote => v.push(item("Branches", format!("Check out {}", r.name), "remote branch", checkout_remote(r))),

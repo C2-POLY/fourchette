@@ -6,6 +6,9 @@ use std::path::PathBuf;
 /// How many actions can be undone in a row.
 pub const UNDO_DEPTH: usize = 30;
 
+/// `Snapshot::left` of a `merge --squash` stopped on conflicts, which `Repo::operation` cannot see.
+pub const SQUASH: &str = "squash";
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
     pub head_branch: Option<String>,
@@ -104,6 +107,11 @@ impl Repo {
         //    Only that one: a rebase started in a terminal since is the person's.
         if let Some(op) = s.left.as_ref().filter(|op| self.operation().as_ref() == Some(*op)) {
             self.git(&[op, "--abort"])?;
+        }
+        // A squash stopped on conflicts leaves no MERGE_HEAD to abort, only conflicted files:
+        // `reset --merge` takes them back as `merge --abort` would, other local edits kept.
+        if s.left.as_deref() == Some(SQUASH) && self.operation().is_none() && !self.conflicted_files().is_empty() {
+            self.git(&["reset", "-q", "--merge"])?;
         }
         let now = self.state();
 

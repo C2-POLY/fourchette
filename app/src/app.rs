@@ -66,6 +66,14 @@ pub enum Dialog {
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
     /// "Do you want to abort the merge?" for the operation in progress (`Repo::operation`).
     Abort { op: String },
+    /// The original's PushWindowController: the remote branch, Force push and Push all tags.
+    Push(crate::push::Push),
+    /// The original's MergeWindowController: merge a branch into the checked-out one, as a merge
+    /// commit or squashed, `no_ff` its "No fast-forward" box; `check` foresees conflicts.
+    Merge { merge: crate::merge::Merge, style: crate::checkout::MergeStyle, no_ff: bool, check: crate::merge::Check },
+    /// The original's PullWindowController: the remote branch to pull, Merge or Rebase, and
+    /// "Stash and reapply" when there are local changes (`dirty`).
+    Pull { pull: crate::pull::Pull, mode: crate::pull::Mode, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
@@ -78,12 +86,24 @@ pub enum Cmd {
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool },
     /// Abort, Continue or Skip the merge, rebase, cherry-pick or revert in progress.
     Operation(crate::operation::Action),
+    /// Open the Merge dialog for a branch (`remote`: a remote one) into the checked-out one.
+    AskMerge { name: String, remote: bool },
+    /// The Merge dialog's choice, run as one undo step.
+    Merge { merge: crate::merge::Merge, way: crate::merge::Way },
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
+    /// Repository › Pull… (⇧⌘L): open the Pull dialog.
+    PullDialog,
+    /// The Pull dialog's choice: `git pull` with these arguments, from `source`.
+    PullFrom { source: crate::pull::Source, args: Vec<String> },
     /// A stash's Apply: `stash apply`, or `stash pop` when "Delete stash after Apply" is on.
     ApplyStash(String),
     Push,
+    /// Push… (⇧⌘P, the palette): open the Push dialog on the current branch.
+    AskPush,
+    /// The Push dialog's choice.
+    PushTo(crate::push::Push),
     Discard { path: String, untracked: bool },
     Select(Sel),
     Diff(DiffReq),
@@ -395,6 +415,14 @@ impl App {
         // FOURCHETTE_DIALOG=<name> opens one of the dialogs on the sample project.
         if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
             t.dialog = sample_dialog(&v, &t.worktrees);
+            if let Some(kind) = v.strip_prefix("push") {
+                sample_push(t, kind);
+            }
+        }
+        // FOURCHETTE_DIALOG=pull: the Pull dialog on `develop`, diverged from origin/develop.
+        if std::env::var("FOURCHETTE_DIALOG").is_ok_and(|v| v == "pull") {
+            let s = app.library.settings;
+            app.tab_mut().pull_sample(s);
         }
         // FOURCHETTE_MENU=<x>,<y> right-clicks there, in points, to show a context menu.
         app.shot_menu = std::env::var("FOURCHETTE_MENU").ok().and_then(|v| {
@@ -571,6 +599,10 @@ impl App {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);
                 }
+                Cmd::PullDialog => {
+                    let s = self.library.settings;
+                    self.tab_mut().pull_dialog(s);
+                }
                 Cmd::ApplyStash(name) => {
                     let c = Cmd::apply_stash(&name, self.library.settings.delete_stash_after_apply);
                     self.tab_mut().run(c, ctx);
@@ -613,7 +645,10 @@ impl App {
 
 /// The dialog `FOURCHETTE_DIALOG` names, filled in as on the sample project: `confirm` (delete a
 /// tag), `rebase`, `branch`, `tag`, `delete-branch` (checked out in a worktree with changes, not
-/// merged), `delete-worktree`, `group` and `abort` (of `FOURCHETTE_OPERATION`'s, else a merge).
+/// merged), `delete-worktree`, `group`, and `merge` (feature/search into develop, diverged, with
+/// conflicts; `merge-clean` without, `merge-ff` where a fast-forward is possible, `merge-noff` with "No fast-forward" ticked, `merge-checking`
+/// while the check runs, `merge-old` with a Git too old to check), and `abort` (of
+/// `FOURCHETTE_OPERATION`'s, else a merge).
 fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<Dialog> {
     let wt = worktrees.iter().find(|w| !w.is_main).cloned();
     let confirm = |title: &str, message: &str, args: &[&str]| Dialog::Confirm {
@@ -635,8 +670,45 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
         "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
         "abort" => Dialog::Abort { op: std::env::var("FOURCHETTE_OPERATION").map(|v| crate::operation::sample(&v).op).unwrap_or_else(|_| "merge".into()) },
         "group" => Dialog::NewGroup { path: PathBuf::from("/Users/me/dev/fourchette"), name: "Side projects".into() },
+        m if m.starts_with("merge") => {
+            use crate::merge::{Check, Merge, Test};
+            let (ours, theirs) = if m == "merge-ff" || m == "merge-noff" { (0, 3) } else { (2, 3) };
+            let test = match m {
+                "merge-clean" | "merge-ff" | "merge-noff" => Test::Clean,
+                "merge-checking" => Test::Checking,
+                "merge-old" => Test::Unknown("Checking for conflicts beforehand needs Git 2.38 or later.".into()),
+                _ => Test::Conflicts(vec!["src/search/index.rs".into(), "src/app.rs".into(), "Cargo.lock".into()]),
+            };
+            let merge = Merge { branch: "feature/search".into(), remote: false, head: "develop".into(), ours, theirs };
+            Dialog::Merge { merge, style: Default::default(), no_ff: m == "merge-noff", check: Check::done(test) }
+        }
         _ => return None,
     })
+}
+
+/// The Push dialog on the sample project's `develop`: `push` 3 commits ahead of origin/develop,
+/// `-diverged` 2 ahead and 3 behind, `-force` the same with Force push asking to confirm, `-new`
+/// to a new remote branch with all tags.
+fn sample_push(t: &mut Tab, kind: &str) {
+    let (ahead, behind, upstream) = match kind {
+        "-diverged" | "-force" => (2, 3, "origin/develop"),
+        "-new" => (0, 0, ""),
+        _ => (3, 0, "origin/develop"),
+    };
+    if let Some(b) = t.refs.iter_mut().find(|r| r.name == "develop" && r.kind == RefKind::Local) {
+        (b.upstream, b.ahead, b.behind) = (upstream.into(), ahead, behind);
+    }
+    t.ask_push();
+    if let Some(Dialog::Push(p)) = &mut t.dialog {
+        match kind {
+            "-force" => (p.force, p.confirm) = (true, true),
+            "-new" => {
+                p.target = "feature/lighter-toolbar".into();
+                p.tags = true;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The saved fonts, or those of `FOURCHETTE_FONTS=<ui>,<code>` (either part may be left out).

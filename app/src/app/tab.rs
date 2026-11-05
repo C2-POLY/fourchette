@@ -344,9 +344,33 @@ impl Tab {
             },
         };
         self.spawn(&format!("Push to '{remote}'"), false, ctx, move |root| {
-            let args = git::push_args(&remote, &branch, &remote_branch, set_up, false);
+            let args = git::push_args(&remote, &branch, &remote_branch, set_up, false, false);
             let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
             git::exec(root, &a).map(|(o, e)| git::push_summary(&format!("{o}{e}"), &branch, &remote))
+        });
+    }
+
+    /// Opens the Push dialog on the current branch (the sample project's too, for a look).
+    pub(super) fn ask_push(&mut self) {
+        let Some(branch) = self.branch.clone() else {
+            self.notify("Check out a branch before pushing.", true);
+            return;
+        };
+        let out = self.repo.as_ref().map(|r| r.git(&["remote"]).unwrap_or_default());
+        let remotes = crate::push::Push::remotes_of(out.as_deref(), &self.refs);
+        let default = self.repo.as_ref().and_then(|r| r.default_remote()).or_else(|| remotes.iter().find(|r| *r == "origin").cloned());
+        match crate::push::Push::new(&branch, remotes, &self.refs, default) {
+            Some(p) => self.dialog = Some(Dialog::Push(p)),
+            None => self.notify("This repository has no remote to push to.", true),
+        }
+    }
+
+    /// The Push dialog's push. Not undoable, like the toolbar's.
+    fn push_to(&mut self, p: crate::push::Push, ctx: &egui::Context) {
+        self.spawn(&p.label(), false, ctx, move |root| {
+            let args = p.args();
+            let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            git::exec(root, &a).map(|(o, e)| p.done(&format!("{o}{e}"))).map_err(|e| crate::push::refused(&e, &p.remote_ref()))
         });
     }
 
@@ -359,16 +383,56 @@ impl Tab {
             self.notify("The current branch has no upstream branch to pull from.", true);
             return;
         };
+        let args = git::pull_args(&up.0, &up.1, s.pull_rebase, s.pull_autostash);
+        self.pull_with(ctx, crate::pull::Source { remote: up.0, branch: up.1 }, args);
+    }
+
+    /// Runs `git <args>`, a pull from `source`, in the background. The snapshot keeps the
+    /// uncommitted changes too, so one Undo takes the whole pull back (the fetch stays).
+    pub(super) fn pull_with(&mut self, ctx: &egui::Context, source: crate::pull::Source, args: Vec<String>) {
         if self.busy.is_none() {
             self.pending_undo = self.repo.as_ref().map(|r| Snapshot { dirty: r.stash_create(), ..r.snapshot("Pull", false, false) });
         }
-        let args = git::pull_args(&up.0, &up.1, s.pull_rebase, s.pull_autostash);
-        self.spawn(&format!("Pull from '{}'", up.0), false, ctx, move |root| {
+        self.spawn(&format!("Pull from '{}'", source.remote), false, ctx, move |root| {
             let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
             let res = git::exec(root, &a).map(|(o, e)| format!("{o}{e}"));
             let repo = Repo { root: root.to_path_buf() };
-            git::pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), &up.0, &up.1)
+            git::pull_outcome(res, repo.operation().as_deref(), &repo.conflicted_files(), &source.remote, &source.branch)
         });
+    }
+
+    /// Repository › Pull…: the Pull dialog on the current branch, its upstream chosen, Merge or
+    /// Rebase and the stash as Settings › Git says, with fresh local changes and counts.
+    pub(super) fn pull_dialog(&mut self, s: crate::settings::Settings) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        let Some(branch) = r.current_branch() else {
+            self.notify("Check out a branch to pull into first.", true);
+            return;
+        };
+        let sources = crate::pull::sources(&self.refs, &crate::pull::remotes(r));
+        let Some(mut pull) = crate::pull::Pull::new(&branch, r.upstream(), sources, r.default_remote().as_deref()) else {
+            self.notify("This repository has no remote branch to pull from.", true);
+            return;
+        };
+        pull.counts = crate::pull::count(r, &pull.source().name());
+        self.refresh_status();
+        let mode = crate::pull::Mode::from_setting(s.pull_rebase);
+        self.dialog = Some(Dialog::Pull { pull, mode, stash: s.pull_autostash, dirty: !self.status.is_empty() });
+    }
+
+    /// FOURCHETTE_DIALOG=pull: the Pull dialog on the sample project's `develop`, 2 commits ahead
+    /// of origin/develop and 3 behind.
+    pub(super) fn pull_sample(&mut self, s: crate::settings::Settings) {
+        let branch = self.branch.clone().unwrap_or_else(|| "develop".into());
+        let up = Some(("origin".to_string(), branch.clone()));
+        if let Some(mut pull) = crate::pull::Pull::new(&branch, up, crate::pull::sources(&self.refs, &[]), Some("origin")) {
+            pull.counts = Some((2, 3));
+            let mode = crate::pull::Mode::from_setting(s.pull_rebase);
+            self.dialog = Some(Dialog::Pull { pull, mode, stash: true, dirty: !self.status.is_empty() });
+        }
     }
 
     fn after_load(&mut self) {
@@ -436,8 +500,13 @@ impl Tab {
             }
             Cmd::CheckoutSync { sync, action, merge, stash } => self.checkout_sync(&sync, action, merge, stash),
             Cmd::Operation(a) => self.operation_run(a),
+            Cmd::AskMerge { name, remote } => self.ask_merge(&name, remote),
+            Cmd::Merge { merge, way } => self.merge(&merge, way),
+            Cmd::PullFrom { source, args } => self.pull_with(ctx, source, args),
             Cmd::Fetch { all, quiet } => self.fetch(all, quiet, ctx),
             Cmd::Push => self.push(ctx),
+            Cmd::AskPush => self.ask_push(),
+            Cmd::PushTo(p) => self.push_to(p, ctx),
             Cmd::Discard { path, untracked } => {
                 let Some(r) = &self.repo else { return };
                 let mut snap = r.snapshot(&format!("Discard {path}"), false, !untracked);
@@ -531,6 +600,7 @@ impl Tab {
             | Cmd::Settings
             | Cmd::SetSettings(_)
             | Cmd::Pull
+            | Cmd::PullDialog
             | Cmd::ApplyStash(_)
             | Cmd::SetCommitLimit(_)
             | Cmd::Switcher
@@ -620,6 +690,53 @@ impl Tab {
             Err(e) => self.notify(e, true),
         }
         // Several Git steps ran as one: the toast offers to take them all back while it shows.
+        if let Some(n) = &mut self.notice {
+            n.undo = self.undo.len() > steps;
+        }
+    }
+
+    /// Opens the Merge dialog for `name`, and starts the conflict check in a thread (none for a
+    /// fast-forward, which cannot conflict).
+    fn ask_merge(&mut self, name: &str, remote: bool) {
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        match crate::merge::Merge::read(r, name, remote) {
+            Ok(merge) => {
+                use crate::merge::{Check, Test};
+                let check = if merge.up_to_date() || merge.can_fast_forward() { Check::done(Test::Clean) } else { Check::start(r.root.clone(), name.to_string()) };
+                self.dialog = Some(Dialog::Merge { merge, style: Default::default(), no_ff: false, check });
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// The Merge dialog's choice under one snapshot. A merge stopped on conflicts is kept too
+    /// (Undo aborts it); a squash stopped on conflicts as well, though `record` cannot see it.
+    fn merge(&mut self, merge: &crate::merge::Merge, way: crate::merge::Way) {
+        let Some(r) = &self.repo else { return };
+        if self.busy.is_some() {
+            self.notify("Please wait for the current operation to finish.", true);
+            return;
+        }
+        let snap = r.snapshot(&merge.title(way), false, false);
+        let res = crate::merge::run(r, merge, way);
+        let squash_stopped = way == crate::merge::Way::Squash && r.operation().is_none() && !r.conflicted_files().is_empty();
+        let steps = self.undo.len();
+        if squash_stopped {
+            let mut snap = snap;
+            r.after(&mut snap);
+            snap.left = Some(crate::undo::SQUASH.into());
+            self.push_undo(snap);
+        } else {
+            self.record(Some(snap));
+        }
+        self.reload();
+        match res {
+            Ok(msg) => self.notify(msg, false),
+            Err(e) => self.notify(e, true),
+        }
         if let Some(n) = &mut self.notice {
             n.undo = self.undo.len() > steps;
         }

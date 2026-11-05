@@ -230,8 +230,8 @@ impl Tab {
                             if ui.button("Check out").clicked() {
                                 cmds.push(checkout_remote(r));
                             }
-                            if ui.button(format!("Merge {} into current branch", r.name)).clicked() {
-                                cmds.push(Cmd::Git { label: format!("Merged {}", r.name), args: vec!["merge".into(), "--no-edit".into(), r.name.clone()], network: false });
+                            if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
+                                cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
                             }
                             if ui.button("Copy name").clicked() {
                                 cmds.push(Cmd::Copy(r.name.clone()));
@@ -953,6 +953,8 @@ impl Tab {
             paths.dedup();
             paths.len()
         };
+        // The Push dialog counts commits against another remote branch when one is chosen.
+        let (repo, refs) = (&self.repo, &self.refs);
         let close = match &mut self.dialog {
             None => return,
             Some(Dialog::NewRef { at, label, name, checkout, tag }) => {
@@ -1198,6 +1200,313 @@ impl Tab {
                 }
                 out.primary || out.close
             }
+            Some(Dialog::Push(push)) => {
+                // The original's PushWindowController: where to, Force push, Push all tags. One
+                // panel like Check out's: the result's title and Now / After on top, the choices on
+                // the left and the graph on the right, the sentence under them.
+                use crate::preview;
+                const FORM_W: f32 = 250.0;
+                if push.stale() {
+                    let branch = push.branch.clone();
+                    push.recount(refs, |r| {
+                        let out = repo.as_ref()?.git(&["rev-list", "--left-right", "--count", &format!("refs/heads/{branch}...refs/remotes/{r}")]).ok()?;
+                        let mut n = out.split_whitespace().filter_map(|x| x.parse().ok());
+                        Some((n.next()?, n.next()?))
+                    });
+                }
+                let k = theme::c();
+                let mut status = vec![text("to"), remote(push.remote_ref()), text(push.counts())];
+                if push.tags {
+                    status.push(text("· all tags"));
+                }
+                let hint = if push.confirm {
+                    vec![Hint::Text("Click again to replace them".into())]
+                } else if !push.valid() {
+                    vec![Hint::Text("Not a valid branch name".into())]
+                } else if push.diverged() && !push.force {
+                    vec![Hint::Text("Pull first, or tick Force push".into())]
+                } else {
+                    vec![Hint::Text("A push can't be undone with ⌘Z".into())]
+                };
+                let out = Modal::new("push", Width::Large, "push", vec![text("Push"), pill(push.branch.as_str())])
+                    .danger(push.replaces() && push.confirm)
+                    .status(status)
+                    .hint(hint)
+                    .primary(push.button(), push.force, push.can_push())
+                    .show(ctx, |ui| {
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            let view_id = egui::Id::new("push_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_PUSH_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("push_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            let col = if push.replaces() { k.deleted } else { k.strong };
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &push.title(), egui::FontId::proportional(theme::FS_TITLE), col, title_w);
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The choices on the left, the graph on the right, as tall as the taller.
+                            let before = (push.key(), push.force);
+                            let top = ui.cursor().min;
+                            let form = Rect::from_min_size(top, vec2(FORM_W, 400.0));
+                            let mut left = ui.new_child(egui::UiBuilder::new().id_salt("push_form").max_rect(form).layout(Layout::top_down(Align::Min)));
+                            left.spacing_mut().item_spacing.y = 6.0;
+                            modal::caption(&mut left, "Remote");
+                            if push.remotes.len() > 1 {
+                                let names: Vec<&str> = push.remotes.iter().map(|r| r.as_str()).collect();
+                                let cur = push.remotes.iter().position(|r| *r == push.remote).unwrap_or(0);
+                                if let Some(i) = modal::segmented(&mut left, &names, cur, &[]) {
+                                    push.remote = push.remotes[i].clone();
+                                }
+                            } else {
+                                modal::pill_ui(&mut left, &push.remote, true, theme::FS_BODY);
+                            }
+                            left.add_space(6.0);
+                            modal::caption(&mut left, "Remote branch");
+                            modal::text_field(&mut left, &mut push.target, "branch name");
+                            left.label(RichText::new(push.tracking()).font(theme::secondary()).color(k.faint));
+                            left.add_space(6.0);
+                            modal::check_row(&mut left, &mut push.force, "Force push", Some("with lease"));
+                            modal::check_row(&mut left, &mut push.tags, "Push all tags", None);
+                            let form_h = left.min_rect().height();
+                            let p = push.preview();
+                            let graph_h = preview::height(p.rows);
+                            let block_h = form_h.max(graph_h);
+                            let x = form.right() + 16.0;
+                            ui.painter().vline(x, top.y..=top.y + block_h, Stroke::new(1.0_f32, k.border));
+                            let graph = Rect::from_min_size(pos2(x + 16.0, top.y + (block_h - graph_h) / 2.0), vec2(w - FORM_W - 32.0, graph_h));
+                            let mut right = ui.new_child(egui::UiBuilder::new().id_salt("push_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
+                            preview::show(&mut right, egui::Id::new("push_preview"), &p, after);
+                            ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
+                            if (push.key(), push.force) != before {
+                                push.confirm = false;
+                            }
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            let sentence = if after { push.explain() } else { push.summary() };
+                            ui.label(RichText::new(sentence).color(k.dim));
+                            if push.confirm {
+                                ui.add_space(12.0);
+                                modal::note(ui, k.deleted, |ui| {
+                                    ui.label(RichText::new(push.warning()).color(k.text));
+                                });
+                            } else if push.diverged() && !push.force {
+                                ui.add_space(12.0);
+                                modal::note(ui, k.modified, |ui| {
+                                    ui.label(RichText::new(format!("{} has commits that {} doesn't. Tick Force push to replace them.", push.remote_ref(), push.branch)).color(k.text));
+                                });
+                            }
+                        });
+                    });
+                // Replacing commits on the remote takes a second click.
+                let go = out.primary && push.can_push();
+                if go && push.replaces() && !push.confirm {
+                    push.confirm = true;
+                    false
+                } else {
+                    if go {
+                        cmds.push(Cmd::PushTo(push.clone()));
+                    }
+                    go || out.close
+                }
+            }
+            Some(Dialog::Merge { merge, style, no_ff, check }) => {
+                // The original's MergeWindowController: the branch, Merge commit or Squash, "No
+                // fast-forward", and MergeTestGitCommand's answer before anything is run. Laid
+                // out like the Check out dialog: the result's title and Now / After, the styles
+                // beside the animated graph, the sentence, then the conflict check.
+                use crate::checkout::MergeStyle;
+                use crate::merge::Merge;
+                use crate::preview;
+                const LIST_W: f32 = 190.0;
+                if check.poll() {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+                let enabled = [true; 2];
+                let cur = MergeStyle::ALL.iter().position(|m| m == style).unwrap_or(0);
+                if let Some(i) = modal::choice_keys(ctx, &enabled, cur) {
+                    *style = MergeStyle::ALL[i];
+                }
+                let way = merge.way(*style, *no_ff);
+                let branch_seg = if merge.remote { remote(merge.branch.as_str()) } else { pill(merge.branch.as_str()) };
+                let mut hint = vec![Hint::Key(Cap::Up), Hint::Key(Cap::Down), Hint::Text("choose".into())];
+                hint.extend(modal::undo_hint());
+                let out = Modal::new("merge", Width::Large, "branch", vec![text("Merge"), branch_seg, text("into"), pill(merge.head.as_str())])
+                    .status(vec![text(merge.counts())])
+                    .hint(hint)
+                    .primary(Merge::button(way), false, !merge.up_to_date())
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            // The title, then Now / After on its right.
+                            let view_id = egui::Id::new("merge_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("merge_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &merge.title(way), egui::FontId::proportional(theme::FS_TITLE), k.strong, title_w);
+                            // The styles and the graph, between two rules, on the same rows.
+                            let preview = merge.preview(*style, *no_ff);
+                            let block_h = preview::height(preview.rows.max(MergeStyle::ALL.len()));
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(10.0);
+                            let (block, _) = ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
+                            let list = Rect::from_min_size(block.min, vec2(LIST_W, block_h));
+                            let mut left = ui.new_child(egui::UiBuilder::new().id_salt("merge_styles").max_rect(list).layout(Layout::top_down(Align::Min)));
+                            left.spacing_mut().item_spacing.y = 0.0;
+                            for (i, m) in MergeStyle::ALL.iter().enumerate() {
+                                if modal::list_row(&mut left, m.short(), Some(i + 1), m == style, false, None, preview::ROW).clicked() {
+                                    *style = *m;
+                                }
+                            }
+                            let x = list.right() + 16.0;
+                            ui.painter().vline(x, block.y_range(), Stroke::new(1.0_f32, k.border));
+                            let graph = Rect::from_min_max(pos2(x + 16.0, block.top()), block.max);
+                            let mut right = ui.new_child(egui::UiBuilder::new().id_salt("merge_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
+                            preview::show(&mut right, egui::Id::new("merge_preview"), &preview, after);
+                            ui.add_space(10.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The sentence, in a room as tall as the longest one.
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let mut texts = vec![merge.summary()];
+                            for m in MergeStyle::ALL {
+                                for n in [false, true] {
+                                    texts.push(merge.explain(m, n));
+                                }
+                            }
+                            let room = texts.iter().map(|t| ui.painter().layout(t.clone(), font.clone(), k.dim, w).size().y).fold(0.0, f32::max);
+                            let sentence = if after { merge.explain(*style, *no_ff) } else { merge.summary() };
+                            ui.allocate_ui_with_layout(vec2(w, room), Layout::top_down(Align::Min), |ui| {
+                                ui.set_min_size(vec2(w, room));
+                                ui.label(RichText::new(sentence).color(k.dim));
+                            });
+                            // What the check foresees, unless there is nothing to merge.
+                            if !merge.up_to_date() {
+                                ui.add_space(12.0);
+                                merge_check(ui, &check.test, w);
+                            }
+                            if merge.can_fast_forward() {
+                                ui.add_space(12.0);
+                                modal::check_row(ui, no_ff, "No fast-forward: always create a merge commit", Some("--no-ff"));
+                            }
+                        });
+                    });
+                if out.primary {
+                    cmds.push(Cmd::Merge { merge: merge.clone(), way });
+                }
+                out.primary || out.close
+            }
+            Some(Dialog::Pull { pull, mode, stash, dirty }) => {
+                // The original's PullWindowController: the remote branch, "Rebase instead of
+                // merge", "Stash and reapply local changes", "Pull". Here the mode is a switch and
+                // the result shows on the same animated graph as the Check out dialog.
+                use crate::preview;
+                use crate::pull::Mode;
+                let src = pull.source().name();
+                let hint = vec![Hint::Key(Cap::Text("Enter")), Hint::Text("pulls".into()), Hint::Key(Cap::Text("⌘Z")), Hint::Text("takes the pull back, the fetch stays".into())];
+                let mut picked = None;
+                let out = Modal::new("pull", Width::Large, "pull", vec![text("Pull into"), pill(pull.branch.as_str())])
+                    .status(vec![text("from"), remote(src.as_str()), text(pull.counts_text())])
+                    .hint(hint)
+                    .primary("Pull", false, true)
+                    .show(ctx, |ui| {
+                        let k = theme::c();
+                        let w = Width::Large.px() - 2.0 * modal::PAD;
+                        // The remote branch on the left, Merge or Rebase on the right.
+                        let (row, _) = ui.allocate_exact_size(vec2(w, 28.0), Sense::hover());
+                        let mut left = ui.new_child(egui::UiBuilder::new().id_salt("pull_from").max_rect(row).layout(Layout::left_to_right(Align::Center)));
+                        left.spacing_mut().item_spacing.x = 8.0;
+                        modal::caption(&mut left, "From");
+                        egui::ComboBox::from_id_salt("pull_source").width(300.0).height(320.0).selected_text(RichText::new(src.as_str()).font(theme::mono()).color(k.text)).show_ui(&mut left, |ui| {
+                            for (i, s) in pull.sources.iter().enumerate() {
+                                if ui.selectable_label(i == pull.sel, RichText::new(s.name()).font(theme::mono())).clicked() {
+                                    picked = Some(i);
+                                }
+                            }
+                        });
+                        let mut right = ui.new_child(egui::UiBuilder::new().id_salt("pull_mode").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                        right.spacing_mut().item_spacing.x = 8.0;
+                        let names: Vec<&str> = Mode::ALL.iter().map(|m| m.short()).collect();
+                        let cur = Mode::ALL.iter().position(|m| m == mode).unwrap_or(0);
+                        if let Some(i) = modal::segmented(&mut right, &names, cur, &[]) {
+                            *mode = Mode::ALL[i];
+                        }
+                        modal::caption(&mut right, if pull.fast_forward() { "When it has diverged" } else { "Join with" });
+                        ui.add_space(12.0);
+                        egui::Frame::new().fill(k.bg).stroke(Stroke::new(1.0_f32, k.border)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::symmetric(16, 14)).show(ui, |ui| {
+                            let w = w - 32.0;
+                            ui.set_width(w);
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            // The result's title, Now / After on its right.
+                            let view_id = egui::Id::new("pull_view");
+                            let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
+                            let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+                            let mut side = ui.new_child(egui::UiBuilder::new().id_salt("pull_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
+                            if let Some(i) = modal::segmented(&mut side, &["Now", "After"], after as usize, &[]) {
+                                after = i == 1;
+                                ctx.data_mut(|d| d.insert_temp(view_id, after));
+                            }
+                            let title_w = row.width() - side.min_rect().width() - 12.0;
+                            crate::ui::fit_text(ui.painter(), row.left_center(), egui::Align2::LEFT_CENTER, &pull.title(*mode), egui::FontId::proportional(theme::FS_TITLE), k.strong, title_w);
+                            // The graph, between two rules.
+                            let preview = pull.preview(*mode);
+                            ui.add_space(12.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(10.0);
+                            preview::show(ui, egui::Id::new("pull_preview"), &preview, after);
+                            ui.add_space(10.0);
+                            let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
+                            ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
+                            ui.add_space(12.0);
+                            // The sentence, in a room as tall as the longest one.
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let room = pull.sentences().into_iter().map(|t| ui.painter().layout(t, font.clone(), k.dim, w).size().y).fold(0.0, f32::max);
+                            let sentence = if after { pull.explain(*mode) } else { pull.summary() };
+                            ui.allocate_ui_with_layout(vec2(w, room), Layout::top_down(Align::Min), |ui| {
+                                ui.set_min_size(vec2(w, room));
+                                ui.label(RichText::new(sentence).color(k.dim));
+                            });
+                        });
+                        if *dirty {
+                            ui.add_space(12.0);
+                            let side = if changed == 1 { "1 file".to_string() } else { format!("{changed} files") };
+                            modal::check_row(ui, stash, "Stash and reapply local changes", Some(&side));
+                        }
+                    });
+                // Another remote branch: count again (the sample project keeps its counts).
+                if let Some(i) = picked.filter(|i| *i != pull.sel) {
+                    pull.sel = i;
+                    if let Some(r) = &self.repo {
+                        pull.counts = crate::pull::count(r, &pull.source().name());
+                    }
+                }
+                if out.primary {
+                    cmds.push(Cmd::PullFrom { source: pull.source().clone(), args: pull.args(*mode, *stash && *dirty) });
+                }
+                out.primary || out.close
+            }
         };
         if close {
             self.dialog = None;
@@ -1332,8 +1641,8 @@ impl App {
             Id::Commit => Cmd::Commit,
             Id::Fetch => Cmd::Fetch { all: false, quiet: false },
             Id::FetchAll => Cmd::Fetch { all: true, quiet: false },
-            Id::Pull => Cmd::Pull,
-            Id::Push => Cmd::Push,
+            Id::Pull => Cmd::PullDialog,
+            Id::Push => Cmd::AskPush,
             Id::Stash => Cmd::stash(),
             Id::PopStash => Cmd::pop_stash(),
             Id::CheckoutBranch => Cmd::PaletteCheckout,
@@ -1615,5 +1924,52 @@ impl eframe::App for App {
         self.run(cmds, ctx);
         self.menu_sync(ctx);
         self.screenshot_step(ctx);
+    }
+}
+
+/// The Merge dialog's line about conflicts, `w` wide: checking, none, the files that would
+/// conflict, or why it could not tell.
+fn merge_check(ui: &mut Ui, test: &crate::merge::Test, w: f32) {
+    use crate::merge::Test;
+    const SHOWN: usize = 5;
+    let k = theme::c();
+    // A sign on the left, then a line of text.
+    let line = |ui: &mut Ui, text: &str, col: egui::Color32, sign: &dyn Fn(&egui::Painter, Pos2)| {
+        let (rect, _) = ui.allocate_exact_size(vec2(w, 22.0), Sense::hover());
+        sign(ui.painter(), pos2(rect.left() + 9.0, rect.center().y));
+        crate::ui::fit_text(ui.painter(), pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, text, theme::body(), col, w - 26.0);
+    };
+    match test {
+        Test::Checking => {
+            let t = ui.input(|i| i.time) as f32;
+            line(ui, "Checking for conflicts…", k.faint, &|p, c| {
+                // A turning arc, drawn: the font has no spinner glyph.
+                let pts: Vec<Pos2> = (0..=16).map(|i| c + egui::Vec2::angled(t * 5.0 + i as f32 / 16.0 * 4.5) * 6.0).collect();
+                p.add(Shape::line(pts, Stroke::new(1.6_f32, k.faint)));
+            });
+        }
+        Test::Clean => line(ui, "No conflicts: Git can merge it on its own.", k.text, &|p, c| {
+            p.circle_filled(c, 8.0, theme::tint(k.added, k.bg, 0.2));
+            crate::ui::check_mark(p, c, k.added);
+        }),
+        Test::Conflicts(files) => {
+            crate::modal::note(ui, k.modified, |ui| {
+                ui.spacing_mut().item_spacing.y = 4.0;
+                let n = files.len();
+                let head = if n == 1 { "Will cause conflicts in 1 file".to_string() } else { format!("Will cause conflicts in {n} files") };
+                ui.label(RichText::new(head).color(k.strong).strong());
+                for f in files.iter().take(SHOWN) {
+                    ui.add(egui::Label::new(RichText::new(f).font(theme::mono()).color(k.text)).truncate());
+                }
+                if n > SHOWN {
+                    ui.label(RichText::new(format!("and {} more", n - SHOWN)).color(k.faint));
+                }
+                ui.label(RichText::new("You can still merge, then resolve them and Continue from the banner; ⌘Z takes it all back.").color(k.dim));
+            });
+        }
+        Test::Unknown(why) => line(ui, why, k.faint, &|p, c| {
+            p.circle_stroke(c, 7.0, Stroke::new(1.4_f32, k.faint));
+            p.text(c, Align2::CENTER_CENTER, "?", FontId::proportional(11.0), k.faint);
+        }),
     }
 }
