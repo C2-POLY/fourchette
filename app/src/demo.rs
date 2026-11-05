@@ -55,7 +55,6 @@ pub fn build() -> Demo {
             author: a.to_string(),
             email: format!("{}@example.com", a.split_whitespace().next().unwrap_or("dev").to_lowercase()),
             time: now - hrs * 3600,
-            date: String::new(),
             subject: s.to_string(),
         })
         .collect();

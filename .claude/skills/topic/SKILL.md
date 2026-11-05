@@ -106,13 +106,13 @@ Respecte `CLAUDE.md` (architecture, `Cmd` et `Dialog`, fils et canaux, icônes d
 Depuis `app/` du worktree :
 
 ```bash
-# Compiler : aucun nouveau warning par rapport à main
+# Compiler : aucun warning
 cargo build 2>&1 | grep -E '^(warning|error)'
 
 # Tests unitaires : tous doivent passer
 cargo test
 
-# Lints : pas plus que les 5 warnings de main (code mort de git.rs et app.rs, deux remarques de style)
+# Lints : aucun warning
 cargo clippy 2>&1 | grep -E '^(warning|error)' | sort | uniq -c
 
 # Seulement si le sujet touche ai.rs ou github.rs : les tests qui appellent Claude Code et GitHub pour de vrai

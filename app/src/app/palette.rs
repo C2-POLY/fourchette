@@ -241,12 +241,9 @@ impl App {
         crate::modal::animate_layer(ctx, area.response.layer_id, area.response.rect.center(), t);
         if let Some(k) = chosen {
             if k < items.len() {
-                match items.swap_remove(k).cmd {
-                    Some(c) => {
-                        cmds.push(c);
-                        close = true;
-                    }
-                    None => {}
+                if let Some(c) = items.swap_remove(k).cmd {
+                    cmds.push(c);
+                    close = true;
                 }
             }
         }
