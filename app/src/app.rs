@@ -63,6 +63,9 @@ pub enum Dialog {
     /// The original's CheckoutAndSyncController: check out a branch behind its upstream and bring
     /// it up to date. `dirty`: there are local changes, so "Stash and reapply" shows.
     CheckoutSync { sync: crate::checkout::Sync, action: crate::checkout::SyncAction, merge: crate::checkout::MergeStyle, stash: bool, dirty: bool },
+    /// The original's PullWindowController: the remote branch to pull, Merge or Rebase, and
+    /// "Stash and reapply" when there are local changes (`dirty`).
+    Pull { pull: crate::pull::Pull, mode: crate::pull::Mode, stash: bool, dirty: bool },
 }
 
 pub enum Cmd {
@@ -76,6 +79,10 @@ pub enum Cmd {
     Fetch { all: bool, quiet: bool },
     /// Pull the upstream branch, as the Settings window's Git section says.
     Pull,
+    /// Repository › Pull… (⇧⌘L): open the Pull dialog.
+    PullDialog,
+    /// The Pull dialog's choice: `git pull` with these arguments, from `source`.
+    PullFrom { source: crate::pull::Source, args: Vec<String> },
     /// A stash's Apply: `stash apply`, or `stash pop` when "Delete stash after Apply" is on.
     ApplyStash(String),
     Push,
@@ -386,6 +393,11 @@ impl App {
         if let Ok(v) = std::env::var("FOURCHETTE_DIALOG") {
             t.dialog = sample_dialog(&v, &t.worktrees);
         }
+        // FOURCHETTE_DIALOG=pull: the Pull dialog on `develop`, diverged from origin/develop.
+        if std::env::var("FOURCHETTE_DIALOG").is_ok_and(|v| v == "pull") {
+            let s = app.library.settings;
+            app.tab_mut().pull_sample(s);
+        }
         // FOURCHETTE_MENU=<x>,<y> right-clicks there, in points, to show a context menu.
         app.shot_menu = std::env::var("FOURCHETTE_MENU").ok().and_then(|v| {
             let (x, y) = v.split_once(',')?;
@@ -560,6 +572,10 @@ impl App {
                 Cmd::Pull => {
                     let s = self.library.settings;
                     self.tab_mut().pull(ctx, s);
+                }
+                Cmd::PullDialog => {
+                    let s = self.library.settings;
+                    self.tab_mut().pull_dialog(s);
                 }
                 Cmd::ApplyStash(name) => {
                     let c = Cmd::apply_stash(&name, self.library.settings.delete_stash_after_apply);

@@ -108,6 +108,10 @@ makes a stash's Apply a `stash pop`, which keeps the stash when applying it conf
 names its mode (`--rebase` or `--no-rebase`), so the setting wins over `pull.rebase` in the
 person's Git config. A pull stopped on conflicts, or whose stashed changes conflict when put back
 (Git then keeps them in the stash list as "autostash"), is reported as an error saying so.
+Repository › Pull… (⇧⌘L, #101) opens Fork's pull sheet as a dialog: the remote branch to pull
+(the upstream by default, else the branch of the same name), Merge or Rebase and "Stash and
+reapply local changes" pre-filled from these settings, and the animated graph of the result. The
+dialog's Merge adds `--ff`, so a branch with no commits of its own is always fast-forwarded.
 
 ## Screens (from the compiled layouts in Resources/*.nib)
 
@@ -140,7 +144,8 @@ those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what
 | View > Enter Full Screen | ⌃⌘F | the same (macOS also adds its own 🌐F item and hides ours) |
 | Repository > Commit (`showCommitView:`) | ⇧⌘C | commits, like the Commit button |
 | Fetch… / Quick Fetch | ⇧⌘F / ⌥⇧⌘F | Fetch / Fetch All Remotes |
-| Pull… / Push… | ⇧⌘L / ⇧⌘P | Pull / Push (no sheet in Fourchette) |
+| Pull… (`showPullSheet:`) | ⇧⌘L | the Pull dialog (#101): remote branch, Merge or Rebase, Stash and reapply; the toolbar's Pull still pulls at once |
+| Push… | ⇧⌘P | Push (no sheet in Fourchette) |
 | Save Stash… (`saveStash:`) | ⇧⌘H | Stash Changes; Pop Stash added (toolbar's Pop) |
 | Checkout Branch… (`showQuickLaunchCheckout:`) | ⌘B | the branch palette |
 | New Branch… / New Tag… | ⇧⌘B / ⇧⌘T | the new branch / tag dialog at HEAD |

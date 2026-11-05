@@ -11,6 +11,7 @@ mod library;
 mod menu;
 mod modal;
 mod preview;
+mod pull;
 mod settings;
 mod theme;
 mod titlebar;
