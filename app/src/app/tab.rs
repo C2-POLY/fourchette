@@ -51,6 +51,9 @@ pub struct Tab {
     pub(super) commit_limit: usize,
     /// The diff context and the subject limits of the settings, copied here each frame by `poll_tabs`.
     pub(super) diff_context: u32,
+    /// The diff shows two columns / the whole file (the settings' `diff_split` and `diff_whole`).
+    pub(super) diff_split: bool,
+    pub(super) diff_whole: bool,
     pub(super) subject_limits: (usize, usize),
     /// The Claude model and the commit-message language of the settings, copied the same way.
     pub(super) claude_model: crate::settings::ClaudeModel,
@@ -151,6 +154,8 @@ impl Tab {
             pending_undo: None,
             commit_limit: COMMIT_LIMIT,
             diff_context: git::DIFF_CONTEXT,
+            diff_split: false,
+            diff_whole: false,
             subject_limits: (SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH),
             claude_model: Default::default(),
             commit_language: Default::default(),
@@ -243,8 +248,10 @@ impl Tab {
         self.files_tree = s.files_tree;
         self.claude_model = s.claude_model;
         self.commit_language = s.commit_language;
-        if self.diff_context != s.diff_context {
+        self.diff_split = s.diff_split;
+        if self.diff_context != s.diff_context || self.diff_whole != s.diff_whole {
             self.diff_context = s.diff_context;
+            self.diff_whole = s.diff_whole;
             if let Some(req) = self.diff_req.clone().filter(|_| self.diff.is_some()) {
                 self.open_diff(req);
             }
@@ -633,6 +640,7 @@ impl Tab {
             | Cmd::Settings
             | Cmd::SetSettings(_)
             | Cmd::SetFilesTree(_)
+            | Cmd::SetDiffView { .. }
             | Cmd::Pull
             | Cmd::PullDialog
             | Cmd::ApplyStash(_)
@@ -876,11 +884,19 @@ impl Tab {
         }
     }
 
+    /// Opens the sample project's diff in the given mode (the FOURCHETTE_DIFF screenshot view).
+    pub(super) fn show_demo_diff(&mut self, split: bool, whole: bool) {
+        self.diff_split = split;
+        self.diff_whole = whole;
+        self.open_diff(DiffReq::Commit { hash: String::new(), path: "src/lanes.rs".into() });
+    }
+
     fn open_diff(&mut self, req: DiffReq) {
+        let ctx = if self.diff_whole { git::WHOLE_CONTEXT } else { self.diff_context };
         let (title, text) = match (&self.repo, &req) {
-            (None, DiffReq::Commit { path, .. }) | (None, DiffReq::Worktree { path, .. }) => (path.clone(), demo::diff(path)),
-            (Some(r), DiffReq::Commit { hash, path }) => (path.clone(), r.diff_commit_file(hash, path, self.diff_context)),
-            (Some(r), DiffReq::Worktree { path, staged, untracked }) => (path.clone(), r.diff_worktree_file(path, *staged, *untracked, self.diff_context)),
+            (None, DiffReq::Commit { path, .. }) | (None, DiffReq::Worktree { path, .. }) => (path.clone(), demo::diff(path, self.diff_whole)),
+            (Some(r), DiffReq::Commit { hash, path }) => (path.clone(), r.diff_commit_file(hash, path, ctx)),
+            (Some(r), DiffReq::Worktree { path, staged, untracked }) => (path.clone(), r.diff_worktree_file(path, *staged, *untracked, ctx)),
         };
         self.diff = Some(DiffView { title, text });
         self.diff_req = Some(req);

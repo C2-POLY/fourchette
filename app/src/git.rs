@@ -91,6 +91,8 @@ pub const LOCK_MESSAGE: &str = "index.lock': File exists.";
 pub const MAX_COMMIT_COUNT: usize = 100_000;
 /// Default diff "contextSize" (sub_10031b7cc); the person's choice is `Settings::diff_context`.
 pub const DIFF_CONTEXT: u32 = 3;
+/// The context that makes a diff show the whole file ("Whole file").
+pub const WHOLE_CONTEXT: u32 = 1_000_000;
 
 /// Runs git and returns (stdout, stderr). Retries while the repository is locked.
 pub fn exec(dir: &Path, args: &[&str]) -> Result<(String, String), String> {

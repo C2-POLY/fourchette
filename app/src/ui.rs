@@ -966,6 +966,55 @@ pub fn files_view_switch(ui: &mut Ui, tree: bool) -> Option<bool> {
     out
 }
 
+/// The head of a diff: a Unified / Side by side switch and a "Whole file" toggle button, drawn
+/// right to left (call it inside a right-to-left layout). Returns the new `(split, whole)` when
+/// one is clicked.
+pub fn diff_view_switch(ui: &mut Ui, split: bool, whole: bool) -> Option<(bool, bool)> {
+    let k = theme::c();
+    let font = FontId::proportional(theme::FS_SECONDARY);
+    let width = |ui: &Ui, t: &str| ui.painter().layout_no_wrap(t.to_string(), font.clone(), k.text).size().x;
+    let mut out = None;
+    // Whole file: one button that is lit while on (the rightmost, so it is drawn first).
+    let ww = width(ui, "Whole file") + 20.0;
+    let (rect, _) = ui.allocate_exact_size(vec2(ww, 22.0), Sense::hover());
+    let resp = ui.interact(rect, ui.id().with("diff_whole"), Sense::click()).on_hover_text("Show the whole file, with the changes highlighted");
+    let p = ui.painter();
+    if whole {
+        p.rect(rect, CornerRadius::same(6), k.widget_active, Stroke::new(1.0_f32, k.widget_active_border), StrokeKind::Inside);
+    } else {
+        let bg = if resp.hovered() { k.hover } else { k.input };
+        p.rect(rect, CornerRadius::same(6), bg, Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+    }
+    p.text(rect.center(), Align2::CENTER_CENTER, "Whole file", font.clone(), if whole { k.strong } else { k.dim });
+    if resp.clicked() {
+        out = Some((split, !whole));
+    }
+    ui.add_space(6.0);
+    // Unified | Side by side.
+    let labels = ["Unified", "Side by side"];
+    let widths: Vec<f32> = labels.iter().map(|l| width(ui, l) + 20.0).collect();
+    let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum::<f32>() + 4.0, 22.0), Sense::hover());
+    ui.painter().rect(rect, CornerRadius::same(6), k.input, Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+    let mut x = rect.left() + 2.0;
+    for (i, label) in labels.into_iter().enumerate() {
+        let r = Rect::from_min_size(pos2(x, rect.top() + 2.0), vec2(widths[i], 18.0));
+        x += widths[i];
+        let on = split == (i == 1);
+        let resp = ui.interact(r, ui.id().with(("diff_mode", i)), Sense::click());
+        let p = ui.painter();
+        if on {
+            p.rect_filled(r, CornerRadius::same(4), k.select);
+        } else if resp.hovered() {
+            p.rect_filled(r, CornerRadius::same(4), k.hover);
+        }
+        p.text(r.center(), Align2::CENTER_CENTER, label, font.clone(), if on { k.strong } else { k.dim });
+        if resp.clicked() && !on {
+            out = Some((i == 1, whole));
+        }
+    }
+    out
+}
+
 /// Checks out a remote branch: its local branch when there is one, else a new tracking branch
 /// (`checkout::plan` decides, against the tab's refs).
 pub fn checkout_remote(r: &GitRef) -> Cmd {

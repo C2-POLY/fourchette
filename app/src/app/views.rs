@@ -949,6 +949,10 @@ impl Tab {
                 if ui.button("Close").clicked() || (!settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
                     cmds.push(Cmd::CloseDiff);
                 }
+                ui.add_space(6.0);
+                if let Some((split, whole)) = crate::ui::diff_view_switch(ui, self.diff_split, self.diff_whole) {
+                    cmds.push(Cmd::SetDiffView { split, whole });
+                }
                 if self.status.unstaged.iter().any(|f| f.code == 'U' && f.path == d.title) && ui.button("Resolve with Claude…").clicked() {
                     cmds.push(Cmd::AiResolve(vec![d.title.clone()]));
                 }
@@ -960,6 +964,10 @@ impl Tab {
         if lines.is_empty() {
             ui.add_space(20.0);
             ui.vertical_centered(|ui| ui.label(RichText::new("No text changes to show (binary file or only a mode change).").color(theme::c().dim)));
+            return;
+        }
+        if self.diff_split {
+            Self::diff_split_view(ui, &d.text);
             return;
         }
         let is_header = |l: &str| {
@@ -993,7 +1001,10 @@ impl Tab {
         }
         let font = theme::mono();
         let h = 18.0;
-        egui::ScrollArea::both().auto_shrink([false, false]).show_rows(ui, h, lines.len(), |ui, range| {
+        let marks: Vec<(bool, bool)> = lines.iter().map(|l| (!is_header(l) && l.starts_with('-'), !is_header(l) && l.starts_with('+'))).collect();
+        let (body, strip) = ruler_split(ui);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
+        let out = ruler_jump(ui, egui::ScrollArea::both()).auto_shrink([false, false]).show_rows(&mut child, h, lines.len(), |ui, range| {
             for i in range {
                 let l = lines[i];
                 let w = (l.len() as f32 * 7.6 + 120.0).max(ui.available_width());
@@ -1017,6 +1028,85 @@ impl Tab {
                 p.text(pos2(rect.left() + 96.0, rect.center().y), Align2::LEFT_CENTER, l.replace('\t', "    "), font.clone(), fg);
             }
         });
+        change_ruler(ui, body, strip, &marks, &out);
+    }
+
+    /// The diff in two columns: the old file on the left, the new one on the right, each half of
+    /// the visible width. One vertical scroll moves both, and a sideways scroll (trackpad or
+    /// Shift+wheel) shifts the text of both halves together, so long lines can be read.
+    fn diff_split_view(ui: &mut Ui, text: &str) {
+        use crate::diff::{Cell, Full, Kind, Row};
+        let rows = crate::diff::side_by_side(text);
+        let k = theme::c();
+        let font = theme::mono();
+        let h = 18.0;
+        // Where a line's text starts in its half, after the line number.
+        const TEXT_X: f32 = 52.0;
+        let longest = rows
+            .iter()
+            .map(|r| match r {
+                Row::Pair(l, r) => l.iter().chain(r).map(|c| c.text.replace('\t', "    ").chars().count()).max().unwrap_or(0),
+                Row::Full(..) => 0,
+            })
+            .max()
+            .unwrap_or(0);
+        let char_w = ui.fonts(|f| f.glyph_width(&font, 'M'));
+        let marks: Vec<(bool, bool)> = rows
+            .iter()
+            .map(|r| match r {
+                Row::Pair(l, r) => (l.as_ref().is_some_and(|c| c.kind == Kind::Deleted), r.as_ref().is_some_and(|c| c.kind == Kind::Added)),
+                Row::Full(..) => (false, false),
+            })
+            .collect();
+        let (body, strip) = ruler_split(ui);
+        let half = ((body.width() - 1.0) / 2.0).floor().max(120.0);
+        let max_off = (longest as f32 * char_w - (half - TEXT_X - 8.0)).max(0.0);
+        let id = ui.id().with("diff_split_x");
+        let off = ui.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0).clamp(0.0, max_off);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
+        let out = ruler_jump(ui, egui::ScrollArea::vertical()).auto_shrink([false, false]).show_rows(&mut child, h, rows.len(), |ui, range| {
+            for i in range {
+                let (rect, _) = ui.allocate_exact_size(vec2(half * 2.0 + 1.0, h), Sense::hover());
+                let p = ui.painter();
+                match &rows[i] {
+                    Row::Full(kind, l) => {
+                        let (bg, fg) = if *kind == Full::Hunk { (k.accent_soft, k.accent_text) } else { (k.bg, k.faint) };
+                        p.rect_filled(rect, CornerRadius::ZERO, bg);
+                        p.text(pos2(rect.left() + 10.0, rect.center().y), Align2::LEFT_CENTER, l.replace('\t', "    "), font.clone(), fg);
+                    }
+                    Row::Pair(l, r) => {
+                        let left = Rect::from_min_size(rect.min, vec2(half, h));
+                        let right = Rect::from_min_size(pos2(rect.left() + half + 1.0, rect.top()), vec2(half, h));
+                        for (cell, hr) in [(l, left), (r, right)] {
+                            let cell: &Option<Cell> = cell;
+                            let (bg, fg) = match cell.as_ref().map(|c| c.kind) {
+                                None => (k.faint.gamma_multiply(0.07), k.text),
+                                Some(Kind::Added) => (theme::tint(k.added, k.bg, 0.13), k.diff_added_text),
+                                Some(Kind::Deleted) => (theme::tint(k.deleted, k.bg, 0.13), k.diff_deleted_text),
+                                Some(Kind::Context) => (Color32::TRANSPARENT, k.text),
+                            };
+                            p.rect_filled(hr, CornerRadius::ZERO, bg);
+                            if let Some(c) = cell {
+                                p.text(pos2(hr.left() + 40.0, hr.center().y), Align2::RIGHT_CENTER, c.num.to_string(), FontId::monospace(theme::FS_SMALL), k.faint);
+                                // The text is clipped to its half, right of the line number.
+                                let area = Rect::from_min_max(pos2(hr.left() + TEXT_X - 4.0, hr.top()), hr.max);
+                                let clipped = p.with_clip_rect(area.intersect(p.clip_rect()));
+                                clipped.text(pos2(hr.left() + TEXT_X - off, hr.center().y), Align2::LEFT_CENTER, c.text.replace('\t', "    "), font.clone(), fg);
+                            }
+                        }
+                        // The divider between the halves.
+                        p.rect_filled(Rect::from_min_size(pos2(rect.left() + half, rect.top()), vec2(1.0, h)), CornerRadius::ZERO, k.border);
+                    }
+                }
+            }
+        });
+        if max_off > 0.0 && ui.rect_contains_pointer(out.inner_rect) {
+            let dx = ui.input(|i| i.smooth_scroll_delta.x);
+            if dx != 0.0 {
+                ui.data_mut(|d| d.insert_temp(id, (off - dx).clamp(0.0, max_off)));
+            }
+        }
+        change_ruler(ui, body, strip, &marks, &out);
     }
 
     // ---------------------------------------------------------------- dialogs, keys, screenshot
@@ -2198,4 +2288,93 @@ fn dir_item(ui: &mut Ui, (name, path, count): (&str, &str, usize), depth: usize,
             cmds.push(Cmd::Copy(path.to_string()));
         }
     });
+}
+
+/// Width of the change ruler, right of the diff's scroll bar.
+const RULER_W: f32 = 10.0;
+
+/// The diff's area split in two: the text on the left, the change ruler's strip on the right.
+fn ruler_split(ui: &Ui) -> (Rect, Rect) {
+    let full = ui.available_rect_before_wrap();
+    let strip = Rect::from_min_max(pos2(full.right() - RULER_W, full.top()), full.max);
+    (Rect::from_min_max(full.min, pos2(strip.left() - 2.0, full.bottom())), strip)
+}
+
+/// The diff's scroll area, moved to where the ruler was clicked on the frame before.
+fn ruler_jump(ui: &Ui, area: egui::ScrollArea) -> egui::ScrollArea {
+    match ui.data_mut(|d| d.remove_temp::<f32>(ui.id().with("diff_jump"))) {
+        Some(y) => area.vertical_scroll_offset(y),
+        None => area,
+    }
+}
+
+/// Runs of rows with the same mark, as (first row, rows, mark), the unmarked ones left out.
+fn ruler_runs(marks: &[(bool, bool)]) -> Vec<(usize, usize, (bool, bool))> {
+    let mut runs: Vec<(usize, usize, (bool, bool))> = Vec::new();
+    for (i, &m) in marks.iter().enumerate() {
+        if m == (false, false) {
+            continue;
+        }
+        match runs.last_mut() {
+            Some((start, len, last)) if *last == m && *start + *len == i => *len += 1,
+            _ => runs.push((i, 1, m)),
+        }
+    }
+    runs
+}
+
+/// Where the changes are: a thin strip right of the diff with a red mark for each deleted row and
+/// a green one for each added row, at its place in the whole diff (a row with both, side by side,
+/// is half red, half green), and the visible part outlined. A click or a drag scrolls there.
+fn change_ruler<R>(ui: &mut Ui, body: Rect, strip: Rect, marks: &[(bool, bool)], out: &egui::scroll_area::ScrollAreaOutput<R>) {
+    ui.allocate_rect(body.union(strip), Sense::hover());
+    let k = theme::c();
+    let resp = ui.interact(strip, ui.id().with("diff_ruler"), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let p = ui.painter();
+    p.rect_filled(strip, CornerRadius::ZERO, k.faint.gamma_multiply(0.06));
+    let row = strip.height() / marks.len().max(1) as f32;
+    for (start, len, (del, add)) in ruler_runs(marks) {
+        let top = strip.top() + start as f32 * row;
+        let ys = egui::Rangef::new(top, top + (len as f32 * row).max(2.0));
+        let mid = strip.center().x;
+        let paint = |x0: f32, x1: f32, c: Color32| {
+            p.rect_filled(Rect::from_x_y_ranges(x0..=x1, ys), CornerRadius::ZERO, c);
+        };
+        match (del, add) {
+            (true, true) => {
+                paint(strip.left() + 1.0, mid, k.deleted);
+                paint(mid, strip.right() - 1.0, k.added);
+            }
+            (true, false) => {
+                paint(strip.left() + 1.0, strip.right() - 1.0, k.deleted);
+            }
+            _ => {
+                paint(strip.left() + 1.0, strip.right() - 1.0, k.added);
+            }
+        }
+    }
+    let (content, view, offset) = (out.content_size.y, out.inner_rect.height(), out.state.offset.y);
+    if content > view && content > 0.0 {
+        let y = |v: f32| strip.top() + v / content * strip.height();
+        let r = Rect::from_x_y_ranges(strip.x_range(), y(offset)..=y(offset + view));
+        p.rect_stroke(r, CornerRadius::same(2), Stroke::new(1.0_f32, k.border_strong), egui::StrokeKind::Inside);
+    }
+    if let Some(pos) = resp.interact_pointer_pos().filter(|_| resp.clicked() || resp.dragged()) {
+        let frac = ((pos.y - strip.top()) / strip.height()).clamp(0.0, 1.0);
+        let to = (frac * content - view / 2.0).clamp(0.0, (content - view).max(0.0));
+        ui.data_mut(|d| d.insert_temp(ui.id().with("diff_jump"), to));
+        ui.ctx().request_repaint();
+    }
+}
+
+#[cfg(test)]
+mod ruler_tests {
+    use super::ruler_runs;
+
+    #[test]
+    fn neighbouring_rows_with_the_same_mark_make_one_run() {
+        let (n, d, a, b) = ((false, false), (true, false), (false, true), (true, true));
+        assert_eq!(ruler_runs(&[n, d, d, a, n, a, b, b]), vec![(1, 2, d), (3, 1, a), (5, 1, a), (6, 2, b)]);
+        assert!(ruler_runs(&[n, n]).is_empty());
+    }
 }

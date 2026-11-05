@@ -137,6 +137,8 @@ pub enum Cmd {
     SetSettings(crate::settings::Settings),
     /// The List / Tree switch of the local changes (a setting, shared by every repository).
     SetFilesTree(bool),
+    /// The diff's Unified / Side by side and Whole file choices, kept in the settings.
+    SetDiffView { split: bool, whole: bool },
     /// Folds or unfolds a folder of the Tree view (`true` for the staged list).
     ToggleDir(bool, String),
     /// AI assistant (Claude through the person's subscription).
@@ -321,6 +323,15 @@ impl App {
             if let Ok(v) = std::env::var("FOURCHETTE_FILES") {
                 app.library.settings.files_tree = v == "tree";
                 app.tab_mut().sel = Sel::Wip;
+            }
+        }
+        // FOURCHETTE_DIFF=<unified|split>[,whole] opens the sample diff in that mode for a screenshot, without saving it.
+        if app.screenshot.is_some() {
+            if let Ok(v) = std::env::var("FOURCHETTE_DIFF") {
+                app.library.settings.diff_split = v.split(',').any(|w| w == "split");
+                app.library.settings.diff_whole = v.split(',').any(|w| w == "whole");
+                let (split, whole) = (app.library.settings.diff_split, app.library.settings.diff_whole);
+                app.tab_mut().show_demo_diff(split, whole);
             }
         }
         // FOURCHETTE_TABS=<n> shows the sample project in n tabs, so the strip shows.
@@ -594,6 +605,11 @@ impl App {
                 }
                 Cmd::SetFilesTree(on) => {
                     self.library.settings.files_tree = on;
+                    self.library.save();
+                }
+                Cmd::SetDiffView { split, whole } => {
+                    self.library.settings.diff_split = split;
+                    self.library.settings.diff_whole = whole;
                     self.library.save();
                 }
                 // The hidden palette command sets the same setting as the Settings window.
