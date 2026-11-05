@@ -172,11 +172,38 @@ pub struct Tracking<'a> {
     pub behind: usize,
 }
 
+/// How much of the tracking a local branch row shows, from the fullest to the most compact.
+/// A row takes the fullest one that leaves its name readable (#127).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fit {
+    /// The pill with the cloud and the remote's name, and `=` when level with it.
+    Full,
+    /// The pill with the cloud only, and `=`; a laptop for "local only".
+    Icon,
+    /// The bare cloud only: `=` is left to the tooltip. Ahead and behind counts always stay.
+    Tight,
+}
+
+/// The width a name needs before the row shrinks its tracking: the whole name when short, else
+/// enough for about fifteen letters.
+const NAME_MIN: f32 = 120.0;
+
+/// The fullest `Fit` whose tracking width (given by `width`) leaves `need` for the name in
+/// `room`, else the most compact.
+pub fn choose_fit(room: f32, need: f32, width: impl Fn(Fit) -> f32) -> Fit {
+    [Fit::Full, Fit::Icon].into_iter().find(|&f| room - width(f) >= need).unwrap_or(Fit::Tight)
+}
+
 /// Draws the badges from the right edge `x`; returns the left edge they reach.
-fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
+fn tracking_badges(p: &Painter, t: &Tracking, fit: Fit, right: f32, y: f32) -> f32 {
     let c = theme::c();
     let mut x = right;
     match t.remote {
+        // Short of room, "local only" becomes the Local section's laptop.
+        None if fit != Fit::Full => {
+            laptop_icon(p, pos2(x - 7.0, y), c.faint);
+            x -= 14.0;
+        }
         None => {
             let g = p.layout_no_wrap("local only".into(), egui::FontId::proportional(11.0), c.faint);
             x -= g.size().x;
@@ -185,17 +212,29 @@ fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
         }
         Some(name) => {
             let col = if t.gone { c.faint } else { c.dim };
-            let g = p.layout_no_wrap(name.to_string(), theme::small(), col);
-            let w = g.size().x + 32.0;
+            let g = (fit == Fit::Full).then(|| p.layout_no_wrap(name.to_string(), theme::small(), col));
+            // Tight: the bare cloud, without the pill around it.
+            let w = g.as_ref().map_or(if fit == Fit::Tight { 14.0 } else { 24.0 }, |g| g.size().x + 32.0);
             let r = Rect::from_min_size(pos2(x - w, y - 9.0), vec2(w, 18.0));
-            p.rect(r, CornerRadius::same(9), theme::tint(c.accent, c.sidebar, 0.1), Stroke::new(1.0_f32, c.border), StrokeKind::Inside);
-            cloud_icon(p, pos2(r.left() + 12.0, y), col);
-            let ty = y - g.size().y / 2.0;
-            let tx = r.left() + 23.0;
-            let right_edge = tx + g.size().x;
-            p.galley(pos2(tx, ty), g, col);
-            if t.gone {
-                p.line_segment([pos2(tx, y), pos2(right_edge, y)], Stroke::new(1.0_f32, c.faint));
+            if fit != Fit::Tight {
+                p.rect(r, CornerRadius::same(9), theme::tint(c.accent, c.sidebar, 0.1), Stroke::new(1.0_f32, c.border), StrokeKind::Inside);
+            }
+            cloud_icon(p, pos2(r.center().x.max(r.left() + 7.0).min(r.left() + 12.0), y), col);
+            match g {
+                Some(g) => {
+                    let ty = y - g.size().y / 2.0;
+                    let tx = r.left() + 23.0;
+                    let right_edge = tx + g.size().x;
+                    p.galley(pos2(tx, ty), g, col);
+                    if t.gone {
+                        p.line_segment([pos2(tx, y), pos2(right_edge, y)], Stroke::new(1.0_f32, c.faint));
+                    }
+                }
+                // Gone, with the name hidden: the cloud is struck through.
+                None if t.gone => {
+                    p.line_segment([pos2(r.left() + 2.0, y), pos2(r.right() - 2.0, y)], Stroke::new(1.0_f32, c.faint));
+                }
+                None => {}
             }
             x = r.left() - 6.0;
             if !t.gone {
@@ -209,7 +248,7 @@ fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
                         x -= 8.0;
                     }
                 }
-                if t.ahead == 0 && t.behind == 0 {
+                if t.ahead == 0 && t.behind == 0 && fit != Fit::Tight {
                     // Level with its upstream: an equals sign.
                     let s = Stroke::new(1.4_f32, c.faint);
                     x -= 4.0;
@@ -224,7 +263,7 @@ fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
 }
 
 /// A local branch: colour dot, name, its pull request badge, then ahead/behind and the tracked
-/// remote on the right.
+/// remote on the right. When the name would be cut short, the tracking shrinks first (`Fit`).
 #[allow(clippy::too_many_arguments)]
 pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
@@ -237,10 +276,21 @@ pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, 
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
     p.circle_filled(pos2(x + 3.0, y), 3.5, color);
-    let left = pr_after(p, pr, tracking_badges(p, t, rect.right() - 8.0, y), y);
+    let (name_left, right) = (x + 15.0, rect.right() - 8.0);
+    let room = pr_after(&ghost(p), pr, right, y) - 8.0 - name_left;
+    let need = p.layout_no_wrap(name.to_string(), theme::body(), theme::c().text).size().x.min(NAME_MIN);
+    let fit = choose_fit(room, need, |f| right - tracking_badges(&ghost(p), t, f, right, y));
+    let left = pr_after(p, pr, tracking_badges(p, t, fit, right, y), y);
     let tc = if current { theme::c().strong } else { theme::c().text };
-    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, name, theme::body(), tc, left - 8.0 - (x + 15.0));
+    fit_text(p, pos2(name_left, y), Align2::LEFT_CENTER, name, theme::body(), tc, left - 8.0 - name_left);
     resp
+}
+
+/// A copy of `p` that measures without drawing.
+fn ghost(p: &Painter) -> Painter {
+    let mut g = p.clone();
+    g.set_invisible();
+    g
 }
 
 /// Draws a pull request badge ending before `right` and returns where the name must stop.
@@ -327,6 +377,21 @@ mod tests {
         let names = ["main", "feature/a", "develop", "hotfix/x", "feature/b"];
         let g = group_folders(&names, |s| s);
         assert_eq!(g, vec![Entry::Item(&names[0]), Entry::Item(&names[2]), Entry::Folder("feature".into(), vec![&names[1], &names[4]]), Entry::Folder("hotfix".into(), vec![&names[3]])]);
+    }
+
+    #[test]
+    fn fits() {
+        // Full needs 80, Icon 40, Tight 20.
+        let w = |f| match f {
+            Fit::Full => 80.0,
+            Fit::Icon => 40.0,
+            Fit::Tight => 20.0,
+        };
+        assert_eq!(choose_fit(200.0, 96.0, w), Fit::Full);
+        assert_eq!(choose_fit(140.0, 96.0, w), Fit::Icon);
+        assert_eq!(choose_fit(120.0, 96.0, w), Fit::Tight);
+        // A short name keeps the full tracking where a long one would not.
+        assert_eq!(choose_fit(120.0, 30.0, w), Fit::Full);
     }
 
     #[test]

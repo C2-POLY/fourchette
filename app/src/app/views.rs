@@ -201,9 +201,9 @@ impl Tab {
         let tip = if b.upstream.is_empty() {
             format!("{} has no upstream: it exists only on this Mac", b.name)
         } else if gone {
-            format!("Tracks {}, which no longer exists on the remote", b.upstream)
+            format!("{}\nTracks {}, which no longer exists on the remote", b.name, b.upstream)
         } else {
-            format!("Tracks {} · {} ahead, {} behind", b.upstream, b.ahead, b.behind)
+            format!("{}\nTracks {} · {} ahead, {} behind", b.name, b.upstream, b.ahead, b.behind)
         };
         let pr = self.pull_of(b);
         let tip = match pr {
