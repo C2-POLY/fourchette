@@ -11,6 +11,15 @@ const DETAILS_BOTTOM_MIN_H: f32 = 160.0;
 /// Below this width the bottom panel keeps the one-column layout of the right panel.
 const WIDE_DETAILS_MIN_W: f32 = 640.0;
 
+/// Moves the centre's scroll bars off its right and bottom edges. Drawn after the side panels,
+/// a bar touching an edge took the drag meant for the details panel's resize handle there, so
+/// the history scrolled instead and the panel jumped.
+fn keep_panel_edges_free(ui: &mut Ui) {
+    let grab = ui.style().interaction.resize_grab_radius_side;
+    let scroll = &mut ui.spacing_mut().scroll;
+    scroll.bar_outer_margin = scroll.bar_outer_margin.max(grab + 1.0);
+}
+
 /// Splits the space left in `ui` into two columns with a thin line between them.
 fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
     const GAP: f32 = 32.0;
@@ -1884,6 +1893,7 @@ impl eframe::App for App {
         let settings_open = self.settings_open;
         let t = &mut self.tabs[self.active];
         egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
+            keep_panel_edges_free(ui);
             if board_open {
                 t.board_view(ui, &mut cmds);
                 return;
@@ -1988,5 +1998,59 @@ fn merge_check(ui: &mut Ui, test: &crate::merge::Test, w: f32) {
             p.circle_stroke(c, 7.0, Stroke::new(1.4_f32, k.faint));
             p.text(c, Align2::CENTER_CENTER, "?", FontId::proportional(11.0), k.faint);
         }),
+    }
+}
+
+#[cfg(test)]
+mod panel_resize_tests {
+    use super::*;
+    use eframe::App as _;
+
+    /// A repository with enough commits for the history to scroll, so its scroll bar shows.
+    fn long_repo() -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("fourchette-resize-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let script = "git init -q -b main && for i in $(seq 80); do git -c user.name=T -c user.email=t@t commit -q --allow-empty -m c$i; done";
+        assert!(std::process::Command::new("sh").args(["-c", script]).current_dir(&d).status().unwrap().success());
+        crate::git::find_root(&d).unwrap()
+    }
+
+    #[test]
+    fn the_details_panel_widens_when_its_edge_is_dragged() {
+        let repo = long_repo();
+        let mut a = App::with_library(crate::library::Library::read(&repo.join("no-repos.json")), None);
+        a.open_path(repo.clone(), false);
+        a.tab_mut().sel = Sel::Commit(1);
+        let ctx = egui::Context::default();
+        let mut frame = eframe::Frame::_new_kittest();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(1360.0, 840.0));
+        let step = |a: &mut App, frame: &mut eframe::Frame, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+            let _ = ctx.run(raw, |ctx| a.update(ctx, frame));
+            egui::containers::panel::PanelState::load(&ctx, egui::Id::new("details")).unwrap().rect
+        };
+        // Presses at `from`, moves to `to` in ten steps and releases: the panel's rect after.
+        let mut drag = |a: &mut App, from: f32, to: f32| {
+            let (y, button) = (400.0, egui::PointerButton::Primary);
+            let press = |x: f32, pressed| egui::Event::PointerButton { pos: pos2(x, y), button, pressed, modifiers: Default::default() };
+            step(a, &mut frame, vec![egui::Event::PointerMoved(pos2(from, y))]);
+            step(a, &mut frame, vec![press(from, true)]);
+            for i in 1..=10 {
+                step(a, &mut frame, vec![egui::Event::PointerMoved(pos2(from + (to - from) * i as f32 / 10.0, y))]);
+            }
+            step(a, &mut frame, vec![press(to, false)]);
+            step(a, &mut frame, vec![])
+        };
+        let start = drag(&mut a, 0.0, 0.0);
+        // Anywhere in the handle's grab zone, even on the history's side of the edge.
+        for dx in [-4.0, 0.0, 4.0] {
+            let grab = start.min.x + dx;
+            let wide = drag(&mut a, grab, grab - 100.0);
+            // egui puts the edge under the pointer.
+            assert_eq!((wide.min.x, wide.max.x), (grab - 100.0, start.max.x), "grabbed {dx:+} from the edge");
+            assert_eq!(drag(&mut a, wide.min.x, start.min.x), start);
+        }
+        let _ = std::fs::remove_dir_all(repo);
     }
 }
