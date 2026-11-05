@@ -2,6 +2,7 @@ mod assistant;
 mod board;
 mod changelog;
 mod palette;
+mod pr_draft;
 mod operation;
 mod project;
 mod repos;
@@ -141,6 +142,8 @@ pub enum Cmd {
     AiDeleteSelected,
     /// Claude writes the changelog, for the audience chosen in its window.
     AiChangelog,
+    /// Claude drafts the pull request of the current branch, in its window.
+    AiDraftPr,
     /// Claude proposes a resolution for these conflicted files (all of them when empty).
     AiResolve(Vec<String>),
     /// Worktrees.
@@ -312,6 +315,10 @@ impl App {
         if let Ok(v) = std::env::var("FOURCHETTE_CHANGELOG") {
             let a = crate::changelog::Audience::ALL.into_iter().find(|a| a.label().to_lowercase().starts_with(&v.to_lowercase())).unwrap_or_default();
             app.tab_mut().changelog_sample(a);
+        }
+        // FOURCHETTE_PR=1 shows the pull request window with the sample draft.
+        if std::env::var("FOURCHETTE_PR").is_ok() {
+            app.tab_mut().pr_draft_sample();
         }
         // FOURCHETTE_RESOLVE=1 shows the conflict window with the sample project's conflicts.
         if std::env::var("FOURCHETTE_RESOLVE").is_ok() {

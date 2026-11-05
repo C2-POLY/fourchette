@@ -77,6 +77,9 @@ impl App {
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));
             v.push(item("Assistant", "Write the changelog with Claude", "AI · for developers, product, leadership or users", Cmd::AiChangelog));
+            if let Some(b) = &t.branch {
+                v.push(item("Assistant", "Draft the pull request with Claude", format!("AI · {b}, from its diff and its issue"), Cmd::AiDraftPr));
+            }
             let conflicts = super::resolve::conflicted(&t.status);
             if conflicts.len() > 1 {
                 v.push(item("Assistant", "Resolve all conflicts with Claude", "AI · one proposal per file", Cmd::AiResolve(Vec::new())));
