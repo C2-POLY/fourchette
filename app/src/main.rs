@@ -15,6 +15,7 @@ mod operation;
 mod preview;
 mod push;
 mod pull;
+mod resolve;
 mod settings;
 mod theme;
 mod titlebar;

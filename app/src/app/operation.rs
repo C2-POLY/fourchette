@@ -65,6 +65,9 @@ impl Tab {
                         if p.can_skip() && modal::button(ui, "Skip", Kind::Plain, true).on_hover_text("Leave out the commit it stopped on").clicked() {
                             cmds.push(Cmd::Operation(Action::Skip));
                         }
+                        if !p.resolved() && modal::button(ui, "Resolve with Claude…", Kind::Plain, true).on_hover_text("Claude proposes a resolution for each conflicted file").clicked() {
+                            cmds.push(Cmd::AiResolve(Vec::new()));
+                        }
                         if modal::button(ui, "Abort", Kind::Plain, true).on_hover_text(format!("Go back to before the {}", operation::noun(&p.op))).clicked() {
                             cmds.push(Cmd::Dialog(Dialog::Abort { op: p.op.clone() }));
                         }

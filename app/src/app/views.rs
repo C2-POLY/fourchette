@@ -111,6 +111,10 @@ impl Tab {
                 if ui.button("📝  Write the changelog…").clicked() {
                     cmds.push(Cmd::AiChangelog);
                 }
+                let conflicts = super::resolve::conflicted(&self.status);
+                if ui.add_enabled(!conflicts.is_empty(), egui::Button::new("🔀  Resolve conflicts…")).on_disabled_hover_text("No file is in conflict").clicked() {
+                    cmds.push(Cmd::AiResolve(Vec::new()));
+                }
                 if crate::ai::find_claude().is_none() {
                     ui.separator();
                     ui.label(RichText::new("Claude Code isn't installed on this Mac.").small().color(theme::c().modified));
@@ -725,6 +729,15 @@ impl Tab {
                     }
                     resp.context_menu(|ui| {
                         crate::ui::menu_rows(ui);
+                        if f.code == 'U' {
+                            if ui.button("Resolve with Claude…").clicked() {
+                                cmds.push(Cmd::AiResolve(vec![f.path.clone()]));
+                            }
+                            if files.iter().filter(|g| g.code == 'U').count() > 1 && ui.button("Resolve all conflicts with Claude…").clicked() {
+                                cmds.push(Cmd::AiResolve(Vec::new()));
+                            }
+                            ui.separator();
+                        }
                         if !staged {
                             if ui.button("Stage").clicked() {
                                 cmds.push(Cmd::Git { label: format!("Staged {}", f.path), args: vec!["add".into(), "-A".into(), "--".into(), f.path.clone()], network: false });
@@ -874,6 +887,9 @@ impl Tab {
                 ui.add_space(10.0);
                 if ui.button("Close").clicked() || (!settings_open && ui.input(|i| i.key_pressed(Key::Escape))) {
                     cmds.push(Cmd::CloseDiff);
+                }
+                if self.status.unstaged.iter().any(|f| f.code == 'U' && f.path == d.title) && ui.button("Resolve with Claude…").clicked() {
+                    cmds.push(Cmd::AiResolve(vec![d.title.clone()]));
                 }
             });
         });
@@ -1898,6 +1914,7 @@ impl eframe::App for App {
         t.dialogs(ctx, &mut cmds);
         t.cleanup_window(ctx, &mut cmds);
         t.changelog_window(ctx);
+        t.resolve_window(ctx);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
