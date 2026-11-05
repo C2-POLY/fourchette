@@ -63,6 +63,8 @@ pub struct Tab {
     pub(super) notice: Option<Notice>,
     /// A merge, rebase, cherry-pick or revert stopped on conflicts: the banner shows it.
     pub(super) operation: Option<crate::operation::InProgress>,
+    /// The branch's issue on the project, and the offer to move it.
+    pub(super) issue: super::issue::IssueFlow,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -89,6 +91,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.changelog_poll();
         t.resolve_poll();
         t.project_poll();
+        t.issue_poll(settings.issue_status_auto);
         if timers {
             t.timers(ctx, settings);
         }
@@ -146,6 +149,7 @@ impl Tab {
             details_layout: DetailsLayout::default(),
             notice: None,
             operation: None,
+            issue: Default::default(),
         }
     }
 
@@ -618,6 +622,7 @@ impl Tab {
             | Cmd::ProjectReload
             | Cmd::ProjectPick(_)
             | Cmd::Board
+            | Cmd::IssueDetail(_)
             | Cmd::NewTab
             | Cmd::OpenTab(_)
             | Cmd::SelectTab(_)
@@ -627,6 +632,9 @@ impl Tab {
             | Cmd::InstallUpdate
             | Cmd::UpdateCheckNow => {}
             Cmd::ProjectMove(m) => self.project_move(m),
+            Cmd::IssueMove => self.issue_accept(),
+            Cmd::IssueDecline => self.issue_decline(),
+            Cmd::IssueUndo => self.issue_undo(),
         }
     }
 

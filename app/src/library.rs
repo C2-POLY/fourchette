@@ -603,6 +603,7 @@ mod tests {
                 "pull_rebase": false,
                 "pull_autostash": false,
                 "delete_stash_after_apply": false,
+                "issue_status_auto": false,
                 "diff_context": 3,
                 "subject_low": 50,
                 "subject_high": 70,
