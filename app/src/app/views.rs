@@ -44,16 +44,8 @@ impl Tab {
     // ---------------------------------------------------------------- toolbar
 
     fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool) {
-        // The toolbar is the window's top edge (no title bar): dragging its empty background moves
-        // the window and a double-click zooms it. Added first, so the buttons on top keep their clicks.
-        let bg = ui.interact(ui.max_rect(), ui.id().with("window_drag"), Sense::click_and_drag());
-        if bg.drag_started_by(egui::PointerButton::Primary) {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-        }
-        if bg.double_clicked() {
-            let zoomed = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!zoomed));
-        }
+        // The toolbar is the window's top edge (no title bar).
+        crate::titlebar::drag_area(ui);
         let fullscreen = ui.input(|i| i.viewport().fullscreen.unwrap_or(false));
         ui.horizontal_centered(|ui| {
             // Room for the red, yellow and green buttons, which sit on the toolbar.
@@ -1740,6 +1732,16 @@ impl App {
             cmds.push(Cmd::Switcher);
             return;
         }
+        // ⇧⌘O shows the home page (the menu bar takes the key while its item is enabled).
+        if ctx.input(|i| i.modifiers.command && i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(Key::O)) {
+            cmds.push(Cmd::Home);
+            return;
+        }
+        // The home page has no history or board for the keys below.
+        if self.tab().home {
+            self.favorite_keys(ctx, cmds);
+            return;
+        }
         // ⌘B goes to the Project view and back to the history.
         let (board_key, escape) = board::board_keys(ctx);
         if board_key {
@@ -1854,6 +1856,7 @@ impl App {
             Id::Website => Cmd::OpenUrl(menu::REPO_URL.into()),
             Id::Issues => Cmd::OpenUrl(menu::ISSUES_URL.into()),
             Id::NewTab => Cmd::NewTab,
+            Id::Home => Cmd::Home,
             Id::CloseTab => Cmd::CloseTab(self.active),
             Id::NextTab => Cmd::ShowTab { next: true },
             Id::PrevTab => Cmd::ShowTab { next: false },
@@ -1971,7 +1974,11 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
-                ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update));
+                if self.tab().home {
+                    self.home_toolbar(ui, &mut cmds);
+                } else {
+                    ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update));
+                }
             });
 
         // The tabs, from two on (issue #59): with one, the window looks as before tabs.
@@ -1983,137 +1990,142 @@ impl eframe::App for App {
                 .show(ctx, |ui| self.tab_strip(ui, &mut cmds));
         }
 
-        egui::TopBottomPanel::bottom("status")
-            .exact_height(28.0)
-            .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(12, 4)))
-            .show(ctx, |ui| {
-                let t = &self.tabs[self.active];
-                ui.horizontal_centered(|ui| {
-                    let (dot, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                    ui.painter().circle_filled(dot.center(), 4.0, t.ref_color(&t.head));
-                    ui.label(RichText::new(t.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::c().text));
-                    if let Some((a, b)) = t.ahead_behind {
-                        ui.label(RichText::new(format!("{a} ahead, {b} behind")).color(theme::c().dim).size(theme::FS_SECONDARY));
-                    }
-                    ui.label(RichText::new("·").color(theme::c().faint));
-                    ui.label(RichText::new(format!("{} commits", t.commits.len())).color(theme::c().dim).size(theme::FS_SECONDARY));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let a = self.library.appearance;
-                        let tip = format!("Appearance: {} — click for {}", a.label(), a.next().label());
-                        if appearance_button(ui, a).on_hover_text(tip).clicked() {
-                            cmds.push(Cmd::SetAppearance(a.next()));
+        // The home page (issue #109) takes the window under the toolbar: no status bar, sidebar or details.
+        if self.tab().home {
+            self.home_page(ctx, &mut cmds);
+        } else {
+            egui::TopBottomPanel::bottom("status")
+                .exact_height(28.0)
+                .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(12, 4)))
+                .show(ctx, |ui| {
+                    let t = &self.tabs[self.active];
+                    ui.horizontal_centered(|ui| {
+                        let (dot, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
+                        ui.painter().circle_filled(dot.center(), 4.0, t.ref_color(&t.head));
+                        ui.label(RichText::new(t.branch.clone().unwrap_or_else(|| "detached HEAD".into())).size(theme::FS_SECONDARY).color(theme::c().text));
+                        if let Some((a, b)) = t.ahead_behind {
+                            ui.label(RichText::new(format!("{a} ahead, {b} behind")).color(theme::c().dim).size(theme::FS_SECONDARY));
                         }
-                        let d = t.details_layout;
-                        let tip = if d.hidden {
-                            format!("Details panel: Hidden — click to show it ({}), right-click for more", d.place.label().to_lowercase())
-                        } else {
-                            format!("Details panel: {} — click to move it to the {}, right-click for more", d.label(), d.clicked().place.label().to_lowercase())
-                        };
-                        let btn = details_button(ui, d).on_hover_text(tip);
-                        if btn.clicked() {
-                            cmds.push(Cmd::SetDetails(d.clicked()));
-                        }
-                        btn.context_menu(|ui| {
-                            crate::ui::menu_rows(ui);
-                            ui.label(RichText::new("Details panel").size(theme::FS_SMALL).color(theme::c().faint));
-                            for place in DetailsPlace::ALL {
-                                if ui.add(egui::Button::selectable(!d.hidden && d.place == place, place.label())).clicked() {
-                                    cmds.push(Cmd::SetDetails(DetailsLayout::shown(place)));
+                        ui.label(RichText::new("·").color(theme::c().faint));
+                        ui.label(RichText::new(format!("{} commits", t.commits.len())).color(theme::c().dim).size(theme::FS_SECONDARY));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            let a = self.library.appearance;
+                            let tip = format!("Appearance: {} — click for {}", a.label(), a.next().label());
+                            if appearance_button(ui, a).on_hover_text(tip).clicked() {
+                                cmds.push(Cmd::SetAppearance(a.next()));
+                            }
+                            let d = t.details_layout;
+                            let tip = if d.hidden {
+                                format!("Details panel: Hidden — click to show it ({}), right-click for more", d.place.label().to_lowercase())
+                            } else {
+                                format!("Details panel: {} — click to move it to the {}, right-click for more", d.label(), d.clicked().place.label().to_lowercase())
+                            };
+                            let btn = details_button(ui, d).on_hover_text(tip);
+                            if btn.clicked() {
+                                cmds.push(Cmd::SetDetails(d.clicked()));
+                            }
+                            btn.context_menu(|ui| {
+                                crate::ui::menu_rows(ui);
+                                ui.label(RichText::new("Details panel").size(theme::FS_SMALL).color(theme::c().faint));
+                                for place in DetailsPlace::ALL {
+                                    if ui.add(egui::Button::selectable(!d.hidden && d.place == place, place.label())).clicked() {
+                                        cmds.push(Cmd::SetDetails(DetailsLayout::shown(place)));
+                                        ui.close();
+                                    }
+                                }
+                                if ui.add(egui::Button::selectable(d.hidden, "Hidden").right_text(RichText::new("⌘J").color(theme::c().faint))).clicked() {
+                                    cmds.push(Cmd::SetDetails(d.hide()));
                                     ui.close();
                                 }
-                            }
-                            if ui.add(egui::Button::selectable(d.hidden, "Hidden").right_text(RichText::new("⌘J").color(theme::c().faint))).clicked() {
-                                cmds.push(Cmd::SetDetails(d.hide()));
-                                ui.close();
-                            }
+                            });
+                            ui.add_space(4.0);
+                            let where_ = t.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
+                            ui.label(RichText::new(where_).color(theme::c().faint).size(theme::FS_SECONDARY));
                         });
-                        ui.add_space(4.0);
-                        let where_ = t.repo.as_ref().map(|r| r.root.display().to_string()).unwrap_or_else(|| "Sample project — open a repository to get started".into());
-                        ui.label(RichText::new(where_).color(theme::c().faint).size(theme::FS_SECONDARY));
                     });
                 });
+
+            // The Project view keeps the sidebar and the details panel; only the centre changes.
+            let board_open = self.tab().board.open;
+            egui::SidePanel::left("sidebar")
+            .resizable(true)
+            .default_width(230.0)
+            .width_range(190.0..=420.0)
+            .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
+            .show(ctx, |ui| {
+                // Each tab's own id scope keeps its scroll positions and text fields apart.
+                let key = self.tab().key;
+                ui.push_id(key, |ui| self.tab_mut().sidebar(ui, &mut cmds));
             });
 
-        // The Project view keeps the sidebar and the details panel; only the centre changes.
-        let board_open = self.tab().board.open;
-        egui::SidePanel::left("sidebar")
-        .resizable(true)
-        .default_width(230.0)
-        .width_range(190.0..=420.0)
-        .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
-        .show(ctx, |ui| {
-            // Each tab's own id scope keeps its scroll positions and text fields apart.
-            let key = self.tab().key;
-            ui.push_id(key, |ui| self.tab_mut().sidebar(ui, &mut cmds));
-        });
+            // Declared after the sidebar, so at the bottom it spans the history only.
+            let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
+            match self.tab().details_layout {
+                DetailsLayout { hidden: true, .. } => {}
+                DetailsLayout { place: DetailsPlace::Right, .. } => {
+                    egui::SidePanel::right("details")
+                        .resizable(true)
+                        .default_width(330.0)
+                        .width_range(280.0..=600.0)
+                        .frame(details_frame)
+                        .show(ctx, |ui| {
+                            let key = self.tab().key;
+                            ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                        });
+                }
+                DetailsLayout { place: DetailsPlace::Bottom, .. } => {
+                    let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
+                    egui::TopBottomPanel::bottom("details_bottom")
+                        .resizable(true)
+                        .default_height(300.0)
+                        .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
+                        .frame(details_frame)
+                        .show(ctx, |ui| {
+                            let key = self.tab().key;
+                            ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+                        });
+                }
+            }
 
-        // Declared after the sidebar, so at the bottom it spans the history only.
-        let details_frame = egui::Frame::new().fill(theme::c().bg).inner_margin(Margin::symmetric(16, 0));
-        match self.tab().details_layout {
-            DetailsLayout { hidden: true, .. } => {}
-            DetailsLayout { place: DetailsPlace::Right, .. } => {
-                egui::SidePanel::right("details")
-                    .resizable(true)
-                    .default_width(330.0)
-                    .width_range(280.0..=600.0)
-                    .frame(details_frame)
-                    .show(ctx, |ui| {
-                        let key = self.tab().key;
-                        ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
+            let settings_open = self.settings_open;
+            let t = &mut self.tabs[self.active];
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
+                keep_panel_edges_free(ui);
+                t.view_tabs(ui, &mut cmds);
+                if board_open {
+                    t.board_view(ui, &mut cmds);
+                    return;
+                }
+                if t.is_demo() {
+                    egui::Frame::new().fill(theme::c().accent_soft).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("This is a sample history so you can look around.").color(theme::c().text));
+                            if ui.button("Open a repository…").clicked() {
+                                cmds.push(Cmd::OpenDialog);
+                            }
+                        });
                     });
-            }
-            DetailsLayout { place: DetailsPlace::Bottom, .. } => {
-                let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
-                egui::TopBottomPanel::bottom("details_bottom")
-                    .resizable(true)
-                    .default_height(300.0)
-                    .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
-                    .frame(details_frame)
-                    .show(ctx, |ui| {
-                        let key = self.tab().key;
-                        ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
-                    });
-            }
+                }
+                t.operation_banner(ui, &mut cmds);
+                if t.diff.is_some() {
+                    t.diff_view(ui, &mut cmds, settings_open);
+                } else if t.commits.is_empty() && t.status.is_empty() {
+                    ui.add_space(80.0);
+                    ui.vertical_centered(|ui| ui.label(RichText::new("This repository has no commits yet.").color(theme::c().dim)));
+                } else {
+                    t.commit_list(ui, &mut cmds);
+                }
+            }));
+
+            let t = self.tab_mut();
+            t.issue_offer_ui(ctx, &mut cmds);
+            t.dialogs(ctx, &mut cmds);
+            t.cleanup_window(ctx, &mut cmds);
+            t.changelog_window(ctx);
+            t.pr_draft_window(ctx);
+            t.resolve_window(ctx);
         }
-
-        let settings_open = self.settings_open;
-        let t = &mut self.tabs[self.active];
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
-            keep_panel_edges_free(ui);
-            t.view_tabs(ui, &mut cmds);
-            if board_open {
-                t.board_view(ui, &mut cmds);
-                return;
-            }
-            if t.is_demo() {
-                egui::Frame::new().fill(theme::c().accent_soft).inner_margin(Margin::symmetric(12, 6)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("This is a sample history so you can look around.").color(theme::c().text));
-                        if ui.button("Open a repository…").clicked() {
-                            cmds.push(Cmd::OpenDialog);
-                        }
-                    });
-                });
-            }
-            t.operation_banner(ui, &mut cmds);
-            if t.diff.is_some() {
-                t.diff_view(ui, &mut cmds, settings_open);
-            } else if t.commits.is_empty() && t.status.is_empty() {
-                ui.add_space(80.0);
-                ui.vertical_centered(|ui| ui.label(RichText::new("This repository has no commits yet.").color(theme::c().dim)));
-            } else {
-                t.commit_list(ui, &mut cmds);
-            }
-        }));
-
-        let t = self.tab_mut();
-        t.issue_offer_ui(ctx, &mut cmds);
-        t.dialogs(ctx, &mut cmds);
-        t.cleanup_window(ctx, &mut cmds);
-        t.changelog_window(ctx);
-        t.pr_draft_window(ctx);
-        t.resolve_window(ctx);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
