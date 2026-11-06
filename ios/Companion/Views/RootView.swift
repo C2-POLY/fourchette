@@ -22,6 +22,7 @@ struct RootView: View {
                             switch route {
                             case .board: BoardView(repo: repo)
                             case .pulls: PullsView(repo: repo)
+                            case .history: BranchesView(repo: repo)
                             }
                         }
                 }
@@ -47,7 +48,7 @@ struct RootView: View {
 
 /// What a repository's detail opens.
 enum Route: String, Hashable {
-    case board, pulls
+    case board, pulls, history
 
     static var fromLaunch: Route? {
         let args = ProcessInfo.processInfo.arguments

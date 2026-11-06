@@ -5,6 +5,39 @@ import Foundation
 enum Sample {
     static let project = ProjectRef(owner: "acme", number: 1, title: "Sample roadmap", url: nil)
 
+    static var branches: [Branch] {
+        func branch(_ name: String, _ headline: String, _ who: String, hours: Double) -> Branch {
+            Branch(name: name, sha: String(UInt64(abs(name.hashValue)) % 0xFFFFFFF, radix: 16).padding(toLength: 7, withPad: "0", startingAt: 0) + "c0ffee",
+                   headline: headline, author: who, date: Date().addingTimeInterval(-hours * 3600))
+        }
+        return [
+            branch("main", "Release 2.3.0", "ines", hours: 1),
+            branch("feature/graph-colours", "Give every branch line its own colour", "camille", hours: 4),
+            branch("feature/search", "Search commits by message, author or hash", "sami", hours: 24),
+            branch("hotfix/login-timeout", "Fix the sign-in timeout on slow networks", "ines", hours: 13),
+        ]
+    }
+
+    static var commits: [Commit] {
+        let list: [(String, String, Double)] = [
+            ("Merge branch 'feature/graph-colours' into develop", "camille", 1), ("Tidy up the sidebar spacing", "lucas", 3),
+            ("Give every branch line its own colour\n\nEach lane takes the colour of its branch, kept as it scrolls.", "camille", 4),
+            ("Draw curved lines between lanes", "camille", 8), ("Update the welcome text", "lucas", 11), ("Fix the sign-in timeout on slow networks", "ines", 13),
+            ("Start the new graph renderer", "camille", 20), ("Release 2.3.0", "ines", 26),
+        ]
+        return list.enumerated().map { i, c in
+            Commit(sha: String(format: "%07x", 0xca2a04c - i * 0x11111) + "0123456789abcdef0123456789abcdef0", message: c.0, authorName: c.1.capitalized, login: c.1,
+                   date: Date().addingTimeInterval(-c.2 * 3600))
+        }
+    }
+
+    static let files = [
+        ChangedFile(filename: "src/graph.rs", status: "modified", additions: 42, deletions: 7),
+        ChangedFile(filename: "src/theme.rs", status: "modified", additions: 12, deletions: 3),
+        ChangedFile(filename: "src/lanes.rs", status: "added", additions: 88, deletions: 0),
+        ChangedFile(filename: "src/old_lanes.rs", status: "removed", additions: 0, deletions: 64),
+    ]
+
     static var pulls: [Pull] {
         func check(_ name: String, _ source: String, _ outcome: Check.Outcome, _ s: Int?) -> Check {
             Check(name: name, source: source, outcome: outcome, seconds: s, url: URL(string: "https://github.com/acme/sample-project/actions"))
