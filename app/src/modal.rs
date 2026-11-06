@@ -305,18 +305,23 @@ pub fn card<R>(ui: &mut Ui, radius: u8, margin: Margin, add: impl FnOnce(&mut Ui
 /// A toast at the bottom of the window: a green tick or a red cross, then the message. It rises
 /// into place as it appears; `age` is its age in seconds. With `undo` (the share of its time left),
 /// a second line says Cmd+Z takes it back, and a bar along its foot shrinks as the time runs out.
-pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option<f32>) {
+/// With `action`, a button after the message instead of that line (the bar stays); returns true
+/// when it is clicked.
+pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option<f32>, action: Option<&str>) -> bool {
+    let mut clicked = false;
     let k = theme::c();
     let t = eased(age * 1.4);
     if t < 1.0 {
         ctx.request_repaint();
     }
-    egui::Area::new(Id::unique("toast")).order(egui::Order::Tooltip).interactable(false).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
+    egui::Area::new(Id::unique("toast")).order(egui::Order::Tooltip).interactable(action.is_some()).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
         ui.multiply_opacity(t);
         let bottom = if undo.is_some() { 12 } else { 9 };
         let r = card(ui, 10, Margin { left: 12, right: 16, top: 9, bottom }, |ui| {
             ui.set_max_width(560.0);
-            ui.horizontal_top(|ui| {
+            // With a button, the tick and the message sit on its centre line.
+            let align = if action.is_some() { egui::Align::Center } else { egui::Align::Min };
+            ui.with_layout(egui::Layout::left_to_right(align), |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
                 let (r, _) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
                 let col = if error { k.deleted } else { k.added };
@@ -328,6 +333,12 @@ pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option
                     }
                 } else {
                     crate::ui::check_mark(p, r.center() + vec2(0.0, 0.5), col);
+                }
+                if let Some(label) = action {
+                    ui.add(egui::Label::new(egui::RichText::new(msg).color(k.strong)));
+                    ui.add_space(6.0);
+                    clicked = button(ui, label, Kind::Plain, true).clicked();
+                    return;
                 }
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 6.0;
@@ -352,6 +363,7 @@ pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option
             p.rect_filled(Rect::from_min_size(track.min, vec2(track.width() * left.clamp(0.0, 1.0), track.height())), CornerRadius::same(1), k.accent);
         }
     });
+    clicked
 }
 
 /// Paints a window's shadows and fill, for windows laid out by hand.

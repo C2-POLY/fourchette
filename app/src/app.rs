@@ -184,6 +184,10 @@ pub enum Cmd {
     RepoFavorite(PathBuf),
     RepoGroup(PathBuf, Option<String>),
     RepoForget(PathBuf),
+    /// "Remove N missing": these repositories, whose folder is gone, come off the list.
+    RepoRemoveMissing(Vec<PathBuf>),
+    /// The Undo of that toast: they go back where they were.
+    RepoPutBack,
     ScanFolder,
     /// "Fetch all" of the switcher and the palette: every repository of the list.
     FetchAllRepos,
@@ -306,6 +310,11 @@ pub struct App {
     home: home::HomeState,
     /// The full board (⌃⌘B, issue #153): the board alone, under one thin bar.
     full: board_full::FullBoard,
+    /// The repositories "Remove N missing" took off last, which its toast's Undo puts back.
+    removed: crate::library::Removed,
+    /// Folders whose repositories are opened without being kept in the list or the tabs
+    /// (`library::temp_roots`); none in tests, whose repositories live there.
+    temp_roots: Vec<PathBuf>,
 }
 
 pub fn short(h: &str) -> &str {
@@ -340,6 +349,8 @@ impl App {
             shot_menu: None,
             home: home::HomeState::default(),
             full: Default::default(),
+            removed: Vec::new(),
+            temp_roots: crate::library::temp_roots(),
         }
     }
 
@@ -376,10 +387,11 @@ impl App {
             }
         }
         // FOURCHETTE_HOME=1 shows the home page with invented repositories, never the person's;
+        // FOURCHETTE_HOME=missing with three of them gone (so "Remove 3 missing" shows);
         // FOURCHETTE_HOME=<text> with that search typed.
         if let (Ok(v), Some(_)) = (std::env::var("FOURCHETTE_HOME"), &app.screenshot) {
-            app.home.sample(&mut app.library);
-            if v != "1" {
+            app.home.sample(&mut app.library, v == "missing");
+            if v != "1" && v != "missing" {
                 app.home.query = v;
             }
         }
@@ -574,13 +586,18 @@ impl App {
             Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
         });
         // FOURCHETTE_TOAST=<message> shows a toast, FOURCHETTE_TOAST=error:<message> an error's,
-        // FOURCHETTE_TOAST=undo:<message> one that offers Cmd+Z.
+        // FOURCHETTE_TOAST=undo:<message> one that offers Cmd+Z, FOURCHETTE_TOAST=button:<message>
+        // one with an Undo button (as after "Remove N missing").
         if let Ok(v) = std::env::var("FOURCHETTE_TOAST") {
             let (msg, error) = v.strip_prefix("error:").map_or((v.as_str(), false), |m| (m, true));
             let (msg, undo) = msg.strip_prefix("undo:").map_or((msg, false), |m| (m, true));
+            let (msg, button) = msg.strip_prefix("button:").map_or((msg, false), |m| (m, true));
             app.notify(msg.to_string(), error);
             if let Some(t) = &mut app.toast {
                 t.undo = undo;
+                if button {
+                    t.action = Some(("Undo", || Cmd::RepoPutBack));
+                }
             }
         }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
@@ -609,7 +626,7 @@ impl App {
     fn set_repo(&mut self, r: Repo) {
         let root = r.root.clone();
         self.tab_mut().set_repo(r);
-        if self.screenshot.is_none() {
+        if self.screenshot.is_none() && !crate::library::is_temporary(&root, &self.temp_roots) {
             self.library.touch(&root);
             self.remember_tabs();
             self.library.save();
@@ -623,7 +640,7 @@ impl App {
     }
 
     fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.toast = Some(tab::Notice { msg: msg.into(), error, at: Instant::now(), undo: false });
+        self.toast = Some(tab::Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None });
     }
 
     /// Moves the tabs' latest messages to the window's toast. A message from a tab in the
@@ -745,6 +762,8 @@ impl App {
                     self.library.forget(&p);
                     self.library.save();
                 }
+                Cmd::RepoRemoveMissing(paths) => self.remove_missing(&paths),
+                Cmd::RepoPutBack => self.put_back(),
                 Cmd::ScanFolder => self.scan_folder(),
                 Cmd::FetchAllRepos => self.fetch_all_repos(ctx),
                 Cmd::Reveal(p) => {
@@ -799,6 +818,34 @@ impl App {
             self.library.set_details(&r.root, l);
             self.library.save();
         }
+    }
+
+    /// "Remove N missing": takes these repositories off the list (nothing on disk), saves it once,
+    /// and says so in a toast whose Undo puts them back.
+    fn remove_missing(&mut self, paths: &[PathBuf]) {
+        let removed = self.library.remove(paths);
+        if removed.is_empty() {
+            return;
+        }
+        self.library.save();
+        let n = removed.len();
+        self.removed = removed;
+        self.notify(if n == 1 { "1 repository removed".to_string() } else { format!("{n} repositories removed") }, false);
+        if let Some(t) = &mut self.toast {
+            t.action = Some(("Undo", || Cmd::RepoPutBack));
+        }
+    }
+
+    /// The Undo of "Remove N missing": the repositories it took off go back as they were.
+    fn put_back(&mut self) {
+        let removed = std::mem::take(&mut self.removed);
+        if removed.is_empty() {
+            return;
+        }
+        let n = removed.len();
+        self.library.put_back(removed);
+        self.library.save();
+        self.notify(if n == 1 { "1 repository put back".to_string() } else { format!("{n} repositories put back") }, false);
     }
 
     /// Adds every repository found under a folder to the list.
