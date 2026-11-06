@@ -5,6 +5,24 @@ import Foundation
 enum Sample {
     static let project = ProjectRef(owner: "acme", number: 1, title: "Sample roadmap", url: nil)
 
+    static var pulls: [Pull] {
+        func check(_ name: String, _ source: String, _ outcome: Check.Outcome, _ s: Int?) -> Check {
+            Check(name: name, source: source, outcome: outcome, seconds: s, url: URL(string: "https://github.com/acme/sample-project/actions"))
+        }
+        func pull(_ n: Int, _ title: String, _ state: String, _ rollup: String?, _ checks: [Check], who: String = "camille", hours: Double, draft: Bool = false) -> Pull {
+            Pull(number: n, title: title, url: URL(string: "https://github.com/acme/sample-project/pull/\(n)"), state: state, isDraft: draft, author: who,
+                 branch: "feat/\(n)-sample", updatedAt: Date().addingTimeInterval(-hours * 3600), checksState: rollup, checks: checks)
+        }
+        return [
+            pull(55, "Search commits by author and hash", "OPEN", "FAILURE", [check("lint", "CI", .failed, 41), check("test (macos-latest)", "CI", .failed, 192),
+                 check("build (ubuntu-latest)", "CI", .passed, 125), check("typos", "Spelling", .passed, 9), check("Deploy preview", "Pages", .skipped, nil)], who: "sami", hours: 2, draft: true),
+            pull(58, "Draw curved lines between lanes", "OPEN", "PENDING", [check("test (macos-latest)", "CI", .running, nil), check("lint", "CI", .passed, 38)], who: "ines", hours: 3),
+            pull(57, "Keep branch names readable next to the badges", "OPEN", "SUCCESS", [check("lint", "CI", .passed, 40), check("test (macos-latest)", "CI", .passed, 201)], who: "lucas", hours: 20),
+            pull(54, "Give every branch line its own colour", "MERGED", "SUCCESS", [check("test (macos-latest)", "CI", .passed, 188)], hours: 30),
+            pull(50, "Try a darker sidebar", "CLOSED", nil, [], who: "lucas", hours: 90),
+        ]
+    }
+
     static var board: Board {
         func card(_ id: String, _ n: Int, _ title: String, _ status: String, type: String = "Feature", labels: [IssueLabel] = [], who: [String] = [], sub: (Int, Int) = (0, 0), kind: Card.Kind = .issue, state: String = "OPEN") -> Card {
             Card(id: id, kind: kind, number: n, title: title, body: "**As someone** with many repositories, I want to *group* them, so that the list stays short.",

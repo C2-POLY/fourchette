@@ -21,6 +21,7 @@ struct RootView: View {
                         .navigationDestination(for: Route.self) { route in
                             switch route {
                             case .board: BoardView(repo: repo)
+                            case .pulls: PullsView(repo: repo)
                             }
                         }
                 }
@@ -46,7 +47,7 @@ struct RootView: View {
 
 /// What a repository's detail opens.
 enum Route: String, Hashable {
-    case board
+    case board, pulls
 
     static var fromLaunch: Route? {
         let args = ProcessInfo.processInfo.arguments

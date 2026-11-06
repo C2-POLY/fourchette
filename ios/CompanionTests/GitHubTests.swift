@@ -117,3 +117,31 @@ final class MoveTests: XCTestCase {
         XCTAssertEqual(board.cards(in: none).map(\.id), [board.cards[0].id])
     }
 }
+
+final class PullTests: XCTestCase {
+    func testPullsWithChecksFailingFirst() throws {
+        let commit: [String: Any] = ["statusCheckRollup": ["state": "FAILURE", "contexts": ["nodes": [
+            ["__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-11-06T10:00:00Z", "completedAt": "2026-11-06T10:02:05Z",
+             "detailsUrl": "https://github.com/a/b/runs/1", "checkSuite": ["workflowRun": ["workflow": ["name": "CI"]], "app": ["name": "GitHub Actions"]]],
+            ["__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "FAILURE", "startedAt": "2026-11-06T10:00:00Z", "completedAt": "2026-11-06T10:00:41Z", "detailsUrl": NSNull()],
+            ["__typename": "CheckRun", "name": "test", "status": "IN_PROGRESS", "conclusion": NSNull()],
+            ["__typename": "StatusContext", "context": "ci/legacy", "state": "SUCCESS", "targetUrl": "https://ci.example.com/1"],
+        ]]]]
+        let pr: [String: Any] = ["number": 5, "title": "Fix", "url": "https://github.com/a/b/pull/5", "state": "OPEN", "isDraft": false, "headRefName": "fix/5",
+                                 "updatedAt": "2026-11-06T10:03:00Z", "author": ["login": "camille"], "commits": ["nodes": [["commit": commit]]]]
+        let data: [String: Any] = ["repository": ["open": ["nodes": [pr]], "done": ["nodes": []]]]
+        let pulls = PullQueries.parse(data)
+        let pull = try XCTUnwrap(pulls.open.first)
+        XCTAssertEqual(pull.checksState, "FAILURE")
+        XCTAssertEqual(pull.checks.map(\.name), ["lint", "test", "build", "ci/legacy"])
+        XCTAssertEqual(pull.checks[2].seconds, 125)
+        XCTAssertEqual(pull.checks[2].source, "CI")
+        XCTAssertTrue(pulls.recent.isEmpty)
+    }
+
+    func testDurations() {
+        XCTAssertEqual(PullQueries.duration(41), "41s")
+        XCTAssertEqual(PullQueries.duration(192), "3m 12s")
+        XCTAssertEqual(PullQueries.duration(3900), "1h 05m")
+    }
+}
