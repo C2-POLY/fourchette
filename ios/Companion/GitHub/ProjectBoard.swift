@@ -34,7 +34,7 @@ struct Card: Identifiable, Hashable, Sendable {
     let url: URL?
     /// OPEN, CLOSED or MERGED; empty for a draft.
     let state: String
-    let status: String?
+    var status: String?
     let type: String?
     let labels: [IssueLabel]
     let assignees: [String]
@@ -60,11 +60,25 @@ struct Board: Sendable {
     let projectID: String
     let statusFieldID: String?
     let columns: [Column]
-    let cards: [Card]
+    var cards: [Card]
 
     /// The cards of a column, in the project's order.
     func cards(in column: Column) -> [Card] {
         cards.filter { $0.status == (column.id == nil ? nil : column.name) }
+    }
+
+    /// The board with a card in another column, as it shows before GitHub has written it.
+    func moving(_ cardID: Card.ID, to column: Column) -> Board {
+        var b = self
+        if let i = b.cards.firstIndex(where: { $0.id == cardID }) {
+            b.cards[i].status = column.id == nil ? nil : column.name
+        }
+        return b
+    }
+
+    /// The column a card is in.
+    func column(of card: Card) -> Column? {
+        columns.first { $0.id == nil ? card.status == nil : $0.name == card.status }
     }
 }
 
@@ -162,7 +176,24 @@ enum ProjectQueries {
     }
 }
 
+enum ProjectWrites {
+    static let setStatus = "mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}"
+    static let clearStatus = "mutation($project:ID!,$item:ID!,$field:ID!){clearProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field}){projectV2Item{id}}}"
+}
+
 extension GitHubClient {
+    /// Writes a card's Status: the only thing the companion ever writes.
+    func move(_ cardID: Card.ID, to column: Board.Column, on board: Board) async throws {
+        guard let field = board.statusFieldID else { throw Failure.status(422, "The project has no Status field.") }
+        var vars: [String: Any] = ["project": board.projectID, "item": cardID, "field": field]
+        if let option = column.id {
+            vars["option"] = option
+            _ = try await graphql(ProjectWrites.setStatus, vars)
+        } else {
+            _ = try await graphql(ProjectWrites.clearStatus, vars)
+        }
+    }
+
     func projects(of repo: Repo) async throws -> [ProjectRef] {
         ProjectQueries.parseProjects(try await graphql(ProjectQueries.projects, ["owner": repo.owner.login, "name": repo.name]))
     }
