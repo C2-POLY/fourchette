@@ -1,6 +1,6 @@
-# Mechanics sheet — Fork (original) → Fourchette (rebuild)
+# Mechanics sheet — the original app → Fourchette (rebuild)
 
-Target: `/Applications/Fork.app/Contents/MacOS/Fork` (Mach-O arm64, Swift/AppKit), sha256 `a2b5ee90…bfca69`.
+Target: the original app's main binary (Mach-O arm64, Swift/AppKit), sha256 `a2b5ee90…bfca69`.
 Ghidra's bridge returned no result for these functions, so they were read with the built-in
 lifter and the raw disassembly. Evidence ids are in brackets.
 
@@ -102,21 +102,21 @@ its default (System, on, 10 minutes) without touching the repository list. The `
 files written while the colour variants existed (issue #14, removed by #125) is ignored and dropped at the
 next save.
 
-The Git section (issue #18) holds Fork's pull sheet and stash defaults, all off by default:
+The Git section (issue #18) holds the original's pull sheet and stash defaults, all off by default:
 Pull merges or rebases (`"pull_rebase"`), "Stash and reapply" puts uncommitted changes aside
 during the pull (`"pull_autostash"`), and "Delete stash after Apply" (`"delete_stash_after_apply"`)
 makes a stash's Apply a `stash pop`, which keeps the stash when applying it conflicts. Pull always
 names its mode (`--rebase` or `--no-rebase`), so the setting wins over `pull.rebase` in the
 person's Git config. A pull stopped on conflicts, or whose stashed changes conflict when put back
 (Git then keeps them in the stash list as "autostash"), is reported as an error saying so.
-Repository › Pull… (⇧⌘L, #101) opens Fork's pull sheet as a dialog: the remote branch to pull
+Repository › Pull… (⇧⌘L, #101) opens the original's pull sheet as a dialog: the remote branch to pull
 (the upstream by default, else the branch of the same name), Merge or Rebase and "Stash and
 reapply local changes" pre-filled from these settings, and the animated graph of the result. The
 dialog's Merge adds `--ff`, so a branch with no commits of its own is always fast-forwarded.
 
 ### Merge (MergeWindowController, MergeTestGitCommand; issue #102)
 
-Fork's Merge window has a "No fast-forward" box (`noFastForwardCheckBox`), and the original passes
+The original's Merge window has a "No fast-forward" box (`noFastForwardCheckBox`), and the original passes
 `--no-ff` to `git merge` [ev_12829593]; its `Merge/MergeTestGitCommand.swift` checks a merge
 before running it [ev_9be9b63c]. The rebuild opens one dialog from a branch's "Merge … into …",
 the remote branch's "Merge … into current branch" and the palette:
@@ -136,7 +136,7 @@ An operation stopped on conflicts (issue #104: merge, rebase, cherry-pick, rever
 shows a banner over the history: "Merge in progress" (a rebase adds its step, "2/5", from
 `rebase-merge/msgnum` and `end`), what it does (the merge message's first line, "branch onto
 main", the commit picked), then "Conflicts in" and the files (a click shows the file's diff), or
-"All conflicts resolved" once none is left unstaged. Abort asks first, in Fork's words ("Do you
+"All conflicts resolved" once none is left unstaged. Abort asks first, in the original's words ("Do you
 want to abort the merge?" / "…the rebase?"), with a red action, then runs `git <op> --abort`;
 Continue, active only when every conflict is resolved, runs `git <op> --continue` with
 `GIT_EDITOR=true` (no editor, Git's message); Skip (rebase only) runs `--skip`. Each is one Undo
@@ -157,8 +157,8 @@ refuses `merge --abort` when a file the merge brought has unstaged edits; its me
 
 ## Menu bar (MainMenu.nib) [ev_1c8c0440aa55e0e10632401c67ff8c7fca7774108d82fe97f19b59ff97807be9]
 
-Decoded from `Fork.app/Contents/Resources/Base.lproj/MainMenu.nib` (`investigation.cany/evidence/1c/`):
-menus **Fork, File, Edit, View, Repository, Window, Help**, 137 items. Fourchette keeps that order and
+Decoded from the original's `Contents/Resources/Base.lproj/MainMenu.nib` (`investigation.cany/evidence/1c/`):
+menus **<app name>, File, Edit, View, Repository, Window, Help**, 137 items. Fourchette keeps that order and
 those shortcuts where it has the action (`app/src/menu.rs`), and leaves out what it doesn't have
 (New Window, Clone, Git Flow, Git LFS, Bisect, Apply Patch, Treemap, Statistics, Accounts, SSH keys…).
 

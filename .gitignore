@@ -13,3 +13,9 @@
 
 # oh-my-claudecode runtime state
 .omc/
+
+# What the rebuild tool found in the original app (kept on disk, out of the repository)
+/investigation.cany/
+/capture/
+/craft.json
+/attachments/

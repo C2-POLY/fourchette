@@ -16,7 +16,7 @@ pub const MAX_PROMPT_CHARS: usize = 60_000;
 pub fn find_claude() -> Option<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
     // The original checks exactly these two, expanding "~" (sub_1003e513c, strings 0x1006476b0/d0).
-    let mut candidates: Vec<PathBuf> = FORK_CLAUDE_PATHS
+    let mut candidates: Vec<PathBuf> = ORIGINAL_CLAUDE_PATHS
         .iter()
         .map(|p| match p.strip_prefix("~/") {
             Some(rest) => home.join(rest),
@@ -33,7 +33,7 @@ pub fn find_claude() -> Option<PathBuf> {
 }
 
 /// Where the original looks for Claude Code.
-pub const FORK_CLAUDE_PATHS: [&str; 2] = ["/opt/homebrew/bin/claude", "~/.local/bin/claude"];
+pub const ORIGINAL_CLAUDE_PATHS: [&str; 2] = ["/opt/homebrew/bin/claude", "~/.local/bin/claude"];
 /// The original's message when neither path exists (sub_1003e4338).
 pub const CANNOT_FIND_CLAUDE: &str = "Cannot find Claude";
 /// The original's progress text while Claude writes a commit message (sub_1003e4338).
@@ -441,7 +441,7 @@ mod tests {
         assert!(commit_message_prompt("D", true, 50, 70, 72, "").contains("staged changes combined with the last commit (i.e. `git diff --cached HEAD^`)"));
         assert_eq!(split_message("\nAdd login\n\nBecause users asked.\n"), ("Add login".to_string(), "Because users asked.".to_string()));
         assert_eq!(split_message("Fix typo"), ("Fix typo".to_string(), String::new()));
-        assert_eq!(FORK_CLAUDE_PATHS, ["/opt/homebrew/bin/claude", "~/.local/bin/claude"]);
+        assert_eq!(ORIGINAL_CLAUDE_PATHS, ["/opt/homebrew/bin/claude", "~/.local/bin/claude"]);
     }
 
     #[test]

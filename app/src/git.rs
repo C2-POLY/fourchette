@@ -181,7 +181,7 @@ pub fn fetch_summary(stderr: &str) -> String {
 
 /// `-c push.default=upstream push <remote> <local>:refs/heads/<remote branch>
 ///  [--force-with-lease] [--tags] [--set-upstream] --verbose --progress` (sub_10016e1ec). Force is
-/// always `--force-with-lease` ("Fork always uses --force-with-lease").
+/// always `--force-with-lease` (the original always uses it).
 pub fn push_args(remote: &str, local: &str, remote_branch: &str, set_upstream: bool, force: bool, tags: bool) -> Vec<String> {
     let mut a = vec![
         "-c".to_string(),

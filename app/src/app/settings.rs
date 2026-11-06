@@ -403,7 +403,7 @@ fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
 }
 
-/// Pull's mode and the stash, Fork's "pullSheetRebase", "pullSheetStashAndReapply" and
+/// Pull's mode and the stash, the original's "pullSheetRebase", "pullSheetStashAndReapply" and
 /// "deleteStashAfterApply" (all off by default), and moving the branch's issue on the project.
 fn git(ui: &mut Ui, pane: &mut Pane<'_>) {
     let s = &mut *pane.settings;

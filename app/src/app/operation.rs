@@ -122,7 +122,7 @@ fn file_chip(ui: &mut Ui, path: &str) -> egui::Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// The Abort confirmation (Fork: "Do you want to abort the merge?"), red. Returns true to close.
+/// The Abort confirmation (the original: "Do you want to abort the merge?"), red. Returns true to close.
 pub(super) fn abort_dialog(ctx: &egui::Context, op: &str, cmds: &mut Vec<Cmd>) -> bool {
     let n = operation::noun(op);
     let title = format!("Abort {n}");
