@@ -112,9 +112,7 @@ impl Tab {
         if self.pulls.loading.is_some() {
             return;
         }
-        let remote = r.default_remote();
-        let url = remote.as_ref().and_then(|rem| r.git(&["remote", "get-url", rem]).ok()).unwrap_or_default();
-        let (Some(slug), Some(remote)) = (github::slug(&url), remote) else {
+        let (Some(slug), Some(remote)) = (self.github_slug(), r.default_remote()) else {
             self.pulls = PullsState::default();
             return;
         };
@@ -123,6 +121,13 @@ impl Tab {
             let _ = tx.send(crate::pulls::load(&slug, &remote));
         });
         self.pulls.loading = Some(rx);
+    }
+
+    /// "owner/name" of the repository on GitHub, from its default remote's address.
+    pub(super) fn github_slug(&self) -> Option<String> {
+        let r = self.repo.as_ref()?;
+        let remote = r.default_remote()?;
+        github::slug(&r.git(&["remote", "get-url", &remote]).ok()?)
     }
 
     pub(super) fn pulls_poll(&mut self) {
