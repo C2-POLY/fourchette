@@ -279,12 +279,14 @@ fn pool(paths: Vec<PathBuf>, tx: Sender<Msg>, ctx: &egui::Context, job: fn(&Path
     let queue = Arc::new(Mutex::new(paths.into_iter().collect::<VecDeque<_>>()));
     for _ in 0..n {
         let (queue, tx, ctx) = (queue.clone(), tx.clone(), ctx.clone());
-        std::thread::spawn(move || loop {
-            let Some(p) = queue.lock().ok().and_then(|mut q| q.pop_front()) else { break };
-            for m in job(&p) {
-                let _ = tx.send(m);
+        // The guard goes with the closure that pops: the queue is free while the job runs.
+        std::thread::spawn(move || {
+            while let Some(p) = queue.lock().ok().and_then(|mut q| q.pop_front()) {
+                for m in job(&p) {
+                    let _ = tx.send(m);
+                }
+                ctx.request_repaint();
             }
-            ctx.request_repaint();
         });
     }
 }

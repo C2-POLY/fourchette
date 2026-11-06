@@ -11,11 +11,11 @@ A Git client for macOS in Rust and egui: the history graph, branches, worktrees,
 
 ## Stack
 
-Rust 2021 (rust-version 1.85), eframe and egui 0.32 (the wgpu renderer on Metal, not glow, so a live resize stays clean), `rfd` for file dialogs, `serde_json`, `image`. Git, Claude Code and GitHub are reached through their command lines (`git`, `claude`, `gh`), never through a library or a token kept by the app. One exception: the update check reads the public releases API and downloads the .dmg with `curl` (no `gh`, which is optional for people who use the app, and no token).
+Rust 2021 (rust-version 1.95, from rustup: Homebrew's `rust` is too old and has no x86_64 target for the release), eframe and egui 0.37 (the wgpu renderer on Metal, not glow, so a live resize stays clean), `rfd` for file dialogs, `serde_json`, `image`. Git, Claude Code and GitHub are reached through their command lines (`git`, `claude`, `gh`), never through a library or a token kept by the app. One exception: the update check reads the public releases API and downloads the .dmg with `curl` (no `gh`, which is optional for people who use the app, and no token).
 
 ## Commands
 
-Run them from `app/`.
+Run them from `app/`, with the Rust of rustup (with `brew install rustup`, put `$(brew --prefix rustup)/bin` first in PATH; Homebrew's `rust` is too old).
 
 ```bash
 # Build and run on a repository (no argument: the current folder if it is a repository, else the tabs of the last quit, else the home page)

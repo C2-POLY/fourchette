@@ -22,7 +22,7 @@ const GLIDE_TIME: f32 = 0.18;
 /// How close to a column's or the board's edge a dragged card scrolls it.
 const SCROLL_EDGE: f32 = 48.0;
 /// The board scrolls with the wheel and its bars, not by dragging it: dragging moves cards.
-const NO_DRAG_SCROLL: egui::scroll_area::ScrollSource = egui::scroll_area::ScrollSource { drag: false, ..egui::scroll_area::ScrollSource::ALL };
+const NO_DRAG_SCROLL: egui::scroll_area::ScrollSource = egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Never, ..egui::scroll_area::ScrollSource::ALL };
 
 // Surfaces of the mode on screen: columns sit below the page, cards above it.
 fn column_fill() -> Color32 {
@@ -710,7 +710,7 @@ pub(super) fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<
     for (i, (o, w)) in options.iter().zip(&widths).enumerate() {
         let r = Rect::from_min_size(pos2(x, rect.top() + 2.0), vec2(*w, rect.height() - 4.0));
         // Two pickers can share an option ("All"): the id has the whole set.
-        let resp = ui.interact(r, ui.id().with(("seg", options.join("|"), o)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("seg", options.join("|"), o)), Sense::click());
         let p = ui.painter();
         if i == chosen {
             p.rect_filled(r, CornerRadius::same(6), theme::c().select);
@@ -988,7 +988,7 @@ fn card(ui: &mut Ui, it: &Item, show_repo: bool, selected: bool, nest: Option<Ne
         }
     }
     let outer = prepared.content_ui.min_rect().expand(11.0);
-    let resp = ui.interact(outer, ui.id().with(("card", &it.id)), Sense::click_and_drag());
+    let resp = ui.interact(outer, ui.scope_id().with(("card", &it.id)), Sense::click_and_drag());
     if selected {
         prepared.frame.stroke = Stroke::new(1.5_f32, theme::c().accent);
         prepared.frame.fill = card_hover();
@@ -1223,7 +1223,7 @@ impl Tab {
                                 }
                                 let mut gap_at = |ui: &mut Ui, j: usize, below: &str| {
                                     if let Some(d) = &drag {
-                                        if let Some(at) = card_gap(ui, Id::new(("board_gap", d.gen, status, below)), gap == Some(j), d.size) {
+                                        if let Some(at) = card_gap(ui, Id::unique(("board_gap", d.gen, status, below)), gap == Some(j), d.size) {
                                             landing = Some(at);
                                         }
                                     }
@@ -1282,7 +1282,7 @@ impl Tab {
         self.board.columns_at = columns_at;
         self.board.cards_at = cards_at;
         if let Some(d) = started {
-            ctx.animate_value_with_time(Id::new(("board_lift", d.gen)), 0.0, 0.0);
+            ctx.animate_value_with_time(Id::unique(("board_lift", d.gen)), 0.0, 0.0);
             self.board.drags = d.gen;
             self.board.drag = Some(d);
         }
@@ -1381,7 +1381,7 @@ impl Tab {
             return;
         };
         let held = d.glide.is_none();
-        let lift = ctx.animate_value_with_time(Id::new(("board_lift", d.gen)), if held { 1.0 } else { 0.0 }, if held { 0.12 } else { GLIDE_TIME });
+        let lift = ctx.animate_value_with_time(Id::unique(("board_lift", d.gen)), if held { 1.0 } else { 0.0 }, if held { 0.12 } else { GLIDE_TIME });
         let pos = match (&d.glide, landing) {
             (Some((_, _, t0)), Some(to)) => {
                 let t = ((now - t0) as f32 / GLIDE_TIME).clamp(0.0, 1.0);
@@ -1395,7 +1395,7 @@ impl Tab {
             _ => d.pos,
         };
         let rect = Rect::from_min_size(pos, d.size);
-        let area = egui::Area::new(Id::new("board_drag")).order(egui::Order::Tooltip).fixed_pos(pos).interactable(false).show(ctx, |ui| {
+        let area = egui::Area::new(Id::unique("board_drag")).order(egui::Order::Tooltip).fixed_pos(pos).interactable(false).show(ctx, |ui| {
             ui.set_width(d.size.x);
             ui.set_max_width(d.size.x);
             if landing.is_none() && !held {
@@ -1451,7 +1451,7 @@ impl Tab {
                 if loading {
                     ui.ctx().request_repaint();
                 }
-                ui.add(egui::TextEdit::singleline(&mut self.board.search).hint_text("Search cards").desired_width(200.0).margin(Margin::symmetric(8, 5)));
+                ui.add(egui::TextEdit::singleline(&mut self.board.search).hint_text("Search cards").desired_width(216.0).margin(Margin::symmetric(8, 5)));
                 if let Some(e) = &self.project.error {
                     if board.is_some() {
                         ui.label(RichText::new(e).size(theme::FS_SMALL).color(theme::c().modified));
@@ -1598,7 +1598,7 @@ impl Tab {
             if let Some(parent) = &it.parent {
                 row(ui, "Parent", &mut |ui| {
                     let r = parent_line(ui, parent, 12.5);
-                    if ui.interact(r.rect, ui.id().with("drawer_parent"), Sense::click()).clicked() {
+                    if ui.interact(r.rect, ui.scope_id().with("drawer_parent"), Sense::click()).clicked() {
                         *goto = Some(parent.clone());
                     }
                 });

@@ -218,7 +218,7 @@ impl Tab {
         if left.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(33));
         }
-        egui::Area::new(egui::Id::new(("issue_offer", self.key))).order(egui::Order::Foreground).anchor(Align2::RIGHT_BOTTOM, vec2(-16.0, -40.0)).show(ctx, |ui| {
+        egui::Area::new(egui::Id::unique(("issue_offer", self.key))).order(egui::Order::Foreground).anchor(Align2::RIGHT_BOTTOM, vec2(-16.0, -40.0)).show(ctx, |ui| {
             let bottom = if left.is_some() { 13 } else { 11 };
             let r = crate::modal::card(ui, 10, Margin { left: 12, right: 14, top: 11, bottom }, |ui| {
                 ui.set_max_width(340.0);

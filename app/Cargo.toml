@@ -2,7 +2,7 @@
 name = "fourchette"
 version = "0.3.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.95"
 description = "A Git client for macOS in Rust and egui"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/C2-POLY/fourchette"
@@ -11,8 +11,10 @@ homepage = "https://c2-poly.github.io/fourchette/"
 [dependencies]
 # wgpu (Metal) instead of the default glow (OpenGL): glow shows stale or stretched frames during a live resize on macOS.
 # The other default features are kept, minus glow, wayland, x11 and the web screen reader.
-eframe = { version = "0.32", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
-egui = "0.32"
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
+# The symbols some labels still use (a check mark, a sparkle) come from egui's emoji fonts,
+# which egui 0.37 no longer loads by default.
+egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
 rfd = "0.15"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -23,11 +25,11 @@ tiny-skia = { version = "0.11", default-features = false, features = ["std", "si
 # The menu bar and the window buttons go through AppKit; the same versions eframe and winit already use.
 [target.'cfg(target_os = "macos")'.dependencies]
 # eframe's wgpu feature enables no backend by itself: Metal, with the WGSL shaders egui uses.
-wgpu = { version = "25", default-features = false, features = ["metal", "wgsl"] }
-objc2 = "0.5"
-block2 = "0.5"
-objc2-app-kit = { version = "0.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl", "NSImage", "NSWorkspace"] }
-objc2-foundation = { version = "0.2", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSData", "block2"] }
+wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
+objc2 = "0.6"
+block2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl", "NSImage", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSData", "block2"] }
 
 [profile.release]
 opt-level = 3

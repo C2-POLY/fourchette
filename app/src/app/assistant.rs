@@ -274,7 +274,7 @@ fn advice_card(ui: &mut egui::Ui, i: usize, a: &mut crate::ai::Advice) {
         .response;
     let rect = resp.rect;
     crate::modal::check_box(ui.painter(), egui::pos2(rect.left() + 20.0, rect.top() + 21.0), a.selected);
-    let click = ui.interact(rect, ui.id().with(("advice", i)), Sense::click());
+    let click = ui.interact(rect, ui.scope_id().with(("advice", i)), Sense::click());
     if click.clicked() {
         a.selected = !a.selected;
     }

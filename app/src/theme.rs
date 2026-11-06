@@ -439,7 +439,7 @@ fn styled_face(b: &[u8], want: &str) -> Option<u32> {
                 }
                 let raw = b.get(strings + off..strings + off + len)?;
                 Some(if platform == 0 || platform == 3 {
-                    String::from_utf16_lossy(&raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                    String::from_utf16_lossy(&raw.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect::<Vec<_>>())
                 } else {
                     String::from_utf8_lossy(raw).into_owned()
                 })
@@ -466,6 +466,8 @@ pub fn apply(ctx: &egui::Context, appearance: Appearance) {
         s.spacing.button_padding = egui::vec2(10.0, 4.0);
         s.spacing.interact_size.y = 24.0;
         s.spacing.menu_margin = egui::Margin::same(6);
+        // A panel's edge is grabbed 5 points either side, as before egui 0.37 brought it to 3.
+        s.interaction.resize_grab_radius_side = 5.0;
         s.text_styles = [
             (TextStyle::Small, FontId::proportional(FS_SMALL)),
             (TextStyle::Body, FontId::proportional(FS_BODY)),

@@ -354,7 +354,7 @@ pub fn png_bytes(icon: &egui::IconData) -> Option<Vec<u8>> {
 /// the main thread, where the frame is drawn; elsewhere nothing happens.
 #[cfg(target_os = "macos")]
 pub fn set_dock_icon(png: &[u8]) -> bool {
-    use objc2::ClassType;
+    use objc2::AnyThread;
     use objc2_app_kit::{NSApplication, NSImage};
     use objc2_foundation::{MainThreadMarker, NSData};
     let Some(mtm) = MainThreadMarker::new() else { return false };
@@ -377,7 +377,7 @@ pub fn set_dock_icon(_png: &[u8]) -> bool {
 #[cfg(target_os = "macos")]
 pub fn set_finder_icon(bundle: &std::path::Path, png: Option<&[u8]>) -> bool {
     use objc2::rc::autoreleasepool;
-    use objc2::ClassType;
+    use objc2::AnyThread;
     use objc2_app_kit::{NSImage, NSWorkspace, NSWorkspaceIconCreationOptions};
     use objc2_foundation::{NSData, NSString};
     autoreleasepool(|_| {
@@ -389,8 +389,8 @@ pub fn set_finder_icon(bundle: &std::path::Path, png: Option<&[u8]>) -> bool {
             None => None,
         };
         let path = NSString::from_str(&bundle.to_string_lossy());
-        // SAFETY: plain AppKit calls on live objects; NSWorkspace may be used from any thread.
-        unsafe { NSWorkspace::sharedWorkspace().setIcon_forFile_options(image.as_deref(), &path, NSWorkspaceIconCreationOptions(0)) }
+        // NSWorkspace may be used from any thread.
+        NSWorkspace::sharedWorkspace().setIcon_forFile_options(image.as_deref(), &path, NSWorkspaceIconCreationOptions(0))
     })
 }
 

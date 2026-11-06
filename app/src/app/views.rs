@@ -142,7 +142,7 @@ impl Tab {
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
-                ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(220.0).margin(Margin::symmetric(10, 6)));
+                ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(240.0).margin(Margin::symmetric(10, 6)));
                 // A newer release on GitHub (issue #80).
                 if update {
                     ui.add_space(10.0);
@@ -1080,7 +1080,7 @@ impl Tab {
             })
             .max()
             .unwrap_or(0);
-        let char_w = ui.fonts(|f| f.glyph_width(&font, 'M'));
+        let char_w = ui.fonts_mut(|f| f.glyph_width(&font, 'M'));
         let marks: Vec<(bool, bool)> = rows
             .iter()
             .map(|r| match r {
@@ -1091,7 +1091,7 @@ impl Tab {
         let (body, strip) = ruler_split(ui);
         let half = ((body.width() - 1.0) / 2.0).floor().max(120.0);
         let max_off = (longest as f32 * char_w - (half - TEXT_X - 8.0)).max(0.0);
-        let id = ui.id().with("diff_split_x");
+        let id = ui.scope_id().with("diff_split_x");
         let off = ui.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0).clamp(0.0, max_off);
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
         // A review remark's line: the first row whose new side is at or after it.
@@ -1377,7 +1377,7 @@ impl Tab {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             // The title, then on its right Now / After and Merge's styles (or the
                             // action's line).
-                            let view_id = egui::Id::new("checkout_sync_view");
+                            let view_id = egui::Id::unique("checkout_sync_view");
                             let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
                             let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
                             let mut side = ui.new_child(egui::UiBuilder::new().id_salt("checkout_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
@@ -1419,7 +1419,7 @@ impl Tab {
                             ui.painter().vline(x, block.y_range(), Stroke::new(1.0_f32, k.border));
                             let graph = Rect::from_min_max(pos2(x + 16.0, block.top()), block.max);
                             let mut right = ui.new_child(egui::UiBuilder::new().id_salt("checkout_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
-                            preview::show(&mut right, egui::Id::new("checkout_sync_preview"), &preview, after);
+                            preview::show(&mut right, egui::Id::unique("checkout_sync_preview"), &preview, after);
                             ui.add_space(10.0);
                             let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
                             ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
@@ -1488,7 +1488,7 @@ impl Tab {
                             let w = Width::Large.px() - 2.0 * modal::PAD - 32.0;
                             ui.set_width(w);
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            let view_id = egui::Id::new("push_view");
+                            let view_id = egui::Id::unique("push_view");
                             let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_PUSH_VIEW").map_or(true, |v| v != "now")));
                             let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
                             let mut side = ui.new_child(egui::UiBuilder::new().id_salt("push_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
@@ -1534,7 +1534,7 @@ impl Tab {
                             ui.painter().vline(x, top.y..=top.y + block_h, Stroke::new(1.0_f32, k.border));
                             let graph = Rect::from_min_size(pos2(x + 16.0, top.y + (block_h - graph_h) / 2.0), vec2(w - FORM_W - 32.0, graph_h));
                             let mut right = ui.new_child(egui::UiBuilder::new().id_salt("push_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
-                            preview::show(&mut right, egui::Id::new("push_preview"), &p, after);
+                            preview::show(&mut right, egui::Id::unique("push_preview"), &p, after);
                             ui.allocate_exact_size(vec2(w, block_h), Sense::hover());
                             if (push.key(), push.force) != before {
                                 push.confirm = false;
@@ -1602,7 +1602,7 @@ impl Tab {
                             ui.set_width(w);
                             ui.spacing_mut().item_spacing.y = 0.0;
                             // The title, then Now / After on its right.
-                            let view_id = egui::Id::new("merge_view");
+                            let view_id = egui::Id::unique("merge_view");
                             let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
                             let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
                             let mut side = ui.new_child(egui::UiBuilder::new().id_salt("merge_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
@@ -1632,7 +1632,7 @@ impl Tab {
                             ui.painter().vline(x, block.y_range(), Stroke::new(1.0_f32, k.border));
                             let graph = Rect::from_min_max(pos2(x + 16.0, block.top()), block.max);
                             let mut right = ui.new_child(egui::UiBuilder::new().id_salt("merge_graph").max_rect(graph).layout(Layout::top_down(Align::Min)));
-                            preview::show(&mut right, egui::Id::new("merge_preview"), &preview, after);
+                            preview::show(&mut right, egui::Id::unique("merge_preview"), &preview, after);
                             ui.add_space(10.0);
                             let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
                             ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
@@ -1709,7 +1709,7 @@ impl Tab {
                             ui.set_width(w);
                             ui.spacing_mut().item_spacing.y = 0.0;
                             // The result's title, Now / After on its right.
-                            let view_id = egui::Id::new("pull_view");
+                            let view_id = egui::Id::unique("pull_view");
                             let mut after = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(view_id, || std::env::var("FOURCHETTE_CHECKOUT_VIEW").map_or(true, |v| v != "now")));
                             let (row, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
                             let mut side = ui.new_child(egui::UiBuilder::new().id_salt("pull_side").max_rect(row).layout(Layout::right_to_left(Align::Center)));
@@ -1725,7 +1725,7 @@ impl Tab {
                             let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
                             ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
                             ui.add_space(10.0);
-                            preview::show(ui, egui::Id::new("pull_preview"), &preview, after);
+                            preview::show(ui, egui::Id::unique("pull_preview"), &preview, after);
                             ui.add_space(10.0);
                             let (rule, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
                             ui.painter().hline(rule.x_range(), rule.center().y, Stroke::new(1.0_f32, k.border));
@@ -1876,7 +1876,7 @@ impl App {
             busy: t.busy.is_some(),
             modal: self.modal(),
             settings: self.settings_open,
-            text_focus: ctx.wants_keyboard_input(),
+            text_focus: ctx.egui_wants_keyboard_input(),
             can_undo: !t.undo.is_empty(),
             changes: !t.status.is_empty(),
             // The Commit button's rule.
@@ -1943,20 +1943,21 @@ impl App {
         self.frame += 1;
         ctx.request_repaint();
         if self.frame >= 120 && !self.shot_requested {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            // Saved and the window closed once the image is ready, from the renderer's callback.
+            let done = ctx.clone();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::ScreenshotCallback::new(move |img| {
+                let [w, h] = img.size;
+                let bytes: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
+                if let Some(dir) = path.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                if let Err(e) = image::save_buffer(&path, &bytes, w as u32, h as u32, image::ExtendedColorType::Rgba8) {
+                    eprintln!("could not save screenshot: {e}");
+                }
+                done.send_viewport_cmd(egui::ViewportCommand::Close);
+                done.request_repaint();
+            })));
             self.shot_requested = true;
-        }
-        let shot = ctx.input(|i| i.events.iter().find_map(|e| if let egui::Event::Screenshot { image, .. } = e { Some(image.clone()) } else { None }));
-        if let Some(img) = shot {
-            let [w, h] = img.size;
-            let bytes: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            if let Err(e) = image::save_buffer(&path, &bytes, w as u32, h as u32, image::ExtendedColorType::Rgba8) {
-                eprintln!("could not save screenshot: {e}");
-            }
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if self.frame > 600 {
             eprintln!("screenshot timed out");
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1983,7 +1984,7 @@ impl eframe::App for App {
     /// never sees it, so each pick runs exactly once: Edit items as text-field events (Copy also
     /// copies text selected in a label), the others as the `Cmd` of their button.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
-        let text = ctx.wants_keyboard_input();
+        let text = ctx.egui_wants_keyboard_input();
         // FOURCHETTE_MENU: a right-click, pressed then released, a while before the screenshot.
         if let (Some(pos), true) = (self.shot_menu, self.frame == 40 || self.frame == 41) {
             let pressed = self.frame == 40;
@@ -2018,7 +2019,8 @@ impl eframe::App for App {
         }
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
         // Every tab's background work, not only the one on screen.
@@ -2041,10 +2043,10 @@ impl eframe::App for App {
         let bar_h = if full { board_full::BAR_H } else { crate::titlebar::TOOLBAR_H };
         crate::titlebar::set_band(bar_h);
         crate::titlebar::place_buttons();
-        egui::TopBottomPanel::top("toolbar")
-            .exact_height(bar_h)
+        egui::Panel::top("toolbar")
+            .exact_size(bar_h)
             .frame(egui::Frame::new().fill(theme::c().sidebar))
-            .show(ctx, |ui| {
+            .show(root, |ui| {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
                 if full {
@@ -2058,17 +2060,17 @@ impl eframe::App for App {
 
         if full {
             let t = &mut self.tabs[self.active];
-            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| t.board_view(ui, true, &mut cmds)));
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| t.board_view(ui, true, &mut cmds)));
             t.board_drawer(ctx, bar_h, &mut cmds);
         }
 
         // The tabs, from two on (issue #59): with one, the window looks as before tabs.
         if !full && self.tabs.len() > 1 {
-            egui::TopBottomPanel::top("tabs")
-                .exact_height(tabs::STRIP_H)
+            egui::Panel::top("tabs")
+                .exact_size(tabs::STRIP_H)
                 .show_separator_line(false)
                 .frame(egui::Frame::new().fill(theme::c().sidebar))
-                .show(ctx, |ui| self.tab_strip(ui, &mut cmds));
+                .show(root, |ui| self.tab_strip(ui, &mut cmds));
         }
 
         // The home page (issue #109) takes the window under the toolbar: no status bar, sidebar or details.
@@ -2077,12 +2079,12 @@ impl eframe::App for App {
             t.issue_offer_ui(ctx, &mut cmds);
             t.dialogs(ctx, &mut cmds);
         } else if self.tab().home {
-            self.home_page(ctx, &mut cmds);
+            self.home_page(root, &mut cmds);
         } else {
-            egui::TopBottomPanel::bottom("status")
-                .exact_height(28.0)
+            egui::Panel::bottom("status")
+                .exact_size(28.0)
                 .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(12, 4)))
-                .show(ctx, |ui| {
+                .show(root, |ui| {
                     let t = &self.tabs[self.active];
                     ui.horizontal_centered(|ui| {
                         let (dot, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
@@ -2132,12 +2134,12 @@ impl eframe::App for App {
 
             // The Project view keeps the sidebar and the details panel; only the centre changes.
             let board_open = self.tab().board.open;
-            egui::SidePanel::left("sidebar")
+            egui::Panel::left("sidebar")
             .resizable(true)
-            .default_width(230.0)
-            .width_range(190.0..=420.0)
+            .default_size(230.0)
+            .size_range(190.0..=420.0)
             .frame(egui::Frame::new().fill(theme::c().sidebar).inner_margin(Margin::symmetric(8, 0)))
-            .show(ctx, |ui| {
+            .show(root, |ui| {
                 // Each tab's own id scope keeps its scroll positions and text fields apart.
                 let key = self.tab().key;
                 ui.push_id(key, |ui| self.tab_mut().sidebar(ui, &mut cmds));
@@ -2148,24 +2150,24 @@ impl eframe::App for App {
             match self.tab().details_layout {
                 DetailsLayout { hidden: true, .. } => {}
                 DetailsLayout { place: DetailsPlace::Right, .. } => {
-                    egui::SidePanel::right("details")
+                    egui::Panel::right("details")
                         .resizable(true)
-                        .default_width(330.0)
-                        .width_range(280.0..=600.0)
+                        .default_size(330.0)
+                        .size_range(280.0..=600.0)
                         .frame(details_frame)
-                        .show(ctx, |ui| {
+                        .show(root, |ui| {
                             let key = self.tab().key;
                             ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
                         });
                 }
                 DetailsLayout { place: DetailsPlace::Bottom, .. } => {
-                    let max_h = (ctx.available_rect().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
-                    egui::TopBottomPanel::bottom("details_bottom")
+                    let max_h = (root.available_rect_before_wrap().height() * 0.7).max(DETAILS_BOTTOM_MIN_H);
+                    egui::Panel::bottom("details_bottom")
                         .resizable(true)
-                        .default_height(300.0)
-                        .height_range(DETAILS_BOTTOM_MIN_H..=max_h)
+                        .default_size(300.0)
+                        .size_range(DETAILS_BOTTOM_MIN_H..=max_h)
                         .frame(details_frame)
-                        .show(ctx, |ui| {
+                        .show(root, |ui| {
                             let key = self.tab().key;
                             ui.push_id(key, |ui| self.tab_mut().details_panel(ui, &mut cmds));
                         });
@@ -2174,7 +2176,7 @@ impl eframe::App for App {
 
             let settings_open = self.settings_open;
             let t = &mut self.tabs[self.active];
-            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| {
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| {
                 keep_panel_edges_free(ui);
                 t.view_tabs(ui, &mut cmds);
                 if board_open {
@@ -2296,7 +2298,6 @@ fn merge_check(ui: &mut Ui, test: &crate::merge::Test, w: f32) {
 #[cfg(test)]
 mod panel_resize_tests {
     use super::*;
-    use eframe::App as _;
 
     /// A repository with enough commits for the history to scroll, so its scroll bar shows.
     fn long_repo() -> std::path::PathBuf {
@@ -2315,14 +2316,22 @@ mod panel_resize_tests {
         a.open_path(repo.clone(), false);
         a.tab_mut().sel = Sel::Commit(1);
         let ctx = egui::Context::default();
-        // The app's fonts, as App::new sets them: the pills' Medium family among them.
+        // The app's style and fonts, as App::new sets them: the pills' Medium family among them.
+        crate::theme::apply(&ctx, Default::default());
         crate::theme::set_fonts(&ctx, Default::default(), Default::default(), false);
         let mut frame = eframe::Frame::_new_kittest();
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(1360.0, 840.0));
         let step = |a: &mut App, frame: &mut eframe::Frame, events: Vec<egui::Event>| {
             let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
-            let _ = ctx.run(raw, |ctx| a.update(ctx, frame));
-            egui::containers::panel::PanelState::load(&ctx, egui::Id::new("details")).unwrap().rect
+            // A panel's id is its salt under the root Ui's.
+            let mut id = egui::Id::NULL;
+            let mut out = ctx.run_ui(raw, |ui| {
+                id = ui.scope_id().with_salt(egui::IdSalt::new("details"));
+                eframe::App::ui(a, ui, frame);
+            });
+            // No renderer takes the font atlas: dropped on purpose.
+            out.textures_delta.clear();
+            egui::containers::panel::PanelState::load(&ctx, id).unwrap().outer_rect
         };
         // Presses at `from`, moves to `to` in ten steps and releases: the panel's rect after.
         let mut drag = |a: &mut App, from: f32, to: f32| {
@@ -2456,7 +2465,7 @@ fn ruler_split(ui: &Ui) -> (Rect, Rect) {
 
 /// The diff's scroll area, moved to where the ruler was clicked on the frame before.
 fn ruler_jump(ui: &Ui, area: egui::ScrollArea) -> egui::ScrollArea {
-    match ui.data_mut(|d| d.remove_temp::<f32>(ui.id().with("diff_jump"))) {
+    match ui.data_mut(|d| d.remove_temp::<f32>(ui.scope_id().with("diff_jump"))) {
         Some(y) => area.vertical_scroll_offset(y),
         None => area,
     }
@@ -2483,7 +2492,7 @@ fn ruler_runs(marks: &[(bool, bool)]) -> Vec<(usize, usize, (bool, bool))> {
 fn change_ruler<R>(ui: &mut Ui, body: Rect, strip: Rect, marks: &[(bool, bool)], out: &egui::scroll_area::ScrollAreaOutput<R>) {
     ui.allocate_rect(body.union(strip), Sense::hover());
     let k = theme::c();
-    let resp = ui.interact(strip, ui.id().with("diff_ruler"), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let resp = ui.interact(strip, ui.scope_id().with("diff_ruler"), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let p = ui.painter();
     p.rect_filled(strip, CornerRadius::ZERO, k.faint.gamma_multiply(0.06));
     let row = strip.height() / marks.len().max(1) as f32;
@@ -2507,7 +2516,7 @@ fn change_ruler<R>(ui: &mut Ui, body: Rect, strip: Rect, marks: &[(bool, bool)],
             }
         }
     }
-    let (content, view, offset) = (out.content_size.y, out.inner_rect.height(), out.state.offset.y);
+    let (content, view, offset) = (out.content_size.y, out.inner_rect.height(), out.state.clamped_offset().y);
     if content > view && content > 0.0 {
         let y = |v: f32| strip.top() + v / content * strip.height();
         let r = Rect::from_x_y_ranges(strip.x_range(), y(offset)..=y(offset + view));
@@ -2516,7 +2525,7 @@ fn change_ruler<R>(ui: &mut Ui, body: Rect, strip: Rect, marks: &[(bool, bool)],
     if let Some(pos) = resp.interact_pointer_pos().filter(|_| resp.clicked() || resp.dragged()) {
         let frac = ((pos.y - strip.top()) / strip.height()).clamp(0.0, 1.0);
         let to = (frac * content - view / 2.0).clamp(0.0, (content - view).max(0.0));
-        ui.data_mut(|d| d.insert_temp(ui.id().with("diff_jump"), to));
+        ui.data_mut(|d| d.insert_temp(ui.scope_id().with("diff_jump"), to));
         ui.ctx().request_repaint();
     }
 }
