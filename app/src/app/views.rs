@@ -169,16 +169,16 @@ impl Tab {
 
     // ---------------------------------------------------------------- sidebar
 
-    pub(super) fn section(&mut self, ui: &mut Ui, title: &str, count: usize, icon: fn(&egui::Painter, Pos2, Color32)) -> bool {
-        self.section_with(ui, title, count, icon, &[]).0
+    pub(super) fn section(&mut self, ui: &mut Ui, title: &str, icon: fn(&egui::Painter, Pos2, Color32)) -> bool {
+        self.section_with(ui, title, icon, &[]).0
     }
 
     /// A section with icon buttons (`(icon, tooltip)`) in its header: whether it is open, and
     /// the index of the button clicked.
-    pub(super) fn section_with(&mut self, ui: &mut Ui, title: &str, count: usize, icon: fn(&egui::Painter, Pos2, Color32), actions: &[(&str, &str)]) -> (bool, Option<usize>) {
+    pub(super) fn section_with(&mut self, ui: &mut Ui, title: &str, icon: fn(&egui::Painter, Pos2, Color32), actions: &[(&str, &str)]) -> (bool, Option<usize>) {
         let open = !self.collapsed.contains(title);
-        let header = section_header(ui, title, count, open, icon);
-        let action = crate::ui::header_actions(ui, header.rect, count, actions);
+        let header = section_header(ui, title, open, icon);
+        let action = crate::ui::header_actions(ui, header.rect, actions);
         if header.clicked() && action.is_none() {
             if open {
                 self.collapsed.insert(title.to_string());
@@ -190,9 +190,9 @@ impl Tab {
     }
 
     /// A folder row of a branch list, folded or not as `self.collapsed` remembers; a filter opens it.
-    fn folder(&mut self, ui: &mut Ui, key: &str, name: &str, count: usize, indent: f32, filtering: bool) -> bool {
+    fn folder(&mut self, ui: &mut Ui, key: &str, name: &str, indent: f32, filtering: bool) -> bool {
         let open = filtering || !self.collapsed.contains(key);
-        if sidebar::folder_row(ui, name, count, open, indent).clicked() && !filtering {
+        if sidebar::folder_row(ui, name, open, indent).clicked() && !filtering {
             if open {
                 self.collapsed.insert(key.to_string());
             } else {
@@ -265,13 +265,13 @@ impl Tab {
             let all_locals: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Local).cloned().collect();
 
             let locals: Vec<GitRef> = all_locals.iter().filter(|r| keep(&r.name)).cloned().collect();
-            if sidebar::section_shown(all_locals.len()) && self.section(ui, "Local", locals.len(), sidebar::laptop_icon) {
+            if sidebar::section_shown(all_locals.len()) && self.section(ui, "Local", sidebar::laptop_icon) {
                 let cur = self.branch.clone().unwrap_or_default();
                 for e in sidebar::group_folders(&locals, |b| b.name.as_str()) {
                     match e {
                         sidebar::Entry::Item(b) => self.local_branch(ui, b, &b.name, sidebar::ITEM_INDENT, &cur, &remote_set, cmds),
                         sidebar::Entry::Folder(dir, items) => {
-                            if self.folder(ui, &format!("folder:local:{dir}"), &dir, items.len(), FOLDER_INDENT, filtering) {
+                            if self.folder(ui, &format!("folder:local:{dir}"), &dir, FOLDER_INDENT, filtering) {
                                 for b in items {
                                     let short = b.name.strip_prefix(&format!("{dir}/")).unwrap_or(&b.name);
                                     self.local_branch(ui, b, short, sidebar::ITEM_INDENT + FOLDER_STEP, &cur, &remote_set, cmds);
@@ -284,7 +284,7 @@ impl Tab {
 
             let remote_total = remote_set.len();
             let remotes: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Remote && keep(&r.name)).cloned().collect();
-            if sidebar::section_shown(remote_total) && self.section(ui, "Remote", remotes.len(), sidebar::cloud_icon) {
+            if sidebar::section_shown(remote_total) && self.section(ui, "Remote", sidebar::cloud_icon) {
                 let mut groups: Vec<(String, Vec<GitRef>)> = Vec::new();
                 for r in remotes {
                     let remote = r.name.split_once('/').map(|x| x.0).unwrap_or(&r.name).to_string();
@@ -315,7 +315,7 @@ impl Tab {
                         match e {
                             sidebar::Entry::Item(r) => self.remote_branch(ui, r, r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name), sidebar::ITEM_INDENT + FOLDER_STEP, &all_locals, cmds),
                             sidebar::Entry::Folder(dir, children) => {
-                                if self.folder(ui, &format!("folder:{remote}:{dir}"), &dir, children.len(), FOLDER_INDENT + FOLDER_STEP, filtering) {
+                                if self.folder(ui, &format!("folder:{remote}:{dir}"), &dir, FOLDER_INDENT + FOLDER_STEP, filtering) {
                                     for r in children {
                                         let rest = r.name.split_once('/').map(|x| x.1).unwrap_or(&r.name);
                                         let label = rest.strip_prefix(&format!("{dir}/")).unwrap_or(rest);
@@ -330,7 +330,7 @@ impl Tab {
 
             let tag_total = self.refs.iter().filter(|r| r.kind == RefKind::Tag).count();
             let tags: Vec<GitRef> = self.refs.iter().filter(|r| r.kind == RefKind::Tag && keep(&r.name)).cloned().collect();
-            if sidebar::section_shown(tag_total) && self.section(ui, "Tags", tags.len(), sidebar::tag_icon) {
+            if sidebar::section_shown(tag_total) && self.section(ui, "Tags", sidebar::tag_icon) {
                 for t in &tags {
                     let resp = side_item(ui, "tag", &t.name);
                     if resp.clicked() {
@@ -362,7 +362,7 @@ impl Tab {
             if missing {
                 actions.push(("trash", "Clean up missing worktrees"));
             }
-            let (open, action) = if linked.is_empty() { (false, None) } else { self.section_with(ui, "Worktrees", linked.len(), sidebar::worktree_icon, &actions) };
+            let (open, action) = if linked.is_empty() { (false, None) } else { self.section_with(ui, "Worktrees", sidebar::worktree_icon, &actions) };
             match action {
                 Some(0) => cmds.push(Cmd::Cockpit),
                 Some(_) => cmds.push(Cmd::PruneWorktrees),
@@ -403,7 +403,7 @@ impl Tab {
             }
 
             let stashes = self.stashes.clone();
-            if sidebar::section_shown(stashes.len()) && self.section(ui, "Stashes", stashes.len(), sidebar::stash_icon) {
+            if sidebar::section_shown(stashes.len()) && self.section(ui, "Stashes", sidebar::stash_icon) {
                 for s in &stashes {
                     let resp = side_item(ui, "stash", &s.message).on_hover_text(&s.name);
                     resp.context_menu(|ui| {

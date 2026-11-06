@@ -566,9 +566,9 @@ pub fn faint_hint(text: impl Into<String>) -> RichText {
     RichText::new(text).color(theme::c().faint)
 }
 
-/// A section's header: its chevron (always shown), its drawn icon, its title and its count.
+/// A section's header: its chevron (always shown), its drawn icon and its title.
 /// The title starts where `sidebar::ITEM_INDENT` puts the rows' icons.
-pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool, icon: fn(&egui::Painter, Pos2, Color32)) -> egui::Response {
+pub fn section_header(ui: &mut Ui, title: &str, open: bool, icon: fn(&egui::Painter, Pos2, Color32)) -> egui::Response {
     ui.add_space(6.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     let p = ui.painter();
@@ -577,7 +577,6 @@ pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool, icon: 
     chevron(p, pos2(rect.left() + 14.0, y), open, theme::c().faint);
     icon(p, pos2(rect.left() + 31.0, y), col);
     p.text(pos2(rect.left() + 44.0, y), Align2::LEFT_CENTER, title, theme::secondary(), col);
-    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
     resp
 }
 
@@ -714,11 +713,10 @@ fn icon_button_at(ui: &Ui, rect: Rect, resp: egui::Response, icon: &str, tip: &s
     resp.on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// Icon buttons on the right of a `section_header`, left of its count: the index of the one
+/// Icon buttons on the right of a `section_header`: the index of the one
 /// clicked. Drawn after the header, so a click on one doesn't fold the section.
-pub fn header_actions(ui: &mut Ui, header: Rect, count: usize, actions: &[(&str, &str)]) -> Option<usize> {
-    let count_w = ui.painter().layout_no_wrap(count.to_string(), theme::small(), theme::c().faint).size().x;
-    let mut right = header.right() - 14.0 - count_w;
+pub fn header_actions(ui: &mut Ui, header: Rect, actions: &[(&str, &str)]) -> Option<usize> {
+    let mut right = header.right() - 6.0;
     let mut clicked = None;
     for (i, (icon, tip)) in actions.iter().enumerate().rev() {
         let rect = Rect::from_center_size(pos2(right - 12.0, header.center().y), vec2(24.0, 22.0));

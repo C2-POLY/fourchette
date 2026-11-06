@@ -179,15 +179,14 @@ fn row_rect(ui: &mut Ui, indent: f32) -> (Rect, egui::Response) {
     (Rect::from_min_max(rect.min + vec2(indent, 0.0), rect.max), resp)
 }
 
-/// A folder of a branch list: chevron, folder icon, name, count.
-pub fn folder_row(ui: &mut Ui, name: &str, count: usize, open: bool, indent: f32) -> egui::Response {
+/// A folder of a branch list: chevron, folder icon, name.
+pub fn folder_row(ui: &mut Ui, name: &str, open: bool, indent: f32) -> egui::Response {
     let (rect, resp) = row_rect(ui, indent);
     let p = ui.painter();
     let y = rect.center().y;
     chevron(p, pos2(rect.left() + 14.0, y), open, theme::c().faint);
     folder_icon(p, pos2(rect.left() + 31.0, y), theme::c().dim);
-    fit_text(p, pos2(rect.left() + 44.0, y), Align2::LEFT_CENTER, name, theme::body(), theme::c().text, rect.width() - 80.0);
-    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
+    fit_text(p, pos2(rect.left() + 44.0, y), Align2::LEFT_CENTER, name, theme::body(), theme::c().text, rect.width() - 54.0);
     resp
 }
 
