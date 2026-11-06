@@ -1,6 +1,7 @@
 //! The person's settings, chosen in the Settings window (Cmd+,) and kept in repos.json under
 //! `"settings"`, next to the appearance (which `Library` keeps apart, since the palette and the
 //! status bar change it too). A missing or invalid value falls back to its default.
+use crate::icon::IconColour;
 use serde_json::{json, Value};
 
 /// "fetchRemotesAutomatically" default true (sub_10031b7cc).
@@ -280,6 +281,8 @@ pub struct Settings {
     pub commit_language: CommitLanguage,
     /// The releases the update check offers.
     pub update_channel: UpdateChannel,
+    /// The colour of the app icon in the Dock and the Finder (#159).
+    pub app_icon: IconColour,
 }
 
 impl Default for Settings {
@@ -303,6 +306,7 @@ impl Default for Settings {
             claude_model: ClaudeModel::Default,
             commit_language: CommitLanguage::Auto,
             update_channel: UpdateChannel::default(),
+            app_icon: IconColour::default(),
         }
     }
 }
@@ -336,6 +340,7 @@ impl Settings {
             claude_model: v["claude_model"].as_str().and_then(ClaudeModel::from_key).unwrap_or(d.claude_model),
             commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
             update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
+            app_icon: v["app_icon"].as_str().and_then(IconColour::parse).unwrap_or(d.app_icon),
         }
     }
 
@@ -359,6 +364,7 @@ impl Settings {
             "claude_model": self.claude_model.key(),
             "commit_language": self.commit_language.key(),
             "update_channel": self.update_channel.key(),
+            "app_icon": self.app_icon.key(),
         })
     }
 
@@ -590,5 +596,21 @@ mod tests {
         assert!(!bad.diff_split && !bad.diff_whole);
         let s = Settings { diff_split: true, diff_whole: true, ..d };
         assert_eq!(Settings::from_json(&s.to_json()), s);
+    }
+
+    #[test]
+    fn the_app_icon_is_teal_until_chosen_and_round_trips() {
+        let d = Settings::default();
+        assert_eq!(d.app_icon, IconColour::Teal);
+        for c in IconColour::PRESETS.into_iter().chain([IconColour::Custom([0x12, 0xab, 0xef])]) {
+            let s = Settings { app_icon: c, ..d };
+            assert_eq!(Settings::from_json(&s.to_json()), s, "{c:?}");
+        }
+        assert_eq!(Settings::from_json(&json!({"app_icon": "#12abef"})).app_icon, IconColour::Custom([0x12, 0xab, 0xef]));
+        // A file saved before this setting existed, or a value it can't read, is Teal; the rest is kept.
+        assert_eq!(Settings::from_json(&json!({"auto_fetch": false})), Settings { auto_fetch: false, ..d });
+        for bad in [json!("mauve"), json!("#12ab"), json!(3), json!(null), json!(["red"])] {
+            assert_eq!(Settings::from_json(&json!({"app_icon": bad, "pull_rebase": true})), Settings { pull_rebase: true, ..d }, "{bad}");
+        }
     }
 }

@@ -1,3 +1,4 @@
+mod app_icon;
 mod assistant;
 mod board;
 mod board_full;
@@ -147,6 +148,8 @@ pub enum Cmd {
     Settings,
     /// Keep the settings chosen in the Settings window; they apply at once.
     SetSettings(crate::settings::Settings),
+    /// The icon colour picker is being dragged: the Dock shows the colour, nothing is saved.
+    PreviewIcon(crate::icon::IconColour),
     /// The List / Tree switch of the local changes (a setting, shared by every repository).
     SetFilesTree(bool),
     /// The diff's Unified / Side by side and Whole file choices, kept in the settings.
@@ -295,6 +298,8 @@ pub struct App {
     menu_cmds: Vec<Cmd>,
     /// New releases on GitHub: the check, the pill, the dialog and the install.
     update: updater::UpdateState,
+    /// The app icon in the colour chosen in Settings (#159).
+    icon: app_icon::IconState,
     /// FOURCHETTE_MENU=<x>,<y>: where a screenshot right-clicks, to show a context menu.
     shot_menu: Option<egui::Pos2>,
     /// The home page's search and what it read from each repository's folder.
@@ -331,6 +336,7 @@ impl App {
             palette: None,
             menu_cmds: Vec::new(),
             update: updater::UpdateState::default(),
+            icon: app_icon::IconState::default(),
             shot_menu: None,
             home: home::HomeState::default(),
             full: Default::default(),
@@ -350,6 +356,8 @@ impl App {
         // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release;
         // FOURCHETTE_WHATS_NEW=1 the dialog shown once after an update.
         app.update.apply_env();
+        // The saved icon colour, or FOURCHETTE_ICON=<preset|#rrggbb>'s without saving it.
+        app.icon_start();
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
         // The tabs open at the last quit come back (not in a screenshot); without any, the
@@ -698,9 +706,13 @@ impl App {
                     if s.update_channel != self.library.settings.update_channel {
                         self.update.check_now(s.update_channel);
                     }
+                    if s.app_icon != self.library.settings.app_icon {
+                        self.icon_chosen(s.app_icon);
+                    }
                     self.library.settings = s;
                     self.library.save();
                 }
+                Cmd::PreviewIcon(c) => self.icon_preview(c),
                 Cmd::SetFilesTree(on) => {
                     self.library.settings.files_tree = on;
                     self.library.save();

@@ -16,6 +16,9 @@ egui = "0.32"
 rfd = "0.15"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# Draws the app icon in the colour chosen in Settings (anti-aliased paths, round caps, gradients),
+# pure Rust; its own PNG support is left out, `image` already encodes.
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 
 # The menu bar and the window buttons go through AppKit; the same versions eframe and winit already use.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -23,8 +26,15 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 wgpu = { version = "25", default-features = false, features = ["metal", "wgsl"] }
 objc2 = "0.5"
 block2 = "0.5"
-objc2-app-kit = { version = "0.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl"] }
-objc2-foundation = { version = "0.2", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "block2"] }
+objc2-app-kit = { version = "0.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl", "NSImage", "NSWorkspace"] }
+objc2-foundation = { version = "0.2", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSData", "block2"] }
 
 [profile.release]
+opt-level = 3
+
+# The app icon in a chosen colour (#159) takes a second to draw with tiny-skia unoptimised;
+# optimised, a debug build draws it in about as long as a release one.
+[profile.dev.package.tiny-skia]
+opt-level = 3
+[profile.dev.package.tiny-skia-path]
 opt-level = 3

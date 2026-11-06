@@ -712,6 +712,7 @@ impl Tab {
             | Cmd::ToggleDetails
             | Cmd::Settings
             | Cmd::SetSettings(_)
+            | Cmd::PreviewIcon(_)
             | Cmd::SetFilesTree(_)
             | Cmd::SetDiffView { .. }
             | Cmd::Pull
