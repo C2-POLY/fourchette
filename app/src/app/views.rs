@@ -1908,6 +1908,7 @@ impl eframe::App for App {
             }
         }
         self.take_notices();
+        self.states_poll();
         self.update_poll(ctx);
         self.was_focused = focused;
         let mut cmds = std::mem::take(&mut self.menu_cmds);

@@ -19,6 +19,7 @@ mod preview;
 mod push;
 mod pull;
 mod pulls;
+mod repo_state;
 mod resolve;
 mod settings;
 mod sidebar;
