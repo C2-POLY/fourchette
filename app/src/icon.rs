@@ -1,5 +1,6 @@
-//! The app icon (Dock and Cmd+Tab): a silver fork whose tines are dipped in the graph's colours.
-//! Drawn in `assets/icon.svg`; `assets/icon.icns` is the same picture for the .app bundle.
+//! The app icon (Dock and Cmd+Tab): a white Git branch on a teal gradient, in the macOS icon shape.
+//! Drawn in `assets/icon.svg`; `scripts/app-icon.sh` renders it into `assets/icon.png`, the
+//! `assets/icon.icns` of the .app bundle and the site's icons.
 
 fn png() -> &'static [u8] {
     include_bytes!("../assets/icon.png")
