@@ -96,3 +96,24 @@ final class ProjectBoardTests: XCTestCase {
         XCTAssertEqual(board.cards(in: ready).map(\.number), [52])
     }
 }
+
+final class MoveTests: XCTestCase {
+    func testMovingChangesTheColumnOnly() {
+        let board = Sample.board
+        let card = board.cards.first { $0.number == 52 }!
+        let done = board.columns.first { $0.name == "Done" }!
+        let moved = board.moving(card.id, to: done)
+        XCTAssertEqual(moved.column(of: moved.cards.first { $0.id == card.id }!)?.name, "Done")
+        XCTAssertEqual(moved.cards.count, board.cards.count)
+        XCTAssertEqual(board.column(of: card)?.name, "Ready", "the original board is unchanged")
+    }
+
+    func testNoStatusColumnHoldsCardsWithout() {
+        let none = Board.Column(id: nil, name: "No Status", color: "GRAY")
+        let sample = Sample.board
+        var board = Board(projectID: sample.projectID, statusFieldID: sample.statusFieldID, columns: [none] + sample.columns, cards: sample.cards)
+        board.cards[0].status = nil
+        XCTAssertEqual(board.column(of: board.cards[0]), none)
+        XCTAssertEqual(board.cards(in: none).map(\.id), [board.cards[0].id])
+    }
+}

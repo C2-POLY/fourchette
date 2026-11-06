@@ -12,6 +12,9 @@ struct BoardView: View {
     @State private var column: String?
     @State private var loading = false
     @State private var error: String?
+    /// Why GitHub refused a move; the card is back in its column.
+    @State private var moveError: String?
+    @State private var dropTarget: String?
 
     var body: some View {
         Group {
@@ -45,6 +48,11 @@ struct BoardView: View {
             }
         }
         .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
+        .alert("The card didn't move", isPresented: Binding(get: { moveError != nil }, set: { if !$0 { moveError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(moveError ?? "")
+        }
         .task { await loadProjects() }
         .onChange(of: project) { Task { await loadBoard() } }
     }
@@ -65,6 +73,11 @@ struct BoardView: View {
                 Section {
                     ForEach(board.cards(in: current)) { card in
                         NavigationLink(value: card) { CardRow(card: card) }
+                            .contextMenu { moveMenu(card, board) }
+                            .swipeActions(edge: .trailing) {
+                                Menu { moveButtons(card, board) } label: { Label("Move", systemImage: "arrow.right.square") }
+                                    .tint(.accent)
+                            }
                     }
                 }
             }
@@ -95,6 +108,10 @@ struct BoardView: View {
                                             .background(.background, in: RoundedRectangle(cornerRadius: 10))
                                     }
                                     .buttonStyle(.plain)
+                                    .draggable(card.id) {
+                                        CardRow(card: card).padding(10).frame(width: 260).background(.background, in: RoundedRectangle(cornerRadius: 10))
+                                    }
+                                    .contextMenu { moveMenu(card, board) }
                                 }
                             }
                         }
@@ -103,9 +120,44 @@ struct BoardView: View {
                     .frame(width: 280)
                     .padding(8)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14).strokeBorder(Color.accent, lineWidth: 2).opacity(dropTarget == c.name ? 1 : 0)
+                    }
+                    .dropDestination(for: String.self) { ids, _ in
+                        guard let id = ids.first, let card = board.cards.first(where: { $0.id == id }) else { return false }
+                        move(card, to: c)
+                        return true
+                    } isTargeted: { dropTarget = $0 ? c.name : (dropTarget == c.name ? nil : dropTarget) }
                 }
             }
             .padding()
+        }
+    }
+
+    /// "Move to" and the other columns, for a card's context menu.
+    private func moveMenu(_ card: Card, _ board: Board) -> some View {
+        Menu("Move to") { moveButtons(card, board) }
+    }
+
+    /// One button per other column.
+    private func moveButtons(_ card: Card, _ board: Board) -> some View {
+        ForEach(board.columns.filter { $0 != board.column(of: card) && $0.id != nil }, id: \.name) { c in
+            Button(c.name) { move(card, to: c) }
+        }
+    }
+
+    /// Shown at once, then written; a refusal puts the card back and says why.
+    private func move(_ card: Card, to column: Board.Column) {
+        guard let before = board, before.column(of: card) != column else { return }
+        board = before.moving(card.id, to: column)
+        guard !session.sample, let client = session.client else { return }
+        Task {
+            do {
+                try await client.move(card.id, to: column, on: before)
+            } catch {
+                board = board?.moving(card.id, to: before.column(of: card) ?? column)
+                moveError = error.localizedDescription
+            }
         }
     }
 
