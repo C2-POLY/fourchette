@@ -121,7 +121,7 @@ impl Pulls {
     }
 }
 
-const FIELDS: &str = "fragment F on PullRequest{number title url state isDraft reviewDecision updatedAt headRefName \
+pub(crate) const FIELDS: &str = "fragment F on PullRequest{number title url state isDraft reviewDecision updatedAt headRefName \
 isCrossRepository headRepositoryOwner{login} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}";
 
 const QUERY: &str = "query($owner:String!,$name:String!,$cursor:String,$first:Boolean!){repository(owner:$owner,name:$name){\

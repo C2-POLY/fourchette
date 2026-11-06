@@ -65,6 +65,7 @@ pub struct Tab {
     pub(super) ai: assistant::AiState,
     pub(super) changelog: Option<super::changelog::ChangelogView>,
     pub(super) pr_draft: Option<super::pr_draft::PrDraftView>,
+    pub(super) cockpit: Option<super::cockpit::CockpitView>,
     pub(super) resolve: Option<super::resolve::ResolveView>,
     pub(super) review: Option<super::review::ReviewView>,
     pub(super) worktrees: Vec<crate::worktree::Worktree>,
@@ -107,6 +108,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.ai_poll();
         t.changelog_poll();
         t.pr_draft_poll();
+        t.cockpit_poll();
         t.resolve_poll();
         t.review_poll();
         t.project_poll();
@@ -171,6 +173,7 @@ impl Tab {
             ai: assistant::AiState::default(),
             changelog: None,
             pr_draft: None,
+            cockpit: None,
             resolve: None,
             review: None,
             worktrees: Vec::new(),
@@ -659,6 +662,7 @@ impl Tab {
             Cmd::AiDeleteSelected => self.ai_delete_selected(),
             Cmd::AiChangelog => self.changelog_open(ctx),
             Cmd::AiDraftPr => self.pr_draft_open(ctx),
+            Cmd::Cockpit => self.cockpit_open(ctx),
             Cmd::AiResolve(paths) => self.resolve_open(paths, ctx),
             Cmd::AiReview => self.review_open(ctx),
             Cmd::AskDeleteBranch { local, remote } => self.ask_delete_branch(local, remote),

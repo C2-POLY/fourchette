@@ -72,6 +72,7 @@ impl App {
                 "at the current commit",
                 Cmd::new_ref_at_head(false),
             ));
+            v.push(item("Commands", "Worktrees", "the cockpit · state, issue and pull request of each, Tidy up", Cmd::Cockpit));
             v.push(item("Commands", "Stash changes", "", Cmd::stash()));
             v.push(item("Commands", "Pop stash", "", Cmd::pop_stash()));
             v.push(item("Commands", "Show local changes", "", Cmd::Select(Sel::Wip)));

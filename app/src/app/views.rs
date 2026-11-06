@@ -364,6 +364,9 @@ impl Tab {
                         if !w.missing && ui.button("Open as repository").clicked() {
                             cmds.push(Cmd::Open(w.path.clone()));
                         }
+                        if ui.button("Open the worktree cockpit").clicked() {
+                            cmds.push(Cmd::Cockpit);
+                        }
                         if ui.button("Copy worktree path").clicked() {
                             cmds.push(Cmd::Copy(w.path.display().to_string()));
                         }
@@ -373,9 +376,14 @@ impl Tab {
                         }
                     });
                 }
-                if linked.iter().any(|w| w.missing) && ui.small_button("Clean up missing worktrees").clicked() {
-                    cmds.push(Cmd::PruneWorktrees);
-                }
+                ui.horizontal(|ui| {
+                    if ui.small_button("Open the cockpit").on_hover_text("Every worktree with its changes, issue and pull request, and Tidy up").clicked() {
+                        cmds.push(Cmd::Cockpit);
+                    }
+                    if linked.iter().any(|w| w.missing) && ui.small_button("Clean up missing worktrees").clicked() {
+                        cmds.push(Cmd::PruneWorktrees);
+                    }
+                });
             }
 
             let stashes = self.stashes.clone();
@@ -2164,6 +2172,7 @@ impl eframe::App for App {
             t.cleanup_window(ctx, &mut cmds);
             t.changelog_window(ctx);
             t.pr_draft_window(ctx);
+            t.cockpit_window(ctx, &mut cmds);
             t.resolve_window(ctx);
             t.review_window(ctx, &mut cmds);
         }
