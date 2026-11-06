@@ -33,15 +33,28 @@ pub fn drag_area(ui: &mut egui::Ui) {
     }
 }
 
-/// Where the buttons' container goes, in the window frame's coordinates (origin at the bottom
-/// left): the top `TOOLBAR_H` of a window `window_h` high.
-fn band(window_h: f64) -> (f64, f64) {
-    (window_h - TOOLBAR_H as f64, TOOLBAR_H as f64)
+/// Height of the band the buttons are centred in: the toolbar's, or the full board's thinner
+/// bar while it shows (#153). Kept as f32 bits.
+static BAND_H: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(TOOLBAR_H.to_bits());
+
+/// The height of the bar at the window's top edge, set each frame before `place_buttons`.
+pub fn set_band(h: f32) {
+    BAND_H.store(h.to_bits(), std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Vertical offset that centres a button `button_h` high in the band.
-fn centred_y(button_h: f64) -> f64 {
-    ((TOOLBAR_H as f64 - button_h) / 2.0).round()
+fn band_h() -> f64 {
+    f32::from_bits(BAND_H.load(std::sync::atomic::Ordering::Relaxed)) as f64
+}
+
+/// Where the buttons' container goes, in the window frame's coordinates (origin at the bottom
+/// left): the top `bar_h` of a window `window_h` high.
+fn band(window_h: f64, bar_h: f64) -> (f64, f64) {
+    (window_h - bar_h, bar_h)
+}
+
+/// Vertical offset that centres a button `button_h` high in a band `bar_h` high.
+fn centred_y(button_h: f64, bar_h: f64) -> f64 {
+    ((bar_h - button_h) / 2.0).round()
 }
 
 #[cfg(target_os = "macos")]
@@ -112,7 +125,8 @@ mod mac {
             let Some(first) = buttons.first() else { continue };
             // button → NSTitlebarView → NSTitlebarContainerView
             let Some(container) = (unsafe { first.superview() }).and_then(|v| unsafe { v.superview() }) else { continue };
-            let (y, h) = super::band(window.frame().size.height);
+            let bar_h = super::band_h();
+            let (y, h) = super::band(window.frame().size.height, bar_h);
             let c = container.frame();
             if differs(c.origin.y, y) || differs(c.size.height, h) {
                 unsafe { container.setFrame(NSRect::new(NSPoint::new(c.origin.x, y), objc2_foundation::NSSize::new(c.size.width, h))) };
@@ -120,7 +134,7 @@ mod mac {
             let step = buttons.get(1).map(|b| b.frame().origin.x - first.frame().origin.x).unwrap_or(20.0);
             for (n, b) in buttons.iter().enumerate() {
                 let f = b.frame();
-                let want = NSPoint::new(super::BUTTONS_X + n as f64 * step, super::centred_y(f.size.height));
+                let want = NSPoint::new(super::BUTTONS_X + n as f64 * step, super::centred_y(f.size.height, bar_h));
                 if differs(f.origin.x, want.x) || differs(f.origin.y, want.y) {
                     let view: &NSView = b;
                     unsafe { view.setFrameOrigin(want) };
@@ -136,9 +150,12 @@ mod tests {
 
     #[test]
     fn buttons_sit_on_the_toolbars_centre_line() {
-        assert_eq!(band(840.0), (780.0, 60.0));
-        assert_eq!(centred_y(14.0), 23.0);
-        assert_eq!(centred_y(16.0), 22.0);
+        assert_eq!(band(840.0, 60.0), (780.0, 60.0));
+        assert_eq!(centred_y(14.0, 60.0), 23.0);
+        assert_eq!(centred_y(16.0, 60.0), 22.0);
+        // The full board's thinner bar (#153).
+        assert_eq!(band(840.0, 44.0), (796.0, 44.0));
+        assert_eq!(centred_y(14.0, 44.0), 15.0);
     }
 
     #[test]

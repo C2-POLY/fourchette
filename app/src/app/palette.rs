@@ -76,6 +76,10 @@ impl App {
             v.push(item("Commands", "Stash changes", "", Cmd::stash()));
             v.push(item("Commands", "Pop stash", "", Cmd::pop_stash()));
             v.push(item("Commands", "Show local changes", "", Cmd::Select(Sel::Wip)));
+            if !t.home {
+                let (title, hint) = if self.full.on && t.board.open { ("Exit full board", "⌃⌘B · bring back the toolbar, sidebar and details") } else { ("Full board", "⌃⌘B · the project's board alone in the window") };
+                v.push(item("View", title, hint, Cmd::BoardFull));
+            }
             v.push(item("Commands", "Stage all changes", "", Cmd::Git { label: "All changes staged".into(), args: vec!["add".into(), "-A".into()], network: false }));
             v.push(item("Assistant", "Clean up branches with Claude", "AI · your subscription", Cmd::AiCleanup));
             v.push(item("Assistant", "Write the changelog with Claude", "AI · for developers, product, leadership or users", Cmd::AiChangelog));

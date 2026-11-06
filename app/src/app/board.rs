@@ -666,17 +666,40 @@ fn refresh_button(ui: &mut Ui, loading: bool) -> Response {
     resp.on_hover_text("Read the project again")
 }
 
-/// The search field, the refresh button and their margins, right of the pickers.
-const BAR_RIGHT_W: f32 = 260.0;
+/// Space left of the first column: the columns centred in `width` when they fit, else the margin.
+fn centre_lead(width: f32, columns: usize) -> f32 {
+    let n = columns as f32;
+    let total = n * COL_W + (n - 1.0).max(0.0) * COL_GAP;
+    ((width - total) / 2.0).floor().max(16.0)
+}
+
+/// "Full board": shows the board alone in the window (#153), labelled so it can be found
+/// without knowing ⌃⌘B.
+fn full_button(ui: &mut Ui) -> Response {
+    let font = FontId::proportional(theme::FS_SECONDARY);
+    let g = ui.painter().layout_no_wrap("Full board".into(), font, theme::c().text);
+    let (rect, resp) = ui.allocate_exact_size(vec2(10.0 + 16.0 + 6.0 + g.size().x + 10.0, 28.0), Sense::click());
+    let p = ui.painter();
+    let hot = resp.hovered();
+    p.rect_filled(rect, CornerRadius::same(7), if hot { theme::c().widget_hover } else { theme::c().input });
+    p.rect_stroke(rect, CornerRadius::same(7), Stroke::new(1.0_f32, theme::c().border), StrokeKind::Inside);
+    let col = if hot { theme::c().strong } else { theme::c().text };
+    super::board_full::enter_icon(p, pos2(rect.left() + 10.0 + 8.0, rect.center().y), col);
+    p.galley_with_override_text_color(pos2(rect.left() + 10.0 + 16.0 + 6.0, rect.center().y - g.size().y / 2.0), g, col);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("The board alone in the window, without the toolbar, sidebar and details (⌃⌘B)")
+}
+
+/// The search field, the refresh and full board buttons and their margins, right of the pickers.
+const BAR_RIGHT_W: f32 = 370.0;
 
 /// How wide `segmented` draws `options`.
-fn segmented_width(ui: &Ui, options: &[&str]) -> f32 {
+pub(super) fn segmented_width(ui: &Ui, options: &[&str]) -> f32 {
     let font = FontId::proportional(theme::FS_SECONDARY);
     options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).sum::<f32>() + 4.0
 }
 
 /// Options side by side, the chosen one filled.
-fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
+pub(super) fn segmented(ui: &mut Ui, options: &[&str], chosen: usize) -> Option<usize> {
     let font = FontId::proportional(theme::FS_SECONDARY);
     let widths: Vec<f32> = options.iter().map(|o| ui.painter().layout_no_wrap(o.to_string(), font.clone(), theme::c().text).size().x + 22.0).collect();
     let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum::<f32>() + 4.0, 28.0), Sense::hover());
@@ -1068,12 +1091,13 @@ impl Tab {
         self.board.detail.take().is_some()
     }
 
-    pub(super) fn board_view(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
+    /// `full`: the board alone in the window (#153), which has its own way out.
+    pub(super) fn board_view(&mut self, ui: &mut Ui, full: bool, cmds: &mut Vec<Cmd>) {
         self.board.typing = ui.ctx().memory(|m| m.focused().is_some());
         let loading = self.project.loading.is_some();
         let data = self.project.board.clone();
 
-        egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 12, bottom: 10 }).show(ui, |ui| self.board_bar(ui, data.as_deref(), loading, cmds));
+        egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 12, bottom: 10 }).show(ui, |ui| self.board_bar(ui, data.as_deref(), loading, full, cmds));
 
         let Some(board) = data else {
             let what = if loading {
@@ -1145,6 +1169,8 @@ impl Tab {
         let mut started: Option<Drag> = None;
         let mut landing: Option<Pos2> = None;
         let (mut columns_at, mut cards_at) = (Vec::new(), Vec::new());
+        // The columns sit in the middle of the board when they fit, else from its left edge.
+        let lead = centre_lead(ui.available_width(), cols.len());
         egui::ScrollArea::horizontal().id_salt("board_columns").scroll_source(NO_DRAG_SCROLL).auto_shrink([false, false]).show(ui, |ui| {
             if let Some(p) = pointer {
                 let clip = ui.clip_rect();
@@ -1154,7 +1180,7 @@ impl Tab {
                 }
             }
             ui.horizontal_top(|ui| {
-                ui.add_space(16.0);
+                ui.add_space(lead);
                 ui.spacing_mut().item_spacing.x = COL_GAP;
                 for (status, items) in &cols {
                     let color = status_color(&board, status);
@@ -1384,7 +1410,7 @@ impl Tab {
         ctx.set_transform_layer(area.response.layer_id, TSTransform::new(rect.center().to_vec2() * (1.0 - scale), scale));
     }
 
-    fn board_bar(&mut self, ui: &mut Ui, board: Option<&Board>, loading: bool, cmds: &mut Vec<Cmd>) {
+    fn board_bar(&mut self, ui: &mut Ui, board: Option<&Board>, loading: bool, full: bool, cmds: &mut Vec<Cmd>) {
         let mut two_rows = false;
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 28.0), Sense::hover());
@@ -1416,6 +1442,9 @@ impl Tab {
                 self.bar_pickers(ui, board);
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if !full && full_button(ui).clicked() {
+                    cmds.push(Cmd::BoardFull);
+                }
                 if refresh_button(ui, loading).clicked() && !loading {
                     cmds.push(Cmd::ProjectReload);
                 }
@@ -1642,9 +1671,20 @@ impl Tab {
     }
 }
 
-/// Esc and ⌘B for the board, from the window's keyboard handler.
-pub(super) fn board_keys(ctx: &egui::Context) -> (bool, bool) {
-    ctx.input(|i| (i.modifiers.command && i.key_pressed(Key::B), i.key_pressed(Key::Escape)))
+/// The board's keys, from the window's keyboard handler.
+pub(super) struct BoardKeys {
+    /// ⌘B: the Project view, or back to the history.
+    pub toggle: bool,
+    /// ⌃⌘B: the board alone in the window (#153).
+    pub full: bool,
+    pub escape: bool,
+}
+
+pub(super) fn board_keys(ctx: &egui::Context) -> BoardKeys {
+    ctx.input(|i| {
+        let b = i.modifiers.command && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(Key::B);
+        BoardKeys { toggle: b && !i.modifiers.ctrl, full: b && i.modifiers.ctrl, escape: i.key_pressed(Key::Escape) }
+    })
 }
 
 #[cfg(test)]
@@ -1753,6 +1793,15 @@ mod tests {
         assert_eq!((d.gap("Todo"), d.gap("Done")), (None, Some(3)), "once let go, only where it lands");
         assert_eq!(edge_scroll(200.0, 0.0, 400.0), 0.0);
         assert!(edge_scroll(10.0, 0.0, 400.0) > 0.0 && edge_scroll(395.0, 0.0, 400.0) < 0.0);
+    }
+
+    #[test]
+    fn columns_are_centred_when_they_fit() {
+        // Five columns take 5 × 284 + 4 × 12 = 1468 points.
+        assert_eq!(centre_lead(2000.0, 5), 266.0);
+        assert_eq!(centre_lead(1468.0, 5), 16.0, "the margin when they just fit");
+        assert_eq!(centre_lead(1000.0, 5), 16.0, "from the left edge when they scroll");
+        assert_eq!(centre_lead(1000.0, 0), 500.0);
     }
 
     #[test]

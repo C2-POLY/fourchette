@@ -1,5 +1,6 @@
 mod assistant;
 mod board;
+mod board_full;
 mod issue;
 mod changelog;
 mod checks;
@@ -194,6 +195,8 @@ pub enum Cmd {
     ProjectMove(crate::github::Move),
     /// Go to the Project view, or back to the history (⌘B).
     Board,
+    /// Show the board alone in the window, or bring the rest back (⌃⌘B).
+    BoardFull,
     /// The toolbar's issue chip: the Project view with that item's details.
     IssueDetail(String),
     /// A click on a branch's pull request badge: the card of its checks, under the badge.
@@ -294,6 +297,8 @@ pub struct App {
     shot_menu: Option<egui::Pos2>,
     /// The home page's search and what it read from each repository's folder.
     home: home::HomeState,
+    /// The full board (⌃⌘B, issue #153): the board alone, under one thin bar.
+    full: board_full::FullBoard,
 }
 
 pub fn short(h: &str) -> &str {
@@ -325,6 +330,7 @@ impl App {
             update: updater::UpdateState::default(),
             shot_menu: None,
             home: home::HomeState::default(),
+            full: Default::default(),
         }
     }
 
@@ -469,6 +475,11 @@ impl App {
             t.board.open = true;
             t.board.all = v == "all";
         }
+        // FOURCHETTE_BOARD_FULL=1: the board alone in the window (#153).
+        let full = std::env::var("FOURCHETTE_BOARD_FULL").is_ok();
+        if full {
+            t.board.open = true;
+        }
         if let Some(n) = std::env::var("FOURCHETTE_BOARD_DETAIL").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
             t.board.open = true;
             t.board.detail = t.project.board.as_ref().and_then(|b| b.items.iter().find(|i| i.number == Some(n))).map(|i| i.id.clone());
@@ -488,6 +499,11 @@ impl App {
         if let Ok(v) = std::env::var("FOURCHETTE_ISSUE") {
             t.issue_sample(&v);
         }
+        if full {
+            let key = t.key;
+            app.full.enter(key);
+        }
+        let t = app.tab_mut();
         // FOURCHETTE_DETAILS=right|bottom|hidden shows a layout for a screenshot without saving it.
         if let Some(l) = std::env::var("FOURCHETTE_DETAILS").ok().and_then(|d| DetailsLayout::parse(&d)) {
             t.details_layout = l;
@@ -728,6 +744,8 @@ impl App {
                 // The home page has no board.
                 Cmd::Board if self.tab().home => {}
                 Cmd::Board => self.board_toggle(),
+                Cmd::BoardFull if self.tab().home => {}
+                Cmd::BoardFull => self.board_full_toggle(),
                 Cmd::IssueDetail(id) => {
                     if !self.tab().board.open {
                         self.board_toggle();
