@@ -58,7 +58,7 @@ impl UpdateState {
     }
 
     /// `FOURCHETTE_UPDATE=1` shows the pill with a sample release, `=dialog` also opens the
-    /// dialog, `=downloading`, `=installing` and `=error` show the dialog at that step.
+    /// dialog, `=checking`, `=downloading`, `=installing` and `=error` show the dialog at that step.
     /// `FOURCHETTE_WHATS_NEW=1` shows the "What's new in Fourchette" dialog with sample items.
     pub fn apply_env(&mut self) {
         if std::env::var("FOURCHETTE_WHATS_NEW").is_ok_and(|v| v == "1") {
@@ -68,6 +68,7 @@ impl UpdateState {
         self.available = Some(update::sample());
         self.dialog = v != "1";
         self.progress = match v.as_str() {
+            "checking" => Some(Progress::Checking),
             "downloading" => Some(Progress::Downloading(0.42)),
             "installing" => Some(Progress::Installing),
             "error" => Some(Progress::Failed("The download is damaged: its SHA-256 doesn't match the release's.".into())),
@@ -164,6 +165,8 @@ impl App {
         let Some(rx) = &u.installing else { return };
         loop {
             match rx.try_recv() {
+                // The release read again on GitHub replaces the one the check found.
+                Ok(Progress::Found(r)) => u.available = Some(*r),
                 Ok(p) => u.progress = Some(p),
                 Err(TryRecvError::Empty) => return,
                 Err(TryRecvError::Disconnected) => break,
@@ -171,6 +174,12 @@ impl App {
         }
         u.installing = None;
         match (&u.progress, &u.bundle) {
+            (Some(Progress::UpToDate), _) => {
+                u.available = None;
+                u.dialog = false;
+                u.progress = None;
+                self.notify("No update to install: GitHub has nothing newer than this Fourchette any more", false);
+            }
             (Some(Progress::Done), Some(bundle)) => {
                 // What the update brings, for the relaunched app to show once.
                 if let (Some(r), Some(file)) = (&u.available, update::shown_file()) {
@@ -207,13 +216,17 @@ impl App {
         }
     }
 
-    /// "Update and Restart": the download and the swap run on a thread; the dialog shows their steps.
+    /// "Update and Restart": reading the release again, the download and the swap run on a thread;
+    /// the dialog shows their steps.
     pub(super) fn update_install(&mut self, ctx: &egui::Context) {
+        let on = self.library.settings.update_channel;
         let u = &mut self.update;
         if u.busy() {
             return;
         }
-        let Some(release) = u.available.clone() else { return };
+        if u.available.is_none() {
+            return;
+        }
         let Some(bundle) = u.bundle.clone() else {
             u.progress = Some(Progress::Failed("Fourchette isn't running from an app bundle, so it can't replace itself.".into()));
             return;
@@ -225,12 +238,12 @@ impl App {
                 let _ = tx.send(p);
                 ctx.request_repaint();
             };
-            if let Err(e) = update::install(&release, &bundle, &send) {
+            if let Err(e) = update::install_latest(on, &bundle, &send) {
                 send(Progress::Failed(e));
             }
         });
         u.installing = Some(rx);
-        u.progress = Some(Progress::Downloading(0.0));
+        u.progress = Some(Progress::Checking);
     }
 
     /// The update dialog: the new version, its notes, then "Update and Restart" and "Later", or
@@ -279,6 +292,7 @@ impl App {
                 }
             }
             match &u.progress {
+                Some(Progress::Checking) => progress_row(ui, "Checking GitHub…", None),
                 Some(Progress::Downloading(f)) => progress_row(ui, &format!("Downloading… {:.0}%", f * 100.0), Some(*f)),
                 Some(Progress::Installing) => progress_row(ui, "Installing…", None),
                 Some(Progress::Done) => progress_row(ui, "Restarting…", None),
@@ -289,7 +303,7 @@ impl App {
                         ui.label(RichText::new(e.as_str()).size(theme::FS_SECONDARY).color(c.dim));
                     });
                 }
-                None => {}
+                Some(Progress::Found(_) | Progress::UpToDate) | None => {}
             }
         });
         if out.primary {

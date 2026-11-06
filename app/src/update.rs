@@ -396,6 +396,12 @@ pub fn check(channel: UpdateChannel) -> Result<Option<Release>, String> {
 /// How far the install got, sent to the window as it goes.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Progress {
+    /// Reading the release on GitHub again before downloading it.
+    Checking,
+    /// The release as GitHub gives it now: the one installed, shown in place of the one checked.
+    Found(Box<Release>),
+    /// GitHub has nothing newer any more (the release is gone, or this build is it): nothing done.
+    UpToDate,
     /// The part of the .dmg downloaded, 0 to 1 (0 while the size is unknown).
     Downloading(f32),
     Installing,
@@ -497,6 +503,20 @@ fn copy_from_dmg(dmg: &Path, mount: &Path, to: &Path) -> Result<(), String> {
         let _ = run(Command::new(HDIUTIL).args(["detach", "-force"]).arg(mount), "hdiutil detach");
     }
     copied
+}
+
+/// "Update and Restart" (#163): reads the release on GitHub again, since its tag may have moved
+/// and the release been published again since the check (a new .dmg, a new SHA-256), then
+/// installs the release found then.
+pub fn install_latest(channel: UpdateChannel, bundle: &Path, progress: &dyn Fn(Progress)) -> Result<(), String> {
+    progress(Progress::Checking);
+    let found = check(channel).map_err(|e| format!("Couldn't read the release on GitHub: {e}"))?;
+    let Some(release) = found else {
+        progress(Progress::UpToDate);
+        return Ok(());
+    };
+    progress(Progress::Found(Box::new(release.clone())));
+    install(&release, bundle, progress)
 }
 
 /// Replaces the app at `bundle` with `release`'s, reporting progress as it goes. On any error
