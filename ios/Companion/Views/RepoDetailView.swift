@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One repository: what the REST API says of it, and the way to its board and pull requests.
+/// One repository: what the REST API says of it, and the way to its board, pull requests and history.
 struct RepoDetailView: View {
     let repo: Repo
     @Environment(\.openURL) private var openURL
@@ -24,6 +24,9 @@ struct RepoDetailView: View {
                 }
                 NavigationLink(value: Route.pulls) {
                     Label("Pull Requests", systemImage: "arrow.triangle.pull")
+                }
+                NavigationLink(value: Route.history) {
+                    Label("Branches and History", systemImage: "clock.arrow.circlepath")
                 }
             }
             Section {

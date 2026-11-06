@@ -145,3 +145,28 @@ final class PullTests: XCTestCase {
         XCTAssertEqual(PullQueries.duration(3900), "1h 05m")
     }
 }
+
+final class HistoryTests: XCTestCase {
+    func testBranchesDefaultFirst() {
+        let ref = { (name: String, date: String) -> [String: Any] in
+            ["name": name, "target": ["oid": "abc1234def", "messageHeadline": "Work on \(name)", "committedDate": date, "author": ["name": "Camille", "user": ["login": "camille"]]]]
+        }
+        let data: [String: Any] = ["repository": ["defaultBranchRef": ["name": "main"], "refs": ["nodes": [ref("feat/x", "2026-11-06T10:00:00Z"), ref("main", "2026-11-05T10:00:00Z")]]]]
+        let branches = HistoryQueries.parseBranches(data)
+        XCTAssertEqual(branches.map(\.name), ["main", "feat/x"])
+        XCTAssertEqual(branches[0].author, "camille")
+        XCTAssertNotNil(branches[0].date)
+    }
+
+    func testCommitsAndFilesDecode() throws {
+        let json = #"[{"sha":"ca2a04c0123","commit":{"message":"Fix it\n\nBecause.","author":{"name":"Camille Laurent","date":"2026-11-06T10:00:00Z"}},"author":{"login":"camille"}},{"sha":"2bf28b1","commit":{"message":"Ghost","author":{"name":"Someone","date":"2026-11-05T10:00:00Z"}},"author":null}]"#
+        let commits = try GitHubClient.decoder.decode([Commit].self, from: Data(json.utf8))
+        XCTAssertEqual(commits[0].headline, "Fix it")
+        XCTAssertEqual(commits[0].body, "Because.")
+        XCTAssertEqual(commits[0].short, "ca2a04c")
+        XCTAssertNil(commits[1].login)
+        XCTAssertEqual(commits[1].authorName, "Someone")
+        let detail = try GitHubClient.decoder.decode(CommitDetail.self, from: Data(#"{"files":[{"filename":"src/a.rs","status":"added","additions":3,"deletions":0}]}"#.utf8))
+        XCTAssertEqual(detail.files.first?.status, "added")
+    }
+}

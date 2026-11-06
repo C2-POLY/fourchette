@@ -116,6 +116,11 @@ struct GitHubClient: Sendable {
         return json["data"] as? [String: Any] ?? [:]
     }
 
+    /// The body of a REST GET.
+    func data(_ url: URL) async throws -> Data {
+        try await get(url).0
+    }
+
     private func get(_ url: URL) async throws -> (Data, HTTPURLResponse) {
         try await send(URLRequest(url: url))
     }
