@@ -1,6 +1,7 @@
 mod ai;
 mod app;
 mod changelog;
+mod cockpit;
 mod checkout;
 mod demo;
 mod diff;

@@ -2,6 +2,7 @@ mod assistant;
 mod board;
 mod issue;
 mod changelog;
+mod cockpit;
 mod palette;
 mod pr_draft;
 mod operation;
@@ -158,6 +159,8 @@ pub enum Cmd {
     AskDeleteWorktree(PathBuf),
     DeleteWorktree(PathBuf),
     PruneWorktrees,
+    /// The worktree cockpit: every worktree with its state, issue and pull request.
+    Cockpit,
     /// Repository switcher (⌘O) and the repository list.
     Switcher,
     RepoFavorite(PathBuf),
@@ -349,6 +352,10 @@ impl App {
         // FOURCHETTE_PR=1 shows the pull request window with the sample draft.
         if std::env::var("FOURCHETTE_PR").is_ok() {
             app.tab_mut().pr_draft_sample();
+        }
+        // FOURCHETTE_COCKPIT=1 shows the worktree cockpit of the sample project (`=tidy` its Tidy up list).
+        if let Ok(v) = std::env::var("FOURCHETTE_COCKPIT") {
+            app.tab_mut().cockpit_sample(v == "tidy");
         }
         // FOURCHETTE_RESOLVE=1 shows the conflict window with the sample project's conflicts.
         if std::env::var("FOURCHETTE_RESOLVE").is_ok() {
