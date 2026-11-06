@@ -81,7 +81,7 @@ pub struct Colors {
     /// Text of added and removed lines in a diff.
     pub diff_added_text: Color32,
     pub diff_deleted_text: Color32,
-    /// Darkness of shadows and of the backdrop behind the palette.
+    /// Darkness of the shadows under floating windows.
     pub shadow: u8,
 }
 

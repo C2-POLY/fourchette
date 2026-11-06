@@ -178,8 +178,7 @@ impl App {
 
         let t = crate::modal::appear(ctx, egui::Id::new("palette"));
         egui::Area::new(egui::Id::new("palette_backdrop")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
+            let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }

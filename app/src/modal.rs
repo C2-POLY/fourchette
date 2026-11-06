@@ -171,9 +171,6 @@ impl Modal {
         let layer = LayerId::new(egui::Order::Foreground, self.id);
         let resp = egui::Modal::new(self.id).backdrop_color(Color32::TRANSPARENT).frame(egui::Frame::NONE).show(ctx, |ui| {
             ui.multiply_opacity(t);
-            // Larger than the window, so it still covers it while the layer is scaled down.
-            let screen = ui.ctx().screen_rect().expand(200.0);
-            ui.painter().with_clip_rect(screen).rect_filled(screen, CornerRadius::ZERO, backdrop());
             self.card(ui, body)
         });
         animate_layer(ctx, layer, resp.response.rect.center(), t);
@@ -274,23 +271,22 @@ impl Modal {
             // A faint light edge along the top, as if lit from above.
             ui.painter().hline(rect.shrink2(vec2(RADIUS as f32, 0.0)).x_range(), rect.top() + 1.0, Stroke::new(1.0_f32, Color32::from_white_alpha(10)));
         }
-        ui.painter().rect_stroke(rect, rr, Stroke::new(1.0_f32, k.border_strong), StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, rr, Stroke::new(1.0_f32, edge()), StrokeKind::Inside);
         out
     }
 }
 
-/// The darkened app behind a window.
-pub fn backdrop() -> Color32 {
-    // Light shadows are faint (45), so the light backdrop takes more of it: about 22 %.
-    theme::shadow(if theme::is_light() { 1.25 } else { 0.8 })
+/// The edge of a floating window: the border colour in light mode, a slightly lighter grey in dark mode.
+fn edge() -> Color32 {
+    if theme::is_light() { theme::c().border_strong } else { Color32::from_rgb(0x3a, 0x3d, 0x46) }
 }
 
 /// A window's two shadows (a wide soft one and a close one) and its fill, as one shape.
 pub fn card_back(rect: Rect, rr: CornerRadius) -> Shape {
     let k = theme::c();
     Shape::Vec(vec![
-        egui::epaint::Shadow { offset: [0, 24], blur: 64, spread: 0, color: theme::shadow(1.0) }.as_shape(rect, rr).into(),
-        egui::epaint::Shadow { offset: [0, 6], blur: 18, spread: 0, color: theme::shadow(0.6) }.as_shape(rect, rr).into(),
+        egui::epaint::Shadow { offset: [0, 24], blur: 64, spread: 0, color: theme::shadow(1.5) }.as_shape(rect, rr).into(),
+        egui::epaint::Shadow { offset: [0, 6], blur: 18, spread: 0, color: theme::shadow(0.9) }.as_shape(rect, rr).into(),
         egui::epaint::RectShape::filled(rect, rr, k.elevated).into(),
     ])
 }
@@ -302,7 +298,7 @@ pub fn card<R>(ui: &mut Ui, radius: u8, margin: Margin, add: impl FnOnce(&mut Ui
     let rect = r.response.rect;
     let rr = CornerRadius::same(radius);
     ui.painter().set(idx, card_back(rect, rr));
-    ui.painter().rect_stroke(rect, rr, Stroke::new(1.0_f32, theme::c().border_strong), StrokeKind::Inside);
+    ui.painter().rect_stroke(rect, rr, Stroke::new(1.0_f32, edge()), StrokeKind::Inside);
     r
 }
 
@@ -364,7 +360,7 @@ pub fn paint_card(p: &egui::Painter, rect: Rect) {
 }
 
 pub fn paint_edge(p: &egui::Painter, rect: Rect) {
-    p.rect_stroke(rect, CornerRadius::same(RADIUS), Stroke::new(1.0_f32, theme::c().border_strong), StrokeKind::Inside);
+    p.rect_stroke(rect, CornerRadius::same(RADIUS), Stroke::new(1.0_f32, edge()), StrokeKind::Inside);
 }
 
 /// How far a window is into its appearing, 0 to 1, eased out: `elapsed` seconds since it opened.
