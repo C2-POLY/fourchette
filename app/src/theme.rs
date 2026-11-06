@@ -338,7 +338,9 @@ fn visuals(k: &Colors, dark: bool) -> Visuals {
 /// The `MEDIUM` family is the interface font's Medium face in front of the interface fonts:
 /// Inter's is built in, Helvetica Neue's and Avenir Next's are faces of their system file, and
 /// San Francisco, one variable font whose other weights egui cannot load, stays Regular.
-pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> egui::FontDefinitions {
+/// With `previews`, every font the Settings menus offer also gets its own family
+/// (`preview_family`), so each name can be written in its own font.
+pub fn fonts_for(ui: UiFont, code: CodeFont, previews: bool, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> egui::FontDefinitions {
     use egui::{FontData, FontFamily};
     use std::sync::Arc;
     let mut f = egui::FontDefinitions::default();
@@ -370,7 +372,32 @@ pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u
         names.insert(0, name);
     }
     f.families.insert(FontFamily::Name(MEDIUM.into()), names);
+    if previews {
+        let ui_fonts = UiFont::ALL.map(|u| (u.label(), u.path(), FontFamily::Proportional, "Inter"));
+        let code_fonts = CodeFont::ALL.map(|c| (c.label(), c.path(), FontFamily::Monospace, "JetBrains Mono"));
+        for (name, path, base, built_in) in ui_fonts.into_iter().chain(code_fonts) {
+            // The font itself, then its family's built-in and egui fonts for the glyphs it lacks.
+            let mut names = egui::FontDefinitions::default().families[&base].clone();
+            names.insert(0, built_in.into());
+            if !f.font_data.contains_key(name) {
+                if let Some(bytes) = path.and_then(read).filter(|b| looks_like_a_font(b)) {
+                    let index = regular_face(&bytes);
+                    f.font_data.insert(name.into(), Arc::new(FontData { index, ..FontData::from_owned(bytes) }));
+                }
+            }
+            if name != built_in && f.font_data.contains_key(name) {
+                names.insert(0, name.into());
+            }
+            f.families.insert(preview_family(name), names);
+        }
+    }
     f
+}
+
+/// The family that writes `label`, a font of the Settings menus, in its own font. It only
+/// exists while Settings is open (`fonts_for` with `previews`).
+pub fn preview_family(label: &str) -> egui::FontFamily {
+    egui::FontFamily::Name(format!("preview {label}").into())
 }
 
 /// Reads a system font file; None when it is missing or unreadable.
@@ -425,8 +452,9 @@ fn styled_face(b: &[u8], want: &str) -> Option<u32> {
 }
 
 /// Shows the chosen fonts at once (the system ones are read now).
-pub fn set_fonts(ctx: &egui::Context, ui: UiFont, code: CodeFont) {
-    ctx.set_fonts(fonts_for(ui, code, &read_system_font));
+/// With `previews`, also every font the Settings menus offer: read only while Settings is open.
+pub fn set_fonts(ctx: &egui::Context, ui: UiFont, code: CodeFont, previews: bool) {
+    ctx.set_fonts(fonts_for(ui, code, previews, &read_system_font));
 }
 
 /// Sets up both modes once, then shows the mode the person chose.
@@ -576,19 +604,19 @@ mod tests {
         use egui::FontFamily;
         let medium = |f: &egui::FontDefinitions| f.families[&FontFamily::Name(MEDIUM.into())].clone();
         // Inter: its Medium, then the interface fonts.
-        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, &no_files);
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, &no_files);
         assert_eq!(medium(&f)[0], "Inter Medium");
         assert_eq!(&medium(&f)[1..], &f.families[&FontFamily::Proportional][..]);
         // A system font without a Medium face (here Inter's bytes, a single font) stays Regular.
-        let f = fonts_for(UiFont::SanFrancisco, CodeFont::JetBrainsMono, &fake_file);
+        let f = fonts_for(UiFont::SanFrancisco, CodeFont::JetBrainsMono, false, &fake_file);
         assert_eq!(medium(&f), f.families[&FontFamily::Proportional]);
         assert_eq!(medium(&f)[0], "San Francisco");
         // A system font that can't be read falls back to Inter, in Medium.
-        let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, &no_files);
+        let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, false, &no_files);
         assert_eq!(medium(&f)[..2], ["Inter Medium", "Inter"]);
         // On this Mac: Avenir Next's Medium face.
         if read_system_font("/System/Library/Fonts/Avenir Next.ttc").is_some() {
-            let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, &read_system_font);
+            let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, false, &read_system_font);
             assert_eq!(medium(&f)[..2], ["Avenir Next Medium", "Avenir Next"]);
             assert_eq!(f.font_data["Avenir Next Medium"].index, 5);
         }
@@ -606,7 +634,7 @@ mod tests {
     #[test]
     fn built_in_fonts_come_first_by_default_with_egui_behind() {
         use egui::FontFamily;
-        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, &no_files);
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, &no_files);
         let default = egui::FontDefinitions::default();
         for (family, ours) in [(FontFamily::Proportional, "Inter"), (FontFamily::Monospace, "JetBrains Mono")] {
             let names = &f.families[&family];
@@ -621,7 +649,7 @@ mod tests {
         use egui::FontFamily;
         let default = egui::FontDefinitions::default();
         for (u, c) in UiFont::ALL[1..].iter().zip(&CodeFont::ALL[1..]) {
-            let f = fonts_for(*u, *c, &fake_file);
+            let f = fonts_for(*u, *c, false, &fake_file);
             for (family, chosen, built_in) in [(FontFamily::Proportional, u.label(), "Inter"), (FontFamily::Monospace, c.label(), "JetBrains Mono")] {
                 let names = &f.families[&family];
                 assert_eq!(names[0], chosen);
@@ -633,7 +661,7 @@ mod tests {
         }
         // Only the font chosen is read: with the built-in interface font, the system one is not asked for.
         let asked = std::cell::RefCell::new(vec![]);
-        fonts_for(UiFont::Inter, CodeFont::Menlo, &|p| {
+        fonts_for(UiFont::Inter, CodeFont::Menlo, false, &|p| {
             asked.borrow_mut().push(p.to_string());
             None
         });
@@ -648,12 +676,45 @@ mod tests {
         let missing = |p: &str| read_system_font(&format!("{p}.does-not-exist"));
         let readers: [&dyn Fn(&str) -> Option<Vec<u8>>; 4] = [&no_files, &damaged, &empty, &missing];
         for read in readers {
-            let f = fonts_for(UiFont::AvenirNext, CodeFont::Monaco, read);
+            let f = fonts_for(UiFont::AvenirNext, CodeFont::Monaco, false, read);
             assert_eq!(f.families[&FontFamily::Proportional][0], "Inter");
             assert_eq!(f.families[&FontFamily::Monospace][0], "JetBrains Mono");
             assert!(!f.font_data.contains_key("Avenir Next") && !f.font_data.contains_key("Monaco"));
         }
         assert_eq!(read_system_font("/nonexistent/Nope.ttf"), None);
+    }
+
+    #[test]
+    fn previews_give_each_offered_font_its_own_family() {
+        use egui::FontFamily;
+        // Without previews, no preview family: the menus stay in the interface font.
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, &fake_file);
+        assert!(!f.families.contains_key(&preview_family("Menlo")));
+        let read = std::cell::RefCell::new(vec![]);
+        let f = fonts_for(UiFont::SanFrancisco, CodeFont::JetBrainsMono, true, &|p| {
+            read.borrow_mut().push(p.to_string());
+            fake_file(p)
+        });
+        let default = egui::FontDefinitions::default();
+        let ui_fonts = UiFont::ALL.map(|u| (u.label(), FontFamily::Proportional, "Inter"));
+        let code_fonts = CodeFont::ALL.map(|c| (c.label(), FontFamily::Monospace, "JetBrains Mono"));
+        for (label, base, built_in) in ui_fonts.into_iter().chain(code_fonts) {
+            let names = &f.families[&preview_family(label)];
+            assert_eq!(names[0], label);
+            let rest = if label == built_in {
+                &names[1..]
+            } else {
+                assert_eq!(names[1], built_in);
+                &names[2..]
+            };
+            assert_eq!(rest, &default.families[&base][..]);
+        }
+        // Each system font is read once, the chosen one included.
+        assert_eq!(read.borrow().len(), 6);
+        // A missing system font shows in the built-in one.
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, true, &no_files);
+        assert_eq!(f.families[&preview_family("Avenir Next")][0], "Inter");
+        assert_eq!(f.families[&preview_family("Monaco")][0], "JetBrains Mono");
     }
 
     #[test]

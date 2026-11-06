@@ -224,9 +224,19 @@ fn font_picker<T: Copy + PartialEq>(ui: &mut Ui, rect: Rect, id: &str, current: 
     let mut child = ui.new_child(UiBuilder::new().id_salt(id).max_rect(rect).layout(Layout::right_to_left(Align::Center)));
     {
         let ui = &mut child;
-        egui::ComboBox::from_id_salt(id).selected_text(label(current)).width(rect.width() - 24.0).show_ui(ui, |ui| {
+        // Each name in its own font, once Settings has loaded them (from the frame after opening).
+        let families = ui.fonts(|f| f.families());
+        let styled = |o: T| {
+            let (family, text) = (theme::preview_family(label(o)), egui::RichText::new(label(o)));
+            if families.contains(&family) {
+                text.family(family)
+            } else {
+                text
+            }
+        };
+        egui::ComboBox::from_id_salt(id).selected_text(styled(current)).width(rect.width() - 24.0).show_ui(ui, |ui| {
             for &o in options {
-                if ui.selectable_label(o == current, label(o)).clicked() && o != current {
+                if ui.selectable_label(o == current, styled(o)).clicked() && o != current {
                     picked = Some(o);
                 }
             }
@@ -523,6 +533,13 @@ fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
 
 impl App {
     pub(super) fn settings_ui(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
+        // The font menus write each font in its own style: those fonts are read on opening
+        // and let go on closing, so they don't stay in memory.
+        if self.font_previews != self.settings_open {
+            self.font_previews = self.settings_open;
+            let (ui_font, code_font) = fonts_from_env(&self.library.settings);
+            theme::set_fonts(ctx, ui_font, code_font, self.font_previews);
+        }
         if !self.settings_open {
             return;
         }

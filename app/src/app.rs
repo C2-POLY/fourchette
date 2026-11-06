@@ -282,6 +282,8 @@ pub struct App {
     states: crate::repo_state::States,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
+    /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
+    font_previews: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
     settings_section: usize,
     screenshot: Option<PathBuf>,
@@ -320,6 +322,7 @@ impl App {
             switcher: None,
             states: Default::default(),
             settings_open: false,
+            font_previews: false,
             settings_section: 0,
             screenshot,
             frame: 0,
@@ -341,7 +344,7 @@ impl App {
         theme::apply(&cc.egui_ctx, appearance);
         // FOURCHETTE_FONTS=<ui>,<code> (for example `sf,menlo`) shows fonts for a screenshot without saving them.
         let (ui_font, code_font) = fonts_from_env(&library.settings);
-        theme::set_fonts(&cc.egui_ctx, ui_font, code_font);
+        theme::set_fonts(&cc.egui_ctx, ui_font, code_font, false);
         let mut app = App::with_library(library, screenshot);
         app.update = updater::UpdateState::new(app.screenshot.is_some());
         // FOURCHETTE_UPDATE=1|dialog shows the pill, and the dialog, with a sample release;
@@ -689,7 +692,7 @@ impl App {
                 }
                 Cmd::SetSettings(s) => {
                     if (s.ui_font, s.code_font) != (self.library.settings.ui_font, self.library.settings.code_font) {
-                        theme::set_fonts(ctx, s.ui_font, s.code_font);
+                        theme::set_fonts(ctx, s.ui_font, s.code_font, self.font_previews);
                     }
                     // Another channel: check on it at once, so the pill shows what it offers.
                     if s.update_channel != self.library.settings.update_channel {
