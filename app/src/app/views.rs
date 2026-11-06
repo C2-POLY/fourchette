@@ -2277,6 +2277,8 @@ mod panel_resize_tests {
         a.open_path(repo.clone(), false);
         a.tab_mut().sel = Sel::Commit(1);
         let ctx = egui::Context::default();
+        // The app's fonts, as App::new sets them: the pills' Medium family among them.
+        crate::theme::set_fonts(&ctx, Default::default(), Default::default());
         let mut frame = eframe::Frame::_new_kittest();
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(1360.0, 840.0));
         let step = |a: &mut App, frame: &mut eframe::Frame, events: Vec<egui::Event>| {

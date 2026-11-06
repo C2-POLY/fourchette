@@ -246,6 +246,15 @@ pub fn mono() -> FontId {
     FontId::monospace(FS_MONO)
 }
 
+/// The family of the names in the history's branch and tag pills: the interface font in its
+/// Medium weight (`fonts_for`).
+pub const MEDIUM: &str = "medium";
+
+/// A branch or tag name in its pill.
+pub fn pill() -> FontId {
+    FontId::new(FS_SMALL, egui::FontFamily::Name(MEDIUM.into()))
+}
+
 /// A colour mixed toward white.
 pub fn lighten(c: Color32, k: f32) -> Color32 {
     let m = |v: u8| (v as f32 + (255.0 - v as f32) * k).round() as u8;
@@ -326,6 +335,9 @@ fn visuals(k: &Colors, dark: bool) -> Visuals {
 /// (licences beside them in `assets/fonts`) and always stay behind the chosen font, then egui's
 /// own fonts, for the glyphs they lack. A system font is read with `read` (its path in, bytes
 /// out; face 0 for a .ttc) and put first; when it is missing or not a font, the built-in one stays first.
+/// The `MEDIUM` family is the interface font's Medium face in front of the interface fonts:
+/// Inter's is built in, Helvetica Neue's and Avenir Next's are faces of their system file, and
+/// San Francisco, one variable font whose other weights egui cannot load, stays Regular.
 pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> egui::FontDefinitions {
     use egui::{FontData, FontFamily};
     use std::sync::Arc;
@@ -341,12 +353,23 @@ pub fn fonts_for(ui: UiFont, code: CodeFont, read: &dyn Fn(&str) -> Option<Vec<u
         f.font_data.insert(name.into(), Arc::new(FontData::from_static(bytes)));
         f.families.entry(family).or_default().insert(0, name.into());
     }
+    // Inter Medium, unless a system interface font is read below.
+    let mut medium = Some(("Inter Medium".to_string(), FontData::from_static(include_bytes!("../assets/fonts/Inter-Medium.ttf"))));
     for (family, name, path) in chosen {
         let Some(bytes) = path.and_then(read).filter(|b| looks_like_a_font(b)) else { continue };
+        if family == FontFamily::Proportional {
+            medium = styled_face(&bytes, "Medium").map(|index| (format!("{name} Medium"), FontData { index, ..FontData::from_owned(bytes.clone()) }));
+        }
         let index = regular_face(&bytes);
         f.font_data.insert(name.into(), Arc::new(FontData { index, ..FontData::from_owned(bytes) }));
         f.families.entry(family).or_default().insert(0, name.into());
     }
+    let mut names = f.families[&FontFamily::Proportional].clone();
+    if let Some((name, data)) = medium {
+        f.font_data.insert(name.clone(), Arc::new(data));
+        names.insert(0, name);
+    }
+    f.families.insert(FontFamily::Name(MEDIUM.into()), names);
     f
 }
 
@@ -364,10 +387,15 @@ fn looks_like_a_font(b: &[u8]) -> bool {
 /// The face of a collection (.ttc) whose style is "Regular", or 0: faces are not in the same
 /// order in every file (Avenir Next's first face is its Bold). A single font is face 0.
 fn regular_face(b: &[u8]) -> u32 {
+    styled_face(b, "Regular").unwrap_or(0)
+}
+
+/// The face of a collection (.ttc) whose style is `want`; None for a single font or without one.
+fn styled_face(b: &[u8], want: &str) -> Option<u32> {
     let u16_at = |o: usize| b.get(o..o + 2).map(|x| u16::from_be_bytes([x[0], x[1]]) as usize);
     let u32_at = |o: usize| b.get(o..o + 4).map(|x| u32::from_be_bytes([x[0], x[1], x[2], x[3]]) as usize);
     if b.get(..4) != Some(b"ttcf") {
-        return 0;
+        return None;
     }
     // The style of the font whose table directory starts at `o`: its typographic style (name id
     // 17) when it has one, else its legacy style (id 2), which calls Avenir Next's Demi Bold "Regular".
@@ -393,7 +421,7 @@ fn regular_face(b: &[u8]) -> u32 {
         named(17).or_else(|| named(2))
     };
     let faces = u32_at(8).unwrap_or(0).min(64);
-    (0..faces).find(|&i| u32_at(12 + 4 * i).and_then(style).as_deref() == Some("Regular")).unwrap_or(0) as u32
+    (0..faces).find(|&i| u32_at(12 + 4 * i).and_then(style).as_deref() == Some(want)).map(|i| i as u32)
 }
 
 /// Shows the chosen fonts at once (the system ones are read now).
@@ -529,6 +557,40 @@ mod tests {
             if let Some(b) = read_system_font(path) {
                 assert_eq!(regular_face(&b), face, "{path}");
             }
+        }
+    }
+
+    #[test]
+    fn a_collection_gives_its_medium_face_when_it_has_one() {
+        // A single font has no other face: San Francisco's file, and Inter's.
+        assert_eq!(styled_face(include_bytes!("../assets/fonts/Inter-Regular.ttf"), "Medium"), None);
+        for (path, face) in [("/System/Library/Fonts/Avenir Next.ttc", Some(5)), ("/System/Library/Fonts/HelveticaNeue.ttc", Some(10)), ("/System/Library/Fonts/SFNS.ttf", None)] {
+            if let Some(b) = read_system_font(path) {
+                assert_eq!(styled_face(&b, "Medium"), face, "{path}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_pill_family_is_the_interface_font_in_medium() {
+        use egui::FontFamily;
+        let medium = |f: &egui::FontDefinitions| f.families[&FontFamily::Name(MEDIUM.into())].clone();
+        // Inter: its Medium, then the interface fonts.
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, &no_files);
+        assert_eq!(medium(&f)[0], "Inter Medium");
+        assert_eq!(&medium(&f)[1..], &f.families[&FontFamily::Proportional][..]);
+        // A system font without a Medium face (here Inter's bytes, a single font) stays Regular.
+        let f = fonts_for(UiFont::SanFrancisco, CodeFont::JetBrainsMono, &fake_file);
+        assert_eq!(medium(&f), f.families[&FontFamily::Proportional]);
+        assert_eq!(medium(&f)[0], "San Francisco");
+        // A system font that can't be read falls back to Inter, in Medium.
+        let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, &no_files);
+        assert_eq!(medium(&f)[..2], ["Inter Medium", "Inter"]);
+        // On this Mac: Avenir Next's Medium face.
+        if read_system_font("/System/Library/Fonts/Avenir Next.ttc").is_some() {
+            let f = fonts_for(UiFont::AvenirNext, CodeFont::JetBrainsMono, &read_system_font);
+            assert_eq!(medium(&f)[..2], ["Avenir Next Medium", "Avenir Next"]);
+            assert_eq!(f.font_data["Avenir Next Medium"].index, 5);
         }
     }
 

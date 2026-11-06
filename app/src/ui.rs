@@ -183,7 +183,7 @@ impl RefPill<'_> {
 
     /// The width of the whole pill, its name in full.
     pub fn width(&self, p: &egui::Painter, extra: f32) -> f32 {
-        p.layout_no_wrap(self.text().to_owned(), theme::small(), Color32::WHITE).size().x + self.chrome_w(extra)
+        p.layout_no_wrap(self.text().to_owned(), theme::pill(), Color32::WHITE).size().x + self.chrome_w(extra)
     }
 }
 
@@ -257,7 +257,7 @@ pub fn draw_ref_pill(p: &egui::Painter, rect: Rect, pill: &RefPill, lane: Color3
     }
     let bw = pull.map(|q| pr_badge_width(q) + 5.0).unwrap_or(0.0);
     let clip = p.with_clip_rect(rect.shrink(1.0));
-    let galley = fit_galley(p, pill.text(), theme::small(), text, rect.right() - PILL_PAD_R - bw - x);
+    let galley = fit_galley(p, pill.text(), theme::pill(), text, rect.right() - PILL_PAD_R - bw - x);
     clip.galley(pos2(x, y - galley.size().y / 2.0), galley, text);
     if let Some(q) = pull {
         pr_badge(&clip, pill_badge_left(rect, q), y, q);
