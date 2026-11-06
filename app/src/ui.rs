@@ -89,23 +89,7 @@ pub fn pr_badge(p: &egui::Painter, left: f32, y: f32, pr: &Pull) {
         PrState::Merged => t.renamed,
         PrState::Closed => t.deleted,
     };
-    let s = Stroke::new(1.3_f32, col);
-    let (x0, x1, r) = (left + 1.8, left + 9.0, 1.6);
-    let (top, bottom) = (y - 3.8, y + 3.8);
-    p.circle_stroke(pos2(x0, top), r, s);
-    p.circle_stroke(pos2(x0, bottom), r, s);
-    p.line_segment([pos2(x0, top + r), pos2(x0, bottom - r)], s);
-    p.circle_stroke(pos2(x1, bottom), r, s);
-    if pr.state == PrState::Merged {
-        // Merged: the right branch joins the left one.
-        p.line_segment([pos2(x1, bottom - r), pos2(x1, y - 0.6)], s);
-        p.line_segment([pos2(x1, y - 0.6), pos2(x0 + 0.6, top + r)], s);
-    } else {
-        // The arrow from the right branch back to the left one.
-        let (ax, ay) = (x0 + 3.6, top);
-        p.add(Shape::line(vec![pos2(x1, bottom - r), pos2(x1, ay), pos2(ax, ay)], s));
-        p.add(Shape::line(vec![pos2(ax + 1.5, ay - 1.5), pos2(ax, ay), pos2(ax + 1.5, ay + 1.5)], s));
-    }
+    pr_icon(p, left, y, col, pr.state == PrState::Merged);
     let c = pos2(left + 17.5, y);
     match pr.ci {
         Some(PrCi::Success) => {
@@ -119,6 +103,27 @@ pub fn pr_badge(p: &egui::Painter, left: f32, y: f32, pr: &Pull) {
             p.circle_filled(c, 1.1, t.modified);
         }
         None => {}
+    }
+}
+
+/// The pull request icon, 11 pt wide from `left`: two branches joined by an arrow, or merged.
+pub fn pr_icon(p: &egui::Painter, left: f32, y: f32, col: Color32, merged: bool) {
+    let s = Stroke::new(1.3_f32, col);
+    let (x0, x1, r) = (left + 1.8, left + 9.0, 1.6);
+    let (top, bottom) = (y - 3.8, y + 3.8);
+    p.circle_stroke(pos2(x0, top), r, s);
+    p.circle_stroke(pos2(x0, bottom), r, s);
+    p.line_segment([pos2(x0, top + r), pos2(x0, bottom - r)], s);
+    p.circle_stroke(pos2(x1, bottom), r, s);
+    if merged {
+        // Merged: the right branch joins the left one.
+        p.line_segment([pos2(x1, bottom - r), pos2(x1, y - 0.6)], s);
+        p.line_segment([pos2(x1, y - 0.6), pos2(x0 + 0.6, top + r)], s);
+    } else {
+        // The arrow from the right branch back to the left one.
+        let (ax, ay) = (x0 + 3.6, top);
+        p.add(Shape::line(vec![pos2(x1, bottom - r), pos2(x1, ay), pos2(ax, ay)], s));
+        p.add(Shape::line(vec![pos2(ax + 1.5, ay - 1.5), pos2(ax, ay), pos2(ax + 1.5, ay + 1.5)], s));
     }
 }
 

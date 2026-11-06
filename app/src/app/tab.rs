@@ -693,6 +693,7 @@ impl Tab {
             | Cmd::RepoGroup(..)
             | Cmd::RepoForget(_)
             | Cmd::ScanFolder
+            | Cmd::FetchAllRepos
             | Cmd::Reveal(_)
             | Cmd::OpenTerminal(_)
             | Cmd::OpenUrl(_)
