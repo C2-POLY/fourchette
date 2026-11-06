@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "fourchette"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "block2 0.5.1",
  "eframe",

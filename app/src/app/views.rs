@@ -7,9 +7,11 @@ use crate::sidebar;
 use crate::ui::*;
 use egui::{pos2, vec2, Align, Align2, Color32, CornerRadius, FontId, Key, Layout, Margin, Pos2, Rect, RichText, Sense, Shape, Stroke, Ui};
 
-/// The bottom details panel's smallest height.
+/// Width of the SHA column at the left of the commit list.
+const SHA_COL_W: f32 = 70.0;
 /// How far a folder's branches are indented in the sidebar.
 const FOLDER_STEP: f32 = 26.0;
+/// The bottom details panel's smallest height.
 const DETAILS_BOTTOM_MIN_H: f32 = 160.0;
 /// Below this width the bottom panel keeps the one-column layout of the right panel.
 const WIDE_DETAILS_MIN_W: f32 = 640.0;
@@ -418,30 +420,16 @@ impl Tab {
 
     // ---------------------------------------------------------------- commit list
 
-    /// Width of the branch / tag column: just enough for the widest first label (plus a "+n").
-    fn refs_width(&self, ui: &Ui, full_w: f32) -> f32 {
-        let mut need: f32 = if self.status.is_empty() { 0.0 } else { 96.0 };
-        for refs in self.by_target.values() {
-            let pills = ref_pills(refs);
-            if let Some(f) = pills.first() {
-                let w = f.width(ui.painter(), badge_w(self.pill_pull(f)));
-                need = need.max(w + 16.0 + if pills.len() > 1 { 28.0 } else { 0.0 });
-            }
-        }
-        need.clamp(72.0, if full_w > 900.0 { 210.0 } else { 150.0 })
-    }
-
     fn commit_list(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
         let wip = !self.status.is_empty();
         let n = self.commits.len() + wip as usize;
         let full_w = ui.available_width();
-        let refs_w = self.refs_width(ui, full_w);
+        let sha_w = SHA_COL_W;
         let graph_w = graph_width(self.max_lanes).min((full_w * 0.3).max(60.0));
-        // Keep at least 280 px for the message: drop SHA, then date, then author when narrow.
-        let room = full_w - refs_w - graph_w - 280.0;
+        // Keep at least 280 px for the message: drop the date, then the author when narrow.
+        let room = full_w - sha_w - graph_w - 280.0;
         let author_w = if room >= 150.0 { 150.0 } else { 0.0 };
         let date_w = if room >= 150.0 + 104.0 { 104.0 } else { 0.0 };
-        let sha_w = if room >= 150.0 + 104.0 + 76.0 { 76.0 } else { 0.0 };
         let show_meta = author_w > 0.0;
 
         let (hrect, _) = ui.allocate_exact_size(vec2(full_w, 30.0), Sense::hover());
@@ -451,17 +439,14 @@ impl Tab {
             p.line_segment([hrect.left_bottom(), hrect.right_bottom()], Stroke::new(1.0_f32, theme::c().border));
             let y = hrect.center().y;
             let f = theme::small();
-            p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "Branch", f.clone(), theme::c().faint);
-            p.text(pos2(hrect.left() + refs_w + 4.0, y), Align2::LEFT_CENTER, "Graph", f.clone(), theme::c().faint);
-            p.text(pos2(hrect.left() + refs_w + graph_w + 8.0, y), Align2::LEFT_CENTER, "Message", f.clone(), theme::c().faint);
+            p.text(pos2(hrect.left() + 12.0, y), Align2::LEFT_CENTER, "SHA", f.clone(), theme::c().faint);
+            p.text(pos2(hrect.left() + sha_w + 4.0, y), Align2::LEFT_CENTER, "Graph", f.clone(), theme::c().faint);
+            p.text(pos2(hrect.left() + sha_w + graph_w + 8.0, y), Align2::LEFT_CENTER, "Message", f.clone(), theme::c().faint);
             if show_meta {
                 let r = hrect.right();
-                p.text(pos2(r - sha_w - date_w - author_w + 4.0, y), Align2::LEFT_CENTER, "Author", f.clone(), theme::c().faint);
+                p.text(pos2(r - date_w - author_w + 4.0, y), Align2::LEFT_CENTER, "Author", f.clone(), theme::c().faint);
                 if date_w > 0.0 {
-                    p.text(pos2(r - sha_w - date_w + 4.0, y), Align2::LEFT_CENTER, "Date", f.clone(), theme::c().faint);
-                }
-                if sha_w > 0.0 {
-                    p.text(pos2(r - sha_w + 4.0, y), Align2::LEFT_CENTER, "SHA", f, theme::c().faint);
+                    p.text(pos2(r - date_w + 4.0, y), Align2::LEFT_CENTER, "Date", f, theme::c().faint);
                 }
             }
         }
@@ -479,7 +464,7 @@ impl Tab {
             for vis in range {
                 let (rect, resp) = ui.allocate_exact_size(vec2(full_w, theme::ROW_H), Sense::click());
                 if wip && vis == 0 {
-                    self.wip_row(ui, rect, &resp, refs_w, graph_w, cmds);
+                    self.wip_row(ui, rect, &resp, sha_w, graph_w, cmds);
                     continue;
                 }
                 let i = vis - wip as usize;
@@ -489,7 +474,7 @@ impl Tab {
                 let lane_col = theme::lane_color(row.color);
                 let matched = search.is_empty() || c.subject.to_lowercase().contains(&search) || c.author.to_lowercase().contains(&search) || c.hash.starts_with(&search);
                 let p = ui.painter_at(rect);
-                let gx = rect.left() + refs_w;
+                let gx = rect.left() + sha_w;
                 let node_x = lane_x(gx, row.lane);
                 let y = rect.center().y;
 
@@ -508,11 +493,29 @@ impl Tab {
                     p.rect_filled(Rect::from_min_size(rect.min, vec2(2.0, rect.height())), CornerRadius::ZERO, lane_col);
                 }
 
-                // Branch / tag pills, joined to the commit by a thin line.
+                // Graph
+                let gp = p.with_clip_rect(Rect::from_min_max(pos2(gx, rect.top()), pos2(gx + graph_w, rect.bottom())));
+                draw_row_graph(&gp, row, gx, rect.top(), rect.bottom(), if matched { 1.0 } else { 0.35 });
+                draw_node(&gp, pos2(node_x, y), row, c.hash == self.head, matched, bg);
+
+                // Text columns
+                let tc = if !matched {
+                    theme::c().faint
+                } else if selected {
+                    theme::c().strong
+                } else {
+                    theme::c().text
+                };
+                let sc = if matched { theme::c().dim } else { theme::c().faint };
+                p.text(pos2(rect.left() + 12.0, y), Align2::LEFT_CENTER, short(&c.hash), theme::mono(), sc);
+                let mx = gx + graph_w + 8.0;
+                let msg_right = rect.right() - date_w - author_w - 12.0;
+                // Branch / tag pills first (at most 40% of the message area), then the message.
+                let mut text_x = mx;
                 if let Some(refs) = self.by_target.get(&c.hash) {
                     let all = ref_pills(refs);
-                    let mut x = rect.left() + 10.0;
-                    let max_x = gx - 4.0;
+                    let max_x = mx + ((msg_right - mx) * 0.4).max(0.0);
+                    let mut x = mx;
                     let mut shown: Vec<(Rect, &GitRef)> = Vec::new();
                     for (k, pill) in all.iter().enumerate() {
                         // A pull request badge sits inside the pill, after its name.
@@ -527,12 +530,12 @@ impl Tab {
                             break;
                         }
                         // A pill wider than the room left ends its name with "…", never cut at the edge.
-                        let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min(max_x - x), 18.0));
+                        let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min((max_x - x).max(24.0)), 18.0));
                         draw_ref_pill(&p, pr, pill, lane_col, bg, pull);
                         shown.push((pr, pill.main));
                         x = pr.right() + theme::REF_GAP;
                     }
-                    p.line_segment([pos2(x - theme::REF_GAP, y), pos2(node_x, y)], Stroke::new(1.0_f32, theme::tint(lane_col, bg, 0.45)));
+                    text_x = x + 2.0;
                     // A double-click on a pill checks its branch out: the local one of a merged pill.
                     if resp.double_clicked() {
                         if let Some(q) = ui.input(|i| i.pointer.interact_pos()) {
@@ -542,7 +545,7 @@ impl Tab {
                         }
                     }
                     // Hovering the pills lists every one of the commit in full, the hidden ones included.
-                    if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x < gx) {
+                    if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x >= mx && q.x < x) {
                         resp.clone().on_hover_ui_at_pointer(|ui| {
                             ui.spacing_mut().item_spacing.y = 4.0;
                             let tip_bg = ui.visuals().window_fill;
@@ -562,33 +565,13 @@ impl Tab {
                         });
                     }
                 }
-
-                // Graph
-                let gp = p.with_clip_rect(Rect::from_min_max(pos2(gx, rect.top()), pos2(gx + graph_w, rect.bottom())));
-                draw_row_graph(&gp, row, gx, rect.top(), rect.bottom(), if matched { 1.0 } else { 0.35 });
-                draw_node(&gp, pos2(node_x, y), row, c.hash == self.head, matched, bg);
-
-                // Text columns
-                let tc = if !matched {
-                    theme::c().faint
-                } else if selected {
-                    theme::c().strong
-                } else {
-                    theme::c().text
-                };
-                let mx = gx + graph_w + 8.0;
-                let msg_right = rect.right() - sha_w - date_w - author_w - 12.0;
-                fit_text(&p, pos2(mx, y), Align2::LEFT_CENTER, &c.subject, theme::body(), tc, msg_right - mx);
+                fit_text(&p, pos2(text_x, y), Align2::LEFT_CENTER, &c.subject, theme::body(), tc, msg_right - text_x);
                 if show_meta {
-                    let sc = if matched { theme::c().dim } else { theme::c().faint };
-                    let ax = rect.right() - sha_w - date_w - author_w;
+                    let ax = rect.right() - date_w - author_w;
                     avatar(&p, pos2(ax + 12.0, y), 9.0, &c.author);
                     fit_text(&p, pos2(ax + 27.0, y), Align2::LEFT_CENTER, &c.author, theme::secondary(), sc, author_w - 35.0);
                     if date_w > 0.0 {
-                        fit_text(&p, pos2(rect.right() - sha_w - date_w + 4.0, y), Align2::LEFT_CENTER, &git::relative_time(c.time), theme::secondary(), sc, date_w - 8.0);
-                    }
-                    if sha_w > 0.0 {
-                        p.text(pos2(rect.right() - sha_w + 4.0, y), Align2::LEFT_CENTER, short(&c.hash), theme::mono(), sc);
+                        fit_text(&p, pos2(rect.right() - date_w + 4.0, y), Align2::LEFT_CENTER, &git::relative_time(c.time), theme::secondary(), sc, date_w - 8.0);
                     }
                 }
 
@@ -601,7 +584,7 @@ impl Tab {
         });
     }
 
-    fn wip_row(&self, ui: &Ui, rect: Rect, resp: &egui::Response, refs_w: f32, graph_w: f32, cmds: &mut Vec<Cmd>) {
+    fn wip_row(&self, ui: &Ui, rect: Rect, resp: &egui::Response, sha_w: f32, graph_w: f32, cmds: &mut Vec<Cmd>) {
         let p = ui.painter_at(rect);
         let bg = if self.sel == Sel::Wip {
             theme::c().select
@@ -611,7 +594,7 @@ impl Tab {
             theme::c().bg
         };
         p.rect_filled(rect, CornerRadius::ZERO, bg);
-        let gx = rect.left() + refs_w;
+        let gx = rect.left() + sha_w;
         let head_row = self.index.get(&self.head).copied();
         let (lane, col) = head_row.and_then(|i| self.rows.get(i)).map(|r| (r.lane, theme::lane_color(r.color))).unwrap_or((0, theme::c().dim));
         if self.sel == Sel::Wip {
@@ -649,7 +632,6 @@ impl Tab {
             p.galley(r.center() - g.size() / 2.0, g, colr);
             bx = r.right() + 4.0;
         }
-        p.text(pos2(rect.left() + 12.0, c.y), Align2::LEFT_CENTER, "Local changes", theme::small(), theme::c().faint);
         if resp.clicked() {
             cmds.push(Cmd::Select(Sel::Wip));
         }
