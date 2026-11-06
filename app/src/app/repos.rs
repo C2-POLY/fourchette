@@ -238,8 +238,7 @@ impl App {
         let top = (screen.top() + 70.0).max(screen.center().y - 330.0);
         let t = crate::modal::appear(ctx, egui::Id::new("switcher"));
         egui::Area::new(egui::Id::new("switcher_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
-            let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
+            let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }

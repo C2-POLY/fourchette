@@ -538,8 +538,7 @@ impl App {
         let min = pos2((screen.center().x - WIN_W * 0.5).round(), (screen.top() + 56.0).max(screen.center().y - WIN_H * 0.5).round());
         let t = crate::modal::appear(ctx, egui::Id::new("settings"));
         egui::Area::new(egui::Id::new("settings_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
-            let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::ZERO, crate::modal::backdrop().gamma_multiply(t));
+            let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }
