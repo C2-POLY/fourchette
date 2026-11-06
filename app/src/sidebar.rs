@@ -4,7 +4,7 @@
 use crate::git::{GitRef, RefKind};
 use crate::theme;
 use crate::pulls::Pull;
-use crate::ui::{chevron, fit_galley, fit_text, pr_badge, pr_badge_width};
+use crate::ui::{check_mark, chevron, fit_galley, fit_text, pr_badge, pr_badge_width};
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui};
 
 /// `owner/repo` for a GitHub or GitLab-style URL (https, ssh or scp form), else the host, else
@@ -34,12 +34,6 @@ pub fn short_url(url: &str) -> String {
         _ if host_name.contains("github") || host_name.contains("gitlab") => path.join("/"),
         _ => host_name.to_string(),
     }
-}
-
-/// The remote an upstream such as "origin/develop" belongs to, among the repository's `remotes`
-/// (the longest match wins, since a remote name may contain "/").
-pub fn upstream_remote<'a>(upstream: &str, remotes: &'a [String]) -> Option<&'a str> {
-    remotes.iter().filter(|r| upstream.strip_prefix(r.as_str()).is_some_and(|rest| rest.starts_with('/'))).max_by_key(|r| r.len()).map(|r| r.as_str())
 }
 
 /// One entry of a branch list: a branch shown by its (rest of the) name, or a folder.
@@ -125,11 +119,44 @@ pub fn repo_icon(p: &Painter, c: Pos2, col: Color32) {
     p.line_segment([c + vec2(-2.0, -2.0), c + vec2(2.0, -2.0)], s);
 }
 
-/// Two chain links.
-pub fn link_icon(p: &Painter, c: Pos2, col: Color32) {
+/// A git branch: two dots on a line and a third one that merges into it.
+pub fn branch_icon(p: &Painter, c: Pos2, col: Color32) {
+    let s = Stroke::new(1.2_f32, col);
+    p.line_segment([c + vec2(-2.5, -2.4), c + vec2(-2.5, 2.4)], s);
+    for o in [vec2(-2.5, -4.2), vec2(-2.5, 4.2), vec2(3.0, -2.6)] {
+        p.circle_stroke(c + o, 1.7, s);
+    }
+    p.add(Shape::line(vec![c + vec2(3.0, -0.9), c + vec2(3.0, 0.2), c + vec2(1.8, 1.5), c + vec2(-2.5, 2.4)], s));
+}
+
+/// A price tag outline: the shape of the graph's tag pills (`ui::tag_icon`), not filled.
+pub fn tag_icon(p: &Painter, c: Pos2, col: Color32) {
     let s = stroke(col);
-    p.rect_stroke(Rect::from_center_size(c + vec2(-2.5, 0.0), vec2(6.5, 4.5)), CornerRadius::same(2), s, StrokeKind::Middle);
-    p.rect_stroke(Rect::from_center_size(c + vec2(2.5, 0.0), vec2(6.5, 4.5)), CornerRadius::same(2), s, StrokeKind::Middle);
+    p.add(Shape::closed_line(vec![c + vec2(-5.3, -4.0), c + vec2(1.6, -4.0), c + vec2(5.6, 0.0), c + vec2(1.6, 4.0), c + vec2(-5.3, 4.0)], s));
+    p.circle_stroke(c + vec2(-2.4, 0.0), 1.1, Stroke::new(1.1_f32, col));
+}
+
+/// A worktree: two stacked windows, one behind the other.
+pub fn worktree_icon(p: &Painter, c: Pos2, col: Color32) {
+    let s = stroke(col);
+    p.add(Shape::line(vec![c + vec2(-3.0, -4.5), c + vec2(5.5, -4.5), c + vec2(5.5, 2.5)], s));
+    p.rect_stroke(Rect::from_min_max(c + vec2(-5.5, -2.5), c + vec2(3.0, 5.0)), CornerRadius::same(1), s, StrokeKind::Middle);
+}
+
+/// A stash: an open tray with a thing set down into it.
+pub fn stash_icon(p: &Painter, c: Pos2, col: Color32) {
+    let s = stroke(col);
+    p.add(Shape::line(vec![c + vec2(-6.0, 0.0), c + vec2(-6.0, 5.0), c + vec2(6.0, 5.0), c + vec2(6.0, 0.0)], s));
+    p.line_segment([c + vec2(0.0, -5.0), c + vec2(0.0, 2.0)], s);
+    p.add(Shape::line(vec![c + vec2(-3.0, -1.0), c + vec2(0.0, 2.0), c + vec2(3.0, -1.0)], s));
+}
+
+/// A warning triangle with its exclamation mark.
+pub fn warning_icon(p: &Painter, c: Pos2, col: Color32) {
+    let s = Stroke::new(1.2_f32, col);
+    p.add(Shape::closed_line(vec![c + vec2(0.0, -5.0), c + vec2(5.5, 4.0), c + vec2(-5.5, 4.0)], s));
+    p.line_segment([c + vec2(0.0, -1.5), c + vec2(0.0, 1.0)], s);
+    p.circle_filled(c + vec2(0.0, 2.6), 0.7, col);
 }
 
 /// A small arrow, up or down, with its stem.
@@ -164,138 +191,121 @@ pub fn folder_row(ui: &mut Ui, name: &str, count: usize, open: bool, indent: f32
     resp
 }
 
+/// Where a local branch's upstream stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Upstream {
+    /// No upstream: the branch exists only on this Mac.
+    None,
+    /// It tracks a remote branch that exists.
+    Tracked,
+    /// It tracks a remote branch that no longer exists.
+    Gone,
+}
+
+/// The small sign a row shows at its right edge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sign {
+    Cloud,
+    Warning,
+}
+
+impl Upstream {
+    /// "Local only" shows nothing: the others get a cloud or a warning triangle.
+    pub fn sign(self) -> Option<Sign> {
+        match self {
+            Upstream::None => None,
+            Upstream::Tracked => Some(Sign::Cloud),
+            Upstream::Gone => Some(Sign::Warning),
+        }
+    }
+}
+
+/// The state of a branch's `upstream` (empty for none), given whether that remote branch exists.
+pub fn upstream_state(upstream: &str, exists: bool) -> Upstream {
+    match (upstream.is_empty(), exists) {
+        (true, _) => Upstream::None,
+        (false, true) => Upstream::Tracked,
+        (false, false) => Upstream::Gone,
+    }
+}
+
+/// Whether a section is worth showing: not when there is nothing to list in it.
+pub fn section_shown(total: usize) -> bool {
+    total > 0
+}
+
+/// The sections folded when a repository opens: the tags, which are many and rarely needed.
+pub fn initial_collapsed() -> std::collections::HashSet<String> {
+    ["Tags".to_string()].into_iter().collect()
+}
+
 /// What a local branch row shows on its right.
-pub struct Tracking<'a> {
-    pub remote: Option<&'a str>,
-    pub gone: bool,
+pub struct Tracking {
+    pub upstream: Upstream,
     pub ahead: usize,
     pub behind: usize,
 }
 
-/// How much of the tracking a local branch row shows, from the fullest to the most compact.
-/// A row takes the fullest one that leaves its name readable (#127).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Fit {
-    /// The pill with the cloud and the remote's name, and `=` when level with it.
-    Full,
-    /// The pill with the cloud only, and `=`; a laptop for "local only".
-    Icon,
-    /// The bare cloud only: `=` is left to the tooltip. Ahead and behind counts always stay.
-    Tight,
-}
+/// Where the rows of a section start, from the row's left edge: under the header's title.
+pub const ITEM_INDENT: f32 = 16.0;
 
-/// The width a name needs before the row shrinks its tracking: the whole name when short, else
-/// enough for about fifteen letters.
-const NAME_MIN: f32 = 120.0;
-
-/// The fullest `Fit` whose tracking width (given by `width`) leaves `need` for the name in
-/// `room`, else the most compact.
-pub fn choose_fit(room: f32, need: f32, width: impl Fn(Fit) -> f32) -> Fit {
-    [Fit::Full, Fit::Icon].into_iter().find(|&f| room - width(f) >= need).unwrap_or(Fit::Tight)
-}
-
-/// Draws the badges from the right edge `x`; returns the left edge they reach.
-fn tracking_badges(p: &Painter, t: &Tracking, fit: Fit, right: f32, y: f32) -> f32 {
+/// Draws the signs from the right edge `x`; returns the left edge they reach. The ↑↓ counts
+/// stay; a cloud says the upstream exists, a triangle that it is gone; "local only" shows nothing.
+fn tracking_badges(p: &Painter, t: &Tracking, right: f32, y: f32) -> f32 {
     let c = theme::c();
     let mut x = right;
-    match t.remote {
-        // Short of room, "local only" becomes the Local section's laptop.
-        None if fit != Fit::Full => {
-            laptop_icon(p, pos2(x - 7.0, y), c.faint);
-            x -= 14.0;
+    match t.upstream.sign() {
+        Some(Sign::Cloud) => {
+            cloud_icon(p, pos2(x - 7.0, y), c.dim);
+            x -= 18.0;
         }
-        None => {
-            let g = p.layout_no_wrap("local only".into(), egui::FontId::proportional(11.0), c.faint);
-            x -= g.size().x;
-            // Italic look: the font has no italic, so a slanted underline-free faint text it is.
-            p.galley(pos2(x, y - g.size().y / 2.0), g, c.faint);
+        Some(Sign::Warning) => {
+            warning_icon(p, pos2(x - 6.0, y), c.modified);
+            x -= 18.0;
         }
-        Some(name) => {
-            let col = if t.gone { c.faint } else { c.dim };
-            let g = (fit == Fit::Full).then(|| p.layout_no_wrap(name.to_string(), theme::small(), col));
-            // Tight: the bare cloud, without the pill around it.
-            let w = g.as_ref().map_or(if fit == Fit::Tight { 14.0 } else { 24.0 }, |g| g.size().x + 32.0);
-            let r = Rect::from_min_size(pos2(x - w, y - 9.0), vec2(w, 18.0));
-            if fit != Fit::Tight {
-                p.rect(r, CornerRadius::same(9), theme::tint(c.accent, c.sidebar, 0.1), Stroke::new(1.0_f32, c.border), StrokeKind::Inside);
-            }
-            cloud_icon(p, pos2(r.center().x.max(r.left() + 7.0).min(r.left() + 12.0), y), col);
-            match g {
-                Some(g) => {
-                    let ty = y - g.size().y / 2.0;
-                    let tx = r.left() + 23.0;
-                    let right_edge = tx + g.size().x;
-                    p.galley(pos2(tx, ty), g, col);
-                    if t.gone {
-                        p.line_segment([pos2(tx, y), pos2(right_edge, y)], Stroke::new(1.0_f32, c.faint));
-                    }
-                }
-                // Gone, with the name hidden: the cloud is struck through.
-                None if t.gone => {
-                    p.line_segment([pos2(r.left() + 2.0, y), pos2(r.right() - 2.0, y)], Stroke::new(1.0_f32, c.faint));
-                }
-                None => {}
-            }
-            x = r.left() - 6.0;
-            if !t.gone {
-                for (n, up, col) in [(t.behind, false, c.modified), (t.ahead, true, c.added)] {
-                    if n > 0 {
-                        let g = p.layout_no_wrap(n.to_string(), theme::small(), col);
-                        x -= g.size().x;
-                        p.galley(pos2(x, y - g.size().y / 2.0), g, col);
-                        x -= 6.0;
-                        arrow(p, pos2(x, y), up, col);
-                        x -= 8.0;
-                    }
-                }
-                if t.ahead == 0 && t.behind == 0 && fit != Fit::Tight {
-                    // Level with its upstream: an equals sign.
-                    let s = Stroke::new(1.4_f32, c.faint);
-                    x -= 4.0;
-                    p.line_segment([pos2(x - 3.5, y - 2.0), pos2(x + 3.5, y - 2.0)], s);
-                    p.line_segment([pos2(x - 3.5, y + 2.0), pos2(x + 3.5, y + 2.0)], s);
-                    x -= 6.0;
-                }
+        None => {}
+    }
+    if t.upstream != Upstream::Gone {
+        for (n, up, col) in [(t.behind, false, c.modified), (t.ahead, true, c.added)] {
+            if n > 0 {
+                let g = p.layout_no_wrap(n.to_string(), theme::small(), col);
+                x -= g.size().x;
+                p.galley(pos2(x, y - g.size().y / 2.0), g, col);
+                x -= 6.0;
+                arrow(p, pos2(x, y), up, col);
+                x -= 8.0;
             }
         }
     }
     x
 }
 
-/// A local branch: colour dot, name, its pull request badge, then ahead/behind and the tracked
-/// remote on the right. When the name would be cut short, the tracking shrinks first (`Fit`).
-#[allow(clippy::too_many_arguments)]
-pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
+/// A local branch: a grey branch icon (a green check mark for the current one, whose name is
+/// stronger), name, its pull request badge, then ahead/behind and the upstream's sign on the right.
+pub fn local_branch_row(ui: &mut Ui, name: &str, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let p = ui.painter();
-    if current {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().select);
-    } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
+    let c = theme::c();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(6), c.hover);
     }
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
-    p.circle_filled(pos2(x + 3.0, y), 3.5, color);
-    let (name_left, right) = (x + 15.0, rect.right() - 8.0);
-    let room = pr_after(&ghost(p), pr, right, y) - 8.0 - name_left;
-    let need = p.layout_no_wrap(name.to_string(), theme::body(), theme::c().text).size().x.min(NAME_MIN);
-    let fit = choose_fit(room, need, |f| right - tracking_badges(&ghost(p), t, f, right, y));
-    let left = pr_after(p, pr, tracking_badges(p, t, fit, right, y), y);
-    let tc = if current { theme::c().strong } else { theme::c().text };
-    fit_text(p, pos2(name_left, y), Align2::LEFT_CENTER, name, theme::body(), tc, left - 8.0 - name_left);
+    if current {
+        check_mark(p, pos2(x + 5.0, y), c.added);
+    } else {
+        branch_icon(p, pos2(x + 5.0, y), c.faint);
+    }
+    let name_left = x + 17.0;
+    let left = pr_after(p, pr, tracking_badges(p, t, rect.right() - 8.0, y), y);
+    let (tc, font) = if current { (c.strong, theme::body_medium()) } else { (c.text, theme::body()) };
+    fit_text(p, pos2(name_left, y), Align2::LEFT_CENTER, name, font, tc, left - 8.0 - name_left);
     (resp, pr.map(|q| badge_rect(rect, left, q)))
 }
 
 /// The hit area of a row's pull request badge drawn at `left`: a little wider than the badge.
 fn badge_rect(row: Rect, left: f32, pr: &Pull) -> Rect {
     Rect::from_min_max(pos2(left - 3.0, row.top()), pos2(left + pr_badge_width(pr) + 3.0, row.bottom()))
-}
-
-/// A copy of `p` that measures without drawing.
-fn ghost(p: &Painter) -> Painter {
-    let mut g = p.clone();
-    g.set_invisible();
-    g
 }
 
 /// Draws a pull request badge ending before `right` and returns where the name must stop.
@@ -307,8 +317,8 @@ fn pr_after(p: &Painter, pr: Option<&Pull>, right: f32, y: f32) -> f32 {
 }
 
 /// A remote: chevron, repo icon, name in medium weight, short address on the right.
-pub fn remote_row(ui: &mut Ui, name: &str, short: &str, open: bool) -> egui::Response {
-    let (rect, resp) = row_rect(ui, 0.0);
+pub fn remote_row(ui: &mut Ui, name: &str, short: &str, open: bool, indent: f32) -> egui::Response {
+    let (rect, resp) = row_rect(ui, indent);
     let p = ui.painter();
     let c = theme::c();
     let y = rect.center().y;
@@ -325,28 +335,16 @@ pub fn remote_row(ui: &mut Ui, name: &str, short: &str, open: bool) -> egui::Res
     resp
 }
 
-/// A remote branch: dot, name, its pull request badge, then a link icon when a local branch
-/// tracks it, else "not local".
-pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, tracked: bool, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
+/// A remote branch: grey branch icon, name, its pull request badge.
+pub fn remote_branch_row(ui: &mut Ui, name: &str, indent: f32, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
     let (rect, resp) = row_rect(ui, 0.0);
     let p = ui.painter();
     let c = theme::c();
     let y = rect.center().y;
     let x = rect.left() + 10.0 + indent;
-    let mut right = rect.right() - 10.0;
-    if tracked {
-        link_icon(p, pos2(right - 6.0, y), c.dim);
-        right -= 18.0;
-    } else {
-        let g = p.layout_no_wrap("not local".into(), egui::FontId::proportional(11.0), c.faint);
-        right -= g.size().x;
-        p.galley(pos2(right, y - g.size().y / 2.0), g, c.faint);
-        right -= 6.0;
-    }
-    let right = pr_after(p, pr, right, y);
-    let (dot, tc) = if tracked { (color, c.text) } else { (theme::tint(color, c.sidebar, 0.4), c.faint) };
-    p.circle_filled(pos2(x + 3.0, y), 3.0, dot);
-    fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, name, theme::body(), tc, right - 8.0 - (x + 15.0));
+    let right = pr_after(p, pr, rect.right() - 10.0, y);
+    branch_icon(p, pos2(x + 5.0, y), c.faint);
+    fit_text(p, pos2(x + 17.0, y), Align2::LEFT_CENTER, name, theme::body(), c.text, right - 8.0 - (x + 17.0));
     (resp, pr.map(|q| badge_rect(rect, right, q)))
 }
 
@@ -368,16 +366,6 @@ mod tests {
     }
 
     #[test]
-    fn upstream_remotes() {
-        let remotes = vec!["origin".to_string(), "up".to_string(), "up/stream".to_string()];
-        assert_eq!(upstream_remote("origin/develop", &remotes), Some("origin"));
-        assert_eq!(upstream_remote("up/stream/main", &remotes), Some("up/stream"));
-        assert_eq!(upstream_remote("up/main", &remotes), Some("up"));
-        assert_eq!(upstream_remote("origins/x", &remotes), None);
-        assert_eq!(upstream_remote("", &remotes), None);
-    }
-
-    #[test]
     fn folders() {
         let names = ["main", "feature/a", "develop", "hotfix/x", "feature/b"];
         let g = group_folders(&names, |s| s);
@@ -385,18 +373,30 @@ mod tests {
     }
 
     #[test]
-    fn fits() {
-        // Full needs 80, Icon 40, Tight 20.
-        let w = |f| match f {
-            Fit::Full => 80.0,
-            Fit::Icon => 40.0,
-            Fit::Tight => 20.0,
-        };
-        assert_eq!(choose_fit(200.0, 96.0, w), Fit::Full);
-        assert_eq!(choose_fit(140.0, 96.0, w), Fit::Icon);
-        assert_eq!(choose_fit(120.0, 96.0, w), Fit::Tight);
-        // A short name keeps the full tracking where a long one would not.
-        assert_eq!(choose_fit(120.0, 30.0, w), Fit::Full);
+    fn upstream_states() {
+        assert_eq!(upstream_state("", false), Upstream::None);
+        assert_eq!(upstream_state("", true), Upstream::None);
+        assert_eq!(upstream_state("origin/a", true), Upstream::Tracked);
+        assert_eq!(upstream_state("origin/a", false), Upstream::Gone);
+    }
+
+    #[test]
+    fn signs_by_upstream() {
+        assert_eq!(Upstream::None.sign(), None);
+        assert_eq!(Upstream::Tracked.sign(), Some(Sign::Cloud));
+        assert_eq!(Upstream::Gone.sign(), Some(Sign::Warning));
+    }
+
+    #[test]
+    fn sections_shown_only_with_something_to_list() {
+        assert!(section_shown(1));
+        assert!(!section_shown(0));
+    }
+
+    #[test]
+    fn tags_start_folded() {
+        assert!(initial_collapsed().contains("Tags"));
+        assert!(!initial_collapsed().contains("Local"));
     }
 
     #[test]

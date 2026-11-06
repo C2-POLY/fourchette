@@ -255,6 +255,11 @@ pub fn pill() -> FontId {
     FontId::new(FS_SMALL, egui::FontFamily::Name(MEDIUM.into()))
 }
 
+/// The current branch's name in the sidebar: body size, Medium weight.
+pub fn body_medium() -> FontId {
+    FontId::new(FS_BODY, egui::FontFamily::Name(MEDIUM.into()))
+}
+
 /// A colour mixed toward white.
 pub fn lighten(c: Color32, k: f32) -> Color32 {
     let m = |v: u8| (v as f32 + (255.0 - v as f32) * k).round() as u8;

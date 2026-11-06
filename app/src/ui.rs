@@ -537,47 +537,24 @@ pub fn ref_label(r: &GitRef) -> String {
     }
 }
 
-fn icon_glyph(kind: &str) -> &'static str {
-    match kind {
-        "changes" => "✏",
-        "history" => "☰",
-        "tag" => "🏷",
-        "stash" => "📦",
-        "worktree" => "🗀",
-        _ => "•",
-    }
-}
-
-pub fn side_item(ui: &mut Ui, kind: &str, text: &str, count: Option<usize>, selected: bool, color: Option<Color32>, current: bool) -> egui::Response {
+/// A sidebar row of the Tags, Worktrees or Stashes sections (`kind` "tag", "worktree" or
+/// "stash"): a drawn icon, then the text, lined up with the branch rows.
+pub fn side_item(ui: &mut Ui, kind: &str, text: &str) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
-    if selected || current {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().select);
-    } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(6), theme::c().hover);
+    let c = theme::c();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(6), c.hover);
     }
     let y = rect.center().y;
-    let mut x = rect.left() + 10.0;
-    if let Some(c) = color {
-        p.circle_filled(pos2(x + 3.0, y), 3.5, c);
-        x += 15.0;
-    } else if kind == "project" {
-        board_icon(p, pos2(x + 5.0, y), theme::c().faint);
-        x += 20.0;
-    } else if kind != "remote" {
-        p.text(pos2(x + 2.0, y), Align2::LEFT_CENTER, icon_glyph(kind), FontId::proportional(12.0), theme::c().faint);
-        x += 20.0;
+    let x = rect.left() + 10.0 + crate::sidebar::ITEM_INDENT;
+    let at = pos2(x + 5.0, y);
+    match kind {
+        "tag" => tag_icon(p, at, c.faint, if resp.hovered() { c.hover } else { c.sidebar }),
+        "worktree" => crate::sidebar::worktree_icon(p, at, c.faint),
+        _ => crate::sidebar::stash_icon(p, at, c.faint),
     }
-    let tc = if selected || current { theme::c().strong } else { theme::c().text };
-    let right = rect.right() - if count.is_some() || current { 34.0 } else { 8.0 };
-    fit_text(p, pos2(x, y), Align2::LEFT_CENTER, text, theme::body(), tc, right - x);
-    if current {
-        check_mark(p, pos2(rect.right() - 14.0, y), theme::c().added);
-    } else if let Some(n) = count {
-        if n > 0 {
-            p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, n.to_string(), theme::small(), theme::c().faint);
-        }
-    }
+    fit_text(p, pos2(x + 17.0, y), Align2::LEFT_CENTER, text, theme::body(), c.text, rect.right() - 8.0 - (x + 17.0));
     resp
 }
 
@@ -589,22 +566,18 @@ pub fn faint_hint(text: impl Into<String>) -> RichText {
     RichText::new(text).color(theme::c().faint)
 }
 
-pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool, icon: Option<fn(&egui::Painter, Pos2, Color32)>) -> egui::Response {
+/// A section's header: its chevron (always shown), its drawn icon, its title and its count.
+/// The title starts where `sidebar::ITEM_INDENT` puts the rows' icons.
+pub fn section_header(ui: &mut Ui, title: &str, count: usize, open: bool, icon: fn(&egui::Painter, Pos2, Color32)) -> egui::Response {
     ui.add_space(6.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     let p = ui.painter();
     let col = if resp.hovered() { theme::c().text } else { theme::c().dim };
-    let mut x = rect.left() + 10.0;
-    if let Some(draw) = icon {
-        draw(p, pos2(x + 7.0, rect.center().y), col);
-        x += 21.0;
-    }
-    let r = p.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, title, theme::secondary(), col);
-    // Like Linear: the chevron sits after the title, shown when hovered or folded.
-    if resp.hovered() || !open {
-        chevron(p, pos2(r.right() + 9.0, rect.center().y), open, theme::c().faint);
-    }
-    p.text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
+    let y = rect.center().y;
+    chevron(p, pos2(rect.left() + 14.0, y), open, theme::c().faint);
+    icon(p, pos2(rect.left() + 31.0, y), col);
+    p.text(pos2(rect.left() + 44.0, y), Align2::LEFT_CENTER, title, theme::secondary(), col);
+    p.text(pos2(rect.right() - 10.0, y), Align2::RIGHT_CENTER, count.to_string(), theme::small(), theme::c().faint);
     resp
 }
 
