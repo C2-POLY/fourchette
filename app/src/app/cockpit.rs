@@ -197,6 +197,7 @@ impl Tab {
         };
         frame = frame.hint(vec![Hint::Text(hint)]).primary("Tidy up…", false, view.report.is_some() && can_go > 0);
         let board = self.project.board.clone();
+        let before = cmds.len();
         let out = frame.show(ctx, |ui| {
             if let Some(e) = &view.pulls_error {
                 modal::note(ui, k.modified, |ui| {
@@ -225,7 +226,7 @@ impl Tab {
             view.tidy = Some(view.list.iter().zip(verdicts).filter(|(_, v)| v.goes()).map(|(w, _)| (w.path.clone(), true)).collect());
         }
         // A link to the board closes the cockpit, so the board shows.
-        if cmds.iter().any(|c| matches!(c, Cmd::IssueDetail(_) | Cmd::OpenTab(_))) {
+        if cmds[before..].iter().any(|c| matches!(c, Cmd::IssueDetail(_) | Cmd::OpenTab(_))) {
             return Next::Close;
         }
         Next::Stay

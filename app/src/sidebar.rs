@@ -133,7 +133,7 @@ pub fn link_icon(p: &Painter, c: Pos2, col: Color32) {
 }
 
 /// A small arrow, up or down, with its stem.
-fn arrow(p: &Painter, c: Pos2, up: bool, col: Color32) {
+pub fn arrow(p: &Painter, c: Pos2, up: bool, col: Color32) {
     let s = Stroke::new(1.4_f32, col);
     let d = if up { -1.0 } else { 1.0 };
     p.line_segment([c + vec2(0.0, -3.5 * d), c + vec2(0.0, 3.5 * d)], s);

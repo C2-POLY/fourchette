@@ -3,6 +3,7 @@ mod board;
 mod issue;
 mod changelog;
 mod cockpit;
+mod home;
 mod palette;
 mod pr_draft;
 mod operation;
@@ -59,8 +60,9 @@ pub struct DiffView {
 pub enum Dialog {
     NewRef { at: String, label: String, name: String, checkout: bool, tag: bool },
     /// The original's RemoveLocalBranchController (sub_100070d94): "Delete local branch from your
-    /// repository", with "Also delete worktree" when the branch is checked out in one.
-    DeleteBranch { name: String, merged: bool, force: bool, worktree: Option<crate::worktree::Worktree>, dirty: bool, also_worktree: bool },
+    /// repository", with "Also delete worktree" when the branch is checked out in one, and its
+    /// remote branch as a second check row when it has one.
+    DeleteBranch(crate::delete::Delete),
     /// The original's RemoveWorktreeController (sub_1002008ec).
     DeleteWorktree { wt: crate::worktree::Worktree, dirty: bool },
     Confirm { title: String, message: String, label: String, args: Vec<String>, network: bool },
@@ -154,8 +156,10 @@ pub enum Cmd {
     /// Claude proposes a resolution for these conflicted files (all of them when empty).
     AiResolve(Vec<String>),
     /// Worktrees.
-    AskDeleteBranch(String),
-    DeleteBranch { name: String, force: bool, also_worktree: bool },
+    /// Delete a branch: the one clicked, local or remote (both for a merged pill); the dialog
+    /// offers the other side too.
+    AskDeleteBranch { local: Option<String>, remote: Option<String> },
+    DeleteBranch(crate::delete::Delete),
     AskDeleteWorktree(PathBuf),
     DeleteWorktree(PathBuf),
     PruneWorktrees,
@@ -167,6 +171,8 @@ pub enum Cmd {
     RepoGroup(PathBuf, Option<String>),
     RepoForget(PathBuf),
     ScanFolder,
+    /// "Fetch all" of the switcher and the palette: every repository of the list.
+    FetchAllRepos,
     Reveal(PathBuf),
     /// Repository > Open in Terminal (⌃⌘T).
     OpenTerminal(PathBuf),
@@ -184,7 +190,7 @@ pub enum Cmd {
     IssueMove,
     IssueDecline,
     IssueUndo,
-    /// Tabs: pick a repository for a new tab in the switcher (⌘T, "+").
+    /// Tabs: a new tab on the home page (⌘T, "+").
     NewTab,
     /// Open a repository in a new tab, or go to its tab when one shows it.
     OpenTab(PathBuf),
@@ -202,6 +208,14 @@ pub enum Cmd {
     CloseWhatsNew,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
+    /// The home page (⇧⌘O, File menu, palette): its tab, else a new one (issue #109).
+    Home,
+    /// The home page's "Keep as a group": these repositories go to that group.
+    HomeKeep { name: String, paths: Vec<PathBuf> },
+    /// The home page's "Dismiss" of a proposal, by its key.
+    HomeDismiss(String),
+    /// The home page's "Explore the sample project", in its tab.
+    HomeSample,
 }
 
 impl Cmd {
@@ -249,6 +263,8 @@ pub struct App {
     toast: Option<tab::Notice>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
+    /// What the switcher shows of each repository: changes, ahead/behind, pull requests, Fetch all.
+    states: crate::repo_state::States,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -264,6 +280,8 @@ pub struct App {
     update: updater::UpdateState,
     /// FOURCHETTE_MENU=<x>,<y>: where a screenshot right-clicks, to show a context menu.
     shot_menu: Option<egui::Pos2>,
+    /// The home page's search and what it read from each repository's folder.
+    home: home::HomeState,
 }
 
 pub fn short(h: &str) -> &str {
@@ -283,6 +301,7 @@ impl App {
             toast: None,
             library,
             switcher: None,
+            states: Default::default(),
             settings_open: false,
             settings_section: 0,
             screenshot,
@@ -293,6 +312,7 @@ impl App {
             menu_cmds: Vec::new(),
             update: updater::UpdateState::default(),
             shot_menu: None,
+            home: home::HomeState::default(),
         }
     }
 
@@ -312,16 +332,26 @@ impl App {
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
         // The tabs open at the last quit come back (not in a screenshot); without any, the
-        // repository given, the current folder or the last one opened, as before tabs.
+        // repository given or the current folder, else the home page (the sample project in a
+        // screenshot, unless FOURCHETTE_HOME=1).
         if app.screenshot.is_some() || !app.restore_tabs(explicit.clone()) {
-            let candidate = explicit.or_else(|| if app.screenshot.is_none() { app.library.recent().first().map(|e| e.path.clone()) } else { None });
-            match candidate.map(|p| Repo::open(&p)) {
+            let home = app.screenshot.is_none() || std::env::var("FOURCHETTE_HOME").is_ok();
+            match explicit.map(|p| Repo::open(&p)) {
                 Some(Ok(r)) => app.set_repo(r),
                 Some(Err(e)) => {
-                    app.tab_mut().load_demo();
+                    app.tab_mut().home = true;
                     app.notify(e, true);
                 }
+                None if home => app.tab_mut().home = true,
                 None => app.tab_mut().load_demo(),
+            }
+        }
+        // FOURCHETTE_HOME=1 shows the home page with invented repositories, never the person's;
+        // FOURCHETTE_HOME=<text> with that search typed.
+        if let (Ok(v), Some(_)) = (std::env::var("FOURCHETTE_HOME"), &app.screenshot) {
+            app.home.sample(&mut app.library);
+            if v != "1" {
+                app.home.query = v;
             }
         }
         // FOURCHETTE_FILES=tree|list shows the local changes (selected) as a tree or a list for a screenshot without saving it.
@@ -401,8 +431,12 @@ impl App {
         if let Ok(q) = std::env::var("FOURCHETTE_PALETTE") {
             app.palette = Some(Palette { query: q, sel: 0, checkout_only: false });
         }
-        if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
+        // FOURCHETTE_SWITCHER=1|fetching|fetched: the switcher, on a sample list in a screenshot.
+        if let Ok(v) = std::env::var("FOURCHETTE_SWITCHER") {
             app.switcher = Some(repos::Switcher::default());
+            if app.screenshot.is_some() {
+                app.switcher_sample(&v);
+            }
         }
         let t = app.tab_mut();
         if std::env::var("FOURCHETTE_BOARD_LIST").is_ok() {
@@ -574,9 +608,21 @@ impl App {
                 Cmd::Open(p) => self.open_path(p, false),
                 Cmd::OpenTab(p) => self.open_path(p, true),
                 Cmd::NewTab => {
-                    let open = self.switcher.as_ref().is_some_and(|s| s.new_tab);
-                    self.switcher = if open { None } else { Some(repos::Switcher { new_tab: true, ..Default::default() }) };
+                    self.switcher = None;
+                    self.tabs.push(Tab::home());
+                    self.activate(self.tabs.len() - 1);
                 }
+                Cmd::Home => self.show_home(),
+                Cmd::HomeKeep { name, paths } => {
+                    self.library.keep_group(&paths, &name);
+                    self.library.save();
+                    self.notify(format!("{} repositories moved to the group “{name}”", paths.len()), false);
+                }
+                Cmd::HomeDismiss(key) => {
+                    self.library.dismiss(&key);
+                    self.library.save();
+                }
+                Cmd::HomeSample => self.tab_mut().load_demo(),
                 Cmd::SelectTab(i) => self.activate(i),
                 Cmd::CloseTab(i) => self.close_tab(i),
                 Cmd::ShowTab { next } => self.show_next_tab(next),
@@ -646,6 +692,7 @@ impl App {
                     self.library.save();
                 }
                 Cmd::ScanFolder => self.scan_folder(),
+                Cmd::FetchAllRepos => self.fetch_all_repos(ctx),
                 Cmd::Reveal(p) => {
                     let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
                 }
@@ -655,6 +702,8 @@ impl App {
                 Cmd::OpenUrl(u) => ctx.open_url(egui::OpenUrl::new_tab(u)),
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
+                // The home page has no board.
+                Cmd::Board if self.tab().home => {}
                 Cmd::Board => self.board_toggle(),
                 Cmd::IssueDetail(id) => {
                     if !self.tab().board.open {
@@ -736,7 +785,15 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
         "tag" => Dialog::NewRef { at: "ca2a04c".into(), label: "commit ca2a04c".into(), name: String::new(), checkout: false, tag: true },
         "delete-branch" => {
             let name = wt.as_ref().and_then(|w| w.branch.clone()).unwrap_or_else(|| "feature/search".into());
-            Dialog::DeleteBranch { name, merged: false, force: false, worktree: wt, dirty: true, also_worktree: true }
+            let local = crate::delete::Local { name: name.clone(), merged: false, force: false, worktree: wt, dirty: true, also_worktree: true };
+            let mut remote = crate::delete::Remote::of(&format!("origin/{name}"));
+            if let Some(r) = remote.as_mut() {
+                r.open_pull = Some("#52 Search across branches".into());
+            }
+            let both = std::env::var("FOURCHETTE_DELETE").ok();
+            let mut d = crate::delete::Delete::new(Some(local), remote, true, both.is_some());
+            d.confirm = both.as_deref() == Some("confirm");
+            Dialog::DeleteBranch(d)
         }
         "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
         "abort" => Dialog::Abort { op: std::env::var("FOURCHETTE_OPERATION").map(|v| crate::operation::sample(&v).op).unwrap_or_else(|_| "merge".into()) },
