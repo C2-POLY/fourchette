@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// One repository: what the REST API says of it. The board, the pull requests and the history
-/// come with their own issues (#174, #176, #177).
+/// One repository: what the REST API says of it, and the way to its project board.
 struct RepoDetailView: View {
     let repo: Repo
     @Environment(\.openURL) private var openURL
@@ -18,6 +17,11 @@ struct RepoDetailView: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+            Section {
+                NavigationLink(value: Route.board) {
+                    Label("Project", systemImage: "rectangle.split.3x1")
+                }
             }
             Section {
                 LabeledContent("Default branch", value: repo.defaultBranch)
