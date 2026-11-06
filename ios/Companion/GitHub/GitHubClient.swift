@@ -101,8 +101,27 @@ struct GitHubClient: Sendable {
         return nil
     }
 
+    /// A GraphQL query: its `data`, or the first error GitHub gives.
+    func graphql(_ query: String, _ variables: [String: Any] = [:]) async throws -> [String: Any] {
+        var request = URLRequest(url: URL(string: "https://api.github.com/graphql")!)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
+        let (data, _) = try await send(request)
+        let json = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        if let errors = json["errors"] as? [[String: Any]], let first = errors.first {
+            let message = first["message"] as? String ?? "GitHub refused the query."
+            let scope = first["type"] as? String == "INSUFFICIENT_SCOPES" || message.contains("scope")
+            throw Failure.status(200, scope ? "the sign-in lacks a permission. Sign out, then sign in again." : message)
+        }
+        return json["data"] as? [String: Any] ?? [:]
+    }
+
     private func get(_ url: URL) async throws -> (Data, HTTPURLResponse) {
-        var request = URLRequest(url: url)
+        try await send(URLRequest(url: url))
+    }
+
+    private func send(_ base: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        var request = base
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
