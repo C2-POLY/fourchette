@@ -60,6 +60,7 @@ impl App {
             }
             v.push(item("Commands", "Fetch", "get the latest from the remote", Cmd::Fetch { all: false, quiet: false }));
             v.push(item("Commands", "Fetch all remotes", "", Cmd::Fetch { all: true, quiet: false }));
+            v.push(item("Commands", "Fetch all repositories", "every repository of the list (⌘O)", Cmd::FetchAllRepos));
             let pull = if self.library.settings.pull_rebase { "rebase onto the upstream branch" } else { "merge the upstream branch" };
             v.push(item("Commands", "Pull", pull, Cmd::Pull));
             v.push(item("Commands", "Pull…", "choose the remote branch, merge or rebase", Cmd::PullDialog));

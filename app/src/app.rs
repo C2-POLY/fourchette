@@ -164,6 +164,8 @@ pub enum Cmd {
     RepoGroup(PathBuf, Option<String>),
     RepoForget(PathBuf),
     ScanFolder,
+    /// "Fetch all" of the switcher and the palette: every repository of the list.
+    FetchAllRepos,
     Reveal(PathBuf),
     /// Repository > Open in Terminal (⌃⌘T).
     OpenTerminal(PathBuf),
@@ -246,6 +248,8 @@ pub struct App {
     toast: Option<tab::Notice>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
+    /// What the switcher shows of each repository: changes, ahead/behind, pull requests, Fetch all.
+    states: crate::repo_state::States,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -280,6 +284,7 @@ impl App {
             toast: None,
             library,
             switcher: None,
+            states: Default::default(),
             settings_open: false,
             settings_section: 0,
             screenshot,
@@ -394,8 +399,12 @@ impl App {
         if let Ok(q) = std::env::var("FOURCHETTE_PALETTE") {
             app.palette = Some(Palette { query: q, sel: 0, checkout_only: false });
         }
-        if std::env::var("FOURCHETTE_SWITCHER").is_ok() {
+        // FOURCHETTE_SWITCHER=1|fetching|fetched: the switcher, on a sample list in a screenshot.
+        if let Ok(v) = std::env::var("FOURCHETTE_SWITCHER") {
             app.switcher = Some(repos::Switcher::default());
+            if app.screenshot.is_some() {
+                app.switcher_sample(&v);
+            }
         }
         let t = app.tab_mut();
         if std::env::var("FOURCHETTE_BOARD_LIST").is_ok() {
@@ -639,6 +648,7 @@ impl App {
                     self.library.save();
                 }
                 Cmd::ScanFolder => self.scan_folder(),
+                Cmd::FetchAllRepos => self.fetch_all_repos(ctx),
                 Cmd::Reveal(p) => {
                     let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
                 }

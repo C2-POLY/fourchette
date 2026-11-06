@@ -227,6 +227,12 @@ impl Library {
         Library { entries, appearance, settings, tabs, active_tab, file: Some(file.to_path_buf()) }
     }
 
+    /// The same settings with `entries` instead of the person's list, saved (if ever) to a
+    /// temporary file rather than repos.json: screenshots show it.
+    pub fn sample(&self, entries: Vec<Entry>) -> Library {
+        Library { entries, appearance: self.appearance, settings: self.settings, tabs: Vec::new(), active_tab: 0, file: Some(std::env::temp_dir().join("fourchette-sample-repos.json")) }
+    }
+
     pub fn save(&self) {
         let Some(file) = self.file.clone().or_else(|| support_dir().map(|d| d.join("repos.json"))) else { return };
         let repos: Vec<Value> = self
