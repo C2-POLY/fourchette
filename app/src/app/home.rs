@@ -339,7 +339,7 @@ fn card(ui: &mut Ui, r: Rect, e: &Entry, marks: &Marks, cmds: &mut Vec<Cmd>) {
         if ui.button("Open in a new tab").clicked() {
             cmds.push(Cmd::OpenTab(e.path.clone()));
         }
-        if ui.button(if e.favorite { "☆  Remove from favorites" } else { "★  Add to favorites" }).clicked() {
+        if ui.button(if e.favorite { "Remove from favorites" } else { "Add to favorites" }).clicked() {
             cmds.push(Cmd::RepoFavorite(e.path.clone()));
         }
         if e.group.is_some() && ui.button("Back to its folder's group").clicked() {

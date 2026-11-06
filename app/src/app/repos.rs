@@ -324,7 +324,7 @@ impl App {
                             resp.on_hover_text(e.path.display().to_string()).context_menu(|ui| {
                                 crate::ui::menu_rows(ui);
                                 ui.set_min_width(220.0);
-                                if ui.button(if e.favorite { "☆  Remove from favorites" } else { "★  Add to favorites" }).clicked() {
+                                if ui.button(if e.favorite { "Remove from favorites" } else { "Add to favorites" }).clicked() {
                                     cmds.push(Cmd::RepoFavorite(e.path.clone()));
                                 }
                                 ui.menu_button("Move to group", |ui| {

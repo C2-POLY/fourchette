@@ -351,16 +351,16 @@ fn row(ui: &mut egui::Ui, w: &Worktree, v: &Verdict, facts: Option<&cockpit::Fac
                     ui.label(RichText::new("Folder gone").color(k.deleted));
                     return;
                 }
-                if ui.small_button("Copy path").clicked() {
+                if crate::ui::icon_button(ui, "copy", "Copy the path").clicked() {
                     cmds.push(Cmd::Copy(w.path.display().to_string()));
                 }
-                if ui.small_button("Terminal").on_hover_text("Open a terminal in this folder").clicked() {
+                if crate::ui::icon_button(ui, "terminal", "Open a terminal in this folder").clicked() {
                     cmds.push(Cmd::OpenTerminal(w.path.clone()));
                 }
-                if ui.small_button("Finder").on_hover_text("Show this folder in the Finder").clicked() {
+                if crate::ui::icon_button(ui, "folder", "Show this folder in the Finder").clicked() {
                     cmds.push(Cmd::Reveal(w.path.clone()));
                 }
-                if ui.small_button("Open").on_hover_text("Open as a repository, in a new tab").clicked() {
+                if crate::ui::icon_button(ui, "open", "Open as a repository, in a new tab").clicked() {
                     cmds.push(Cmd::OpenTab(w.path.clone()));
                 }
             });

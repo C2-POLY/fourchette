@@ -904,7 +904,7 @@ fn empty_state(ui: &mut Ui, title: &str, detail: &str, action: Option<&str>) -> 
         ui.add(egui::Label::new(RichText::new(detail).color(theme::c().dim)).wrap());
         if let Some(a) = action {
             ui.add_space(12.0);
-            clicked = ui.button(a).clicked();
+            clicked = crate::modal::button(ui, a, crate::modal::Kind::Plain, true).clicked();
         }
     });
     clicked
@@ -1266,7 +1266,7 @@ impl Tab {
                                 if done && items.len() > DONE_LIMIT {
                                     let label = if limit == usize::MAX { "Show the latest 20".to_string() } else { format!("Show all {}", items.len()) };
                                     ui.vertical_centered(|ui| {
-                                        if ui.button(RichText::new(label).size(theme::FS_SECONDARY)).clicked() {
+                                        if crate::modal::button(ui, &label, crate::modal::Kind::Plain, true).clicked() {
                                             flip = Some(status.clone());
                                         }
                                     });
@@ -1552,17 +1552,17 @@ impl Tab {
             });
             ui.add_space(10.0);
             ui.horizontal_wrapped(|ui| {
-                if !it.url.is_empty() && ui.button(RichText::new("Open on GitHub").strong()).clicked() {
+                if !it.url.is_empty() && crate::modal::button(ui, "Open on GitHub", crate::modal::Kind::Primary, true).clicked() {
                     cmds.push(Cmd::OpenUrl(it.url.clone()));
                 }
                 if let Some(n) = it.number {
                     if let Some(r) = self.refs.iter().find(|r| r.kind == RefKind::Local && branch_has_number(&r.name, n)) {
-                        if ui.button("Show in history").on_hover_text(format!("Select the tip of {} in All Commits", r.name)).clicked() {
+                        if crate::modal::button(ui, "Show in history", crate::modal::Kind::Plain, true).on_hover_text(format!("Select the tip of {} in All Commits", r.name)).clicked() {
                             cmds.push(Cmd::SelectHash(r.target.clone()));
                         }
                     }
                 }
-                if it.kind != Kind::PullRequest && ui.button("Create a branch…").on_hover_text(format!("Branch “{}” at the current commit", github::branch_name(it))).clicked() {
+                if it.kind != Kind::PullRequest && crate::modal::button(ui, "Create a branch…", crate::modal::Kind::Plain, true).on_hover_text(format!("Branch “{}” at the current commit", github::branch_name(it))).clicked() {
                     cmds.push(Cmd::Dialog(Dialog::NewRef { at: "HEAD".into(), label: "the current commit".into(), name: github::branch_name(it), checkout: true, tag: false }));
                 }
             });

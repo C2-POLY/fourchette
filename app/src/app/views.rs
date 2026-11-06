@@ -104,14 +104,14 @@ impl Tab {
             egui::Popup::menu(&ai_btn).show(|ui| {
                 ui.set_min_width(260.0);
                 ui.label(RichText::new("Claude · your subscription").size(theme::FS_SMALL).color(theme::c().faint));
-                if ui.button("🧹  Clean up branches…").clicked() {
+                if ui.button("Clean up branches…").clicked() {
                     cmds.push(Cmd::AiCleanup);
                 }
-                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new("✏  Suggest a commit message")).clicked() {
+                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new("Suggest a commit message")).clicked() {
                     cmds.push(Cmd::Select(Sel::Wip));
                     cmds.push(Cmd::AiCommitMessage);
                 }
-                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new("🔍  Review the staged changes…")).on_disabled_hover_text("Stage some changes first").clicked() {
+                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new("Review the staged changes…")).on_disabled_hover_text("Stage some changes first").clicked() {
                     cmds.push(Cmd::Select(Sel::Wip));
                     cmds.push(Cmd::AiReview);
                 }
@@ -168,15 +168,23 @@ impl Tab {
     // ---------------------------------------------------------------- sidebar
 
     pub(super) fn section(&mut self, ui: &mut Ui, title: &str, count: usize, icon: Option<fn(&egui::Painter, Pos2, Color32)>) -> bool {
+        self.section_with(ui, title, count, icon, &[]).0
+    }
+
+    /// A section with icon buttons (`(icon, tooltip)`) in its header: whether it is open, and
+    /// the index of the button clicked.
+    pub(super) fn section_with(&mut self, ui: &mut Ui, title: &str, count: usize, icon: Option<fn(&egui::Painter, Pos2, Color32)>, actions: &[(&str, &str)]) -> (bool, Option<usize>) {
         let open = !self.collapsed.contains(title);
-        if section_header(ui, title, count, open, icon).clicked() {
+        let header = section_header(ui, title, count, open, icon);
+        let action = crate::ui::header_actions(ui, header.rect, count, actions);
+        if header.clicked() && action.is_none() {
             if open {
                 self.collapsed.insert(title.to_string());
             } else {
                 self.collapsed.remove(title);
             }
         }
-        open
+        (open, action)
     }
 
     /// A folder row of a branch list, folded or not as `self.collapsed` remembers; a filter opens it.
@@ -344,7 +352,18 @@ impl Tab {
             // Worktrees (the original's RepositoryWorktrees / WorktreeSidebarItem). Shown whenever
             // there are linked worktrees, since Claude Code creates many of them.
             let linked: Vec<crate::worktree::Worktree> = self.worktrees.iter().filter(|w| !w.is_main && keep(&format!("{} {}", w.name(), w.branch.clone().unwrap_or_default()))).cloned().collect();
-            if !linked.is_empty() && self.section(ui, "Worktrees", linked.len(), None) {
+            let missing = linked.iter().any(|w| w.missing);
+            let mut actions = vec![("cockpit", "Open the worktree cockpit: every worktree with its changes, issue and pull request, and Tidy up")];
+            if missing {
+                actions.push(("trash", "Clean up missing worktrees"));
+            }
+            let (open, action) = if linked.is_empty() { (false, None) } else { self.section_with(ui, "Worktrees", linked.len(), None, &actions) };
+            match action {
+                Some(0) => cmds.push(Cmd::Cockpit),
+                Some(_) => cmds.push(Cmd::PruneWorktrees),
+                None => {}
+            }
+            if open {
                 for w in &linked {
                     let label = match (&w.branch, w.missing) {
                         (_, true) => format!("{} (folder gone)", w.name()),
@@ -376,14 +395,6 @@ impl Tab {
                         }
                     });
                 }
-                ui.horizontal(|ui| {
-                    if ui.small_button("Open the cockpit").on_hover_text("Every worktree with its changes, issue and pull request, and Tidy up").clicked() {
-                        cmds.push(Cmd::Cockpit);
-                    }
-                    if linked.iter().any(|w| w.missing) && ui.small_button("Clean up missing worktrees").clicked() {
-                        cmds.push(Cmd::PruneWorktrees);
-                    }
-                });
             }
 
             let stashes = self.stashes.clone();
@@ -750,7 +761,7 @@ impl Tab {
             ui.label(RichText::new("SHA").size(theme::FS_SECONDARY).color(theme::c().faint));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(short(&d.hash)).monospace().color(theme::c().text));
-                if ui.small_button("Copy").clicked() {
+                if crate::ui::icon_button(ui, "copy", "Copy the SHA").clicked() {
                     cmds.push(Cmd::Copy(d.hash.clone()));
                 }
             });
