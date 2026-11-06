@@ -1790,9 +1790,15 @@ impl App {
             return;
         }
         // ⌘B goes to the Project view and back to the history.
-        let (board_key, escape) = board::board_keys(ctx);
-        if board_key {
+        let keys = board::board_keys(ctx);
+        let escape = keys.escape;
+        if keys.toggle {
             cmds.push(Cmd::Board);
+            return;
+        }
+        // ⌃⌘B shows the board alone in the window, or brings the rest back (#153).
+        if keys.full {
+            cmds.push(Cmd::BoardFull);
             return;
         }
         // ⌘J hides the details panel or brings it back where it was.
@@ -1806,8 +1812,9 @@ impl App {
         let t = self.tab_mut();
         if t.board.open {
             // Esc closes the ticket's detail; the history's keys wait.
-            if escape {
-                t.board_escape(ctx.input(|i| i.time));
+            // In the full board, Esc with nothing left to close leaves it.
+            if escape && !t.board_escape(ctx.input(|i| i.time)) {
+                self.board_full_escape();
             }
             return;
         }
@@ -1852,6 +1859,8 @@ impl App {
         let t = self.tab();
         menu::State {
             tabs: self.tabs.len(),
+            home: self.tab().home,
+            full_board: self.full.on && !self.tab().home && self.tab().board.open,
             repo: t.repo.is_some(),
             busy: t.busy.is_some(),
             modal: self.modal(),
@@ -1883,6 +1892,7 @@ impl App {
             Id::Undo => Cmd::Undo,
             Id::ShowChanges => Cmd::Select(Sel::Wip),
             Id::ToggleDetails => Cmd::ToggleDetails,
+            Id::FullBoard => Cmd::BoardFull,
             Id::DetailsRight => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Right)),
             Id::DetailsBottom => Cmd::SetDetails(DetailsLayout::shown(DetailsPlace::Bottom)),
             Id::ShowHead => Cmd::SelectHash(self.tab().head.clone()),
@@ -2014,22 +2024,34 @@ impl eframe::App for App {
         self.was_focused = focused;
         let mut cmds = std::mem::take(&mut self.menu_cmds);
 
+        // The full board (#153): one thin bar, then the board alone.
+        let full = self.board_full_shown();
+        let bar_h = if full { board_full::BAR_H } else { crate::titlebar::TOOLBAR_H };
+        crate::titlebar::set_band(bar_h);
         crate::titlebar::place_buttons();
         egui::TopBottomPanel::top("toolbar")
-            .exact_height(crate::titlebar::TOOLBAR_H)
+            .exact_height(bar_h)
             .frame(egui::Frame::new().fill(theme::c().sidebar))
             .show(ctx, |ui| {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
-                if self.tab().home {
+                if full {
+                    ui.push_id(key, |ui| self.board_full_bar(ui, &mut cmds));
+                } else if self.tab().home {
                     self.home_toolbar(ui, &mut cmds);
                 } else {
                     ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update));
                 }
             });
 
+        if full {
+            let t = &mut self.tabs[self.active];
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| ui.push_id(t.key, |ui| t.board_view(ui, true, &mut cmds)));
+            t.board_drawer(ctx, bar_h, &mut cmds);
+        }
+
         // The tabs, from two on (issue #59): with one, the window looks as before tabs.
-        if self.tabs.len() > 1 {
+        if !full && self.tabs.len() > 1 {
             egui::TopBottomPanel::top("tabs")
                 .exact_height(tabs::STRIP_H)
                 .show_separator_line(false)
@@ -2038,7 +2060,11 @@ impl eframe::App for App {
         }
 
         // The home page (issue #109) takes the window under the toolbar: no status bar, sidebar or details.
-        if self.tab().home {
+        if full {
+            let t = self.tab_mut();
+            t.issue_offer_ui(ctx, &mut cmds);
+            t.dialogs(ctx, &mut cmds);
+        } else if self.tab().home {
             self.home_page(ctx, &mut cmds);
         } else {
             egui::TopBottomPanel::bottom("status")
@@ -2140,7 +2166,7 @@ impl eframe::App for App {
                 keep_panel_edges_free(ui);
                 t.view_tabs(ui, &mut cmds);
                 if board_open {
-                    t.board_view(ui, &mut cmds);
+                    t.board_view(ui, false, &mut cmds);
                     return;
                 }
                 if t.is_demo() {

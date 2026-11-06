@@ -26,6 +26,7 @@ pub enum Id {
     Paste,
     SelectAll,
     ShowChanges,
+    FullBoard,
     ToggleDetails,
     DetailsRight,
     DetailsBottom,
@@ -54,7 +55,7 @@ pub enum Id {
 }
 
 impl Id {
-    pub const ALL: [Id; 38] = [
+    pub const ALL: [Id; 39] = [
         Id::About,
         Id::Settings,
         Id::OpenRepository,
@@ -68,6 +69,7 @@ impl Id {
         Id::Paste,
         Id::SelectAll,
         Id::ShowChanges,
+        Id::FullBoard,
         Id::ToggleDetails,
         Id::DetailsRight,
         Id::DetailsBottom,
@@ -272,6 +274,7 @@ pub fn bar() -> Vec<Menu> {
             title: "View",
             entries: vec![
                 app("Show Local Changes", Id::ShowChanges, None),
+                app("Full Board", Id::FullBoard, Some(cmd('b').ctrl())),
                 Separator,
                 app("Show Details Panel", Id::ToggleDetails, Some(cmd('j'))),
                 app("Details on the Right", Id::DetailsRight, None),
@@ -350,6 +353,10 @@ pub struct State {
     pub details: DetailsLayout,
     /// How many tabs are open.
     pub tabs: usize,
+    /// The active tab shows the home page, which has no board.
+    pub home: bool,
+    /// The board is shown alone in the window (#153).
+    pub full_board: bool,
 }
 
 pub fn enabled(id: Id, s: &State) -> bool {
@@ -366,6 +373,7 @@ pub fn enabled(id: Id, s: &State) -> bool {
         Id::ShowChanges => free && s.changes,
         Id::ShowHead => free && s.head_shown,
         Id::Refresh => free && s.repo,
+        Id::FullBoard => overlay && !s.home,
         Id::Commit => git && s.can_commit,
         Id::Fetch | Id::FetchAll => git,
         Id::Pull => git && s.upstream,
@@ -384,6 +392,7 @@ pub fn enabled(id: Id, s: &State) -> bool {
 pub fn checked(id: Id, s: &State) -> bool {
     let d = s.details;
     match id {
+        Id::FullBoard => s.full_board,
         Id::ToggleDetails => !d.hidden,
         Id::DetailsRight => !d.hidden && d.place == DetailsPlace::Right,
         Id::DetailsBottom => !d.hidden && d.place == DetailsPlace::Bottom,
@@ -735,6 +744,7 @@ mod tests {
             ("Home", "⇧⌘O"),
             ("Command Palette…", "⌘P"),
             ("Show Details Panel", "⌘J"),
+            ("Full Board", "⌃⌘B"),
             // The original's New Tab and Close, and the keys of macOS tabs.
             ("New Tab", "⌘T"),
             ("Close Tab", "⌘W"),

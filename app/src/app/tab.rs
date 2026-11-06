@@ -730,6 +730,7 @@ impl Tab {
             | Cmd::ProjectReload
             | Cmd::ProjectPick(_)
             | Cmd::Board
+            | Cmd::BoardFull
             | Cmd::IssueDetail(_)
             | Cmd::NewTab
             | Cmd::OpenTab(_)
