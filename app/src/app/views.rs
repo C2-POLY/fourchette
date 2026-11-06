@@ -118,6 +118,10 @@ impl Tab {
                     cmds.push(Cmd::Select(Sel::Wip));
                     cmds.push(Cmd::AiCommitMessage);
                 }
+                if ui.add_enabled(!self.status.staged.is_empty(), egui::Button::new("🔍  Review the staged changes…")).on_disabled_hover_text("Stage some changes first").clicked() {
+                    cmds.push(Cmd::Select(Sel::Wip));
+                    cmds.push(Cmd::AiReview);
+                }
                 let sel_hash = match self.sel {
                     Sel::Commit(i) => self.commits.get(i).map(|c| c.hash.clone()),
                     _ => None,
@@ -882,6 +886,13 @@ impl Tab {
                 {
                     cmds.push(Cmd::AiCommitMessage);
                 }
+                if ui
+                    .add_enabled(!self.status.staged.is_empty(), egui::Button::new(RichText::new("Review").color(theme::c().accent_text)))
+                    .on_hover_text("Claude reviews your staged changes and points out problems, by file and line")
+                    .clicked()
+                {
+                    cmds.push(Cmd::AiReview);
+                }
             });
         });
         let resp = ui.add(egui::TextEdit::singleline(&mut self.summary).hint_text(faint_hint("Commit subject")).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 6)));
@@ -949,7 +960,7 @@ impl Tab {
             return;
         }
         if self.diff_split {
-            Self::diff_split_view(ui, &d.text);
+            Self::diff_split_view(ui, &d.text, d.goto, &d.scrolled);
             return;
         }
         let is_header = |l: &str| {
@@ -983,10 +994,12 @@ impl Tab {
         }
         let font = theme::mono();
         let h = 18.0;
+        // A review remark's line: the first row at or after it on the new side.
+        let target = d.goto.and_then(|g| nums.iter().position(|(_, new)| new.is_some_and(|n| n >= g)));
         let marks: Vec<(bool, bool)> = lines.iter().map(|l| (!is_header(l) && l.starts_with('-'), !is_header(l) && l.starts_with('+'))).collect();
         let (body, strip) = ruler_split(ui);
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
-        let out = ruler_jump(ui, egui::ScrollArea::both()).auto_shrink([false, false]).show_rows(&mut child, h, lines.len(), |ui, range| {
+        let out = goto_row(ruler_jump(ui, egui::ScrollArea::both()), target, &d.scrolled, h + ui.spacing().item_spacing.y).auto_shrink([false, false]).show_rows(&mut child, h, lines.len(), |ui, range| {
             for i in range {
                 let l = lines[i];
                 let w = (l.len() as f32 * 7.6 + 120.0).max(ui.available_width());
@@ -1004,6 +1017,9 @@ impl Tab {
                     (Color32::TRANSPARENT, theme::c().text)
                 };
                 p.rect_filled(rect, CornerRadius::ZERO, bg);
+                if target == Some(i) {
+                    goto_mark(p, rect);
+                }
                 let num = |v: Option<u32>| v.map(|x| x.to_string()).unwrap_or_default();
                 p.text(pos2(rect.left() + 40.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].0), FontId::monospace(theme::FS_SMALL), theme::c().faint);
                 p.text(pos2(rect.left() + 80.0, rect.center().y), Align2::RIGHT_CENTER, num(nums[i].1), FontId::monospace(theme::FS_SMALL), theme::c().faint);
@@ -1016,7 +1032,7 @@ impl Tab {
     /// The diff in two columns: the old file on the left, the new one on the right, each half of
     /// the visible width. One vertical scroll moves both, and a sideways scroll (trackpad or
     /// Shift+wheel) shifts the text of both halves together, so long lines can be read.
-    fn diff_split_view(ui: &mut Ui, text: &str) {
+    fn diff_split_view(ui: &mut Ui, text: &str, goto: Option<u32>, scrolled: &std::cell::Cell<bool>) {
         use crate::diff::{Cell, Full, Kind, Row};
         let rows = crate::diff::side_by_side(text);
         let k = theme::c();
@@ -1046,7 +1062,10 @@ impl Tab {
         let id = ui.id().with("diff_split_x");
         let off = ui.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0).clamp(0.0, max_off);
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
-        let out = ruler_jump(ui, egui::ScrollArea::vertical()).auto_shrink([false, false]).show_rows(&mut child, h, rows.len(), |ui, range| {
+        // A review remark's line: the first row whose new side is at or after it.
+        let target = goto.and_then(|g| rows.iter().position(|r| matches!(r, Row::Pair(_, Some(c)) if c.num >= g)));
+        let row_h = h + ui.spacing().item_spacing.y;
+        let out = goto_row(ruler_jump(ui, egui::ScrollArea::vertical()), target, scrolled, row_h).auto_shrink([false, false]).show_rows(&mut child, h, rows.len(), |ui, range| {
             for i in range {
                 let (rect, _) = ui.allocate_exact_size(vec2(half * 2.0 + 1.0, h), Sense::hover());
                 let p = ui.painter();
@@ -1068,6 +1087,9 @@ impl Tab {
                                 Some(Kind::Context) => (Color32::TRANSPARENT, k.text),
                             };
                             p.rect_filled(hr, CornerRadius::ZERO, bg);
+                            if target == Some(i) && hr == right {
+                                goto_mark(p, hr);
+                            }
                             if let Some(c) = cell {
                                 p.text(pos2(hr.left() + 40.0, hr.center().y), Align2::RIGHT_CENTER, c.num.to_string(), FontId::monospace(theme::FS_SMALL), k.faint);
                                 // The text is clipped to its half, right of the line number.
@@ -2063,6 +2085,7 @@ impl eframe::App for App {
         t.changelog_window(ctx);
         t.pr_draft_window(ctx);
         t.resolve_window(ctx);
+        t.review_window(ctx, &mut cmds);
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
@@ -2275,6 +2298,20 @@ fn dir_item(ui: &mut Ui, (name, path, count): (&str, &str, usize), depth: usize,
             cmds.push(Cmd::Copy(path.to_string()));
         }
     });
+}
+
+/// The diff's scroll area, moved once to a few rows above `target` (a review remark's line).
+fn goto_row(area: egui::ScrollArea, target: Option<usize>, scrolled: &std::cell::Cell<bool>, row_h: f32) -> egui::ScrollArea {
+    match target.filter(|_| !scrolled.replace(true)) {
+        Some(i) => area.vertical_scroll_offset(i.saturating_sub(6) as f32 * row_h),
+        None => area,
+    }
+}
+
+/// The highlight of a review remark's line: an accent wash and a bar on its left edge.
+fn goto_mark(p: &egui::Painter, rect: Rect) {
+    p.rect_filled(rect, CornerRadius::ZERO, theme::c().accent_soft);
+    p.rect_filled(Rect::from_min_size(rect.min, vec2(3.0, rect.height())), CornerRadius::ZERO, theme::c().accent);
 }
 
 /// Width of the change ruler, right of the diff's scroll bar.

@@ -8,6 +8,7 @@ mod operation;
 mod project;
 mod repos;
 mod resolve;
+mod review;
 mod settings;
 mod tab;
 mod tabs;
@@ -53,6 +54,10 @@ pub enum DiffReq {
 pub struct DiffView {
     pub title: String,
     pub text: String,
+    /// A line of the new side to scroll to and highlight (a review remark's).
+    pub goto: Option<u32>,
+    /// The scroll to `goto` is done, so the person can scroll away.
+    pub scrolled: std::cell::Cell<bool>,
 }
 
 pub enum Dialog {
@@ -111,6 +116,8 @@ pub enum Cmd {
     Discard { path: String, untracked: bool },
     Select(Sel),
     Diff(DiffReq),
+    /// A diff scrolled to a line of its new side, highlighted (a review remark's).
+    DiffAt(DiffReq, Option<u32>),
     CloseDiff,
     OpenDialog,
     Open(PathBuf),
@@ -152,6 +159,8 @@ pub enum Cmd {
     AiDraftPr,
     /// Claude proposes a resolution for these conflicted files (all of them when empty).
     AiResolve(Vec<String>),
+    /// Claude reviews the staged changes, in its window.
+    AiReview,
     /// Worktrees.
     AskDeleteBranch(String),
     DeleteBranch { name: String, force: bool, also_worktree: bool },
@@ -354,6 +363,11 @@ impl App {
         // FOURCHETTE_PR=1 shows the pull request window with the sample draft.
         if std::env::var("FOURCHETTE_PR").is_ok() {
             app.tab_mut().pr_draft_sample();
+        }
+        // FOURCHETTE_REVIEW=1 shows the review window with the sample remarks (`loading` while
+        // Claude reads, `diff` the diff a click on the first remark opens).
+        if let Ok(v) = std::env::var("FOURCHETTE_REVIEW") {
+            app.tab_mut().review_sample(v == "loading", v == "diff");
         }
         // FOURCHETTE_RESOLVE=1 shows the conflict window with the sample project's conflicts.
         if std::env::var("FOURCHETTE_RESOLVE").is_ok() {

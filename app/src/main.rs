@@ -21,6 +21,7 @@ mod pull;
 mod pulls;
 mod repo_state;
 mod resolve;
+mod review;
 mod settings;
 mod sidebar;
 mod theme;
