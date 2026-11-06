@@ -171,7 +171,7 @@ pub fn gradient(base: [u8; 3]) -> ([u8; 3], [u8; 3]) {
 
 // ---------------------------------------------------------------- icon
 
-fn png() -> &'static [u8] {
+pub fn png() -> &'static [u8] {
     include_bytes!("../assets/icon.png")
 }
 
@@ -347,6 +347,26 @@ pub fn png_bytes(icon: &egui::IconData) -> Option<Vec<u8>> {
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, image::ImageFormat::Png).ok()?;
     Some(out.into_inner())
+}
+
+/// Shows this PNG as the app's icon in the Dock and Cmd+Tab while it runs. egui's
+/// `ViewportCommand::Icon` can't: winit's `set_window_icon` does nothing on macOS. AppKit wants
+/// the main thread, where the frame is drawn; elsewhere nothing happens.
+#[cfg(target_os = "macos")]
+pub fn set_dock_icon(png: &[u8]) -> bool {
+    use objc2::ClassType;
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::{MainThreadMarker, NSData};
+    let Some(mtm) = MainThreadMarker::new() else { return false };
+    let Some(image) = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(png)) else { return false };
+    // SAFETY: an AppKit call on the main thread with a live image.
+    unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_dock_icon(_png: &[u8]) -> bool {
+    false
 }
 
 /// Gives the .app at `bundle` this icon in the Finder (and in the Dock while the app isn't

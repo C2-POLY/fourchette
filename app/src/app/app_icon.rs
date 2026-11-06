@@ -1,5 +1,6 @@
 //! The app icon in the colour chosen in Settings › Appearance (#159): drawn in a background thread
-//! (`icon::render`), then given to the Dock through the viewport and, from an .app bundle, to the
+//! (`icon::render`), then given to the Dock through AppKit (`icon::set_dock_icon`, on the main
+//! thread) and, from an .app bundle, to the
 //! Finder (`icon::set_finder_icon`). One drawing runs at a time; a colour asked meanwhile (the
 //! picker being dragged) is drawn next, and only the last one counts.
 use super::*;
@@ -14,7 +15,7 @@ pub(super) struct IconState {
     finder: bool,
     /// The colour being drawn, and where its result comes back.
     running: Option<IconColour>,
-    done: Option<Receiver<(IconColour, Option<egui::IconData>)>>,
+    done: Option<Receiver<(IconColour, Option<Vec<u8>>)>>,
     /// The colour the Dock shows now.
     shown: IconColour,
     /// The .app this process runs from; None under `cargo run` or in a screenshot.
@@ -44,18 +45,25 @@ impl IconState {
         let finder = std::mem::take(&mut self.finder).then(|| self.bundle.clone()).flatten();
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let data = icon::icon(colour);
+            // The PNG is made here, off the UI thread; Teal is the shipped one.
+            let png = match colour {
+                IconColour::Teal => Some(icon::png().to_vec()),
+                _ => icon::icon(colour).as_ref().and_then(icon::png_bytes),
+            };
             if let Some(bundle) = finder {
                 // Teal takes the custom icon away: the bundle's own icon.icns is the teal one.
-                let png = match colour {
-                    IconColour::Teal => None,
-                    _ => data.as_ref().and_then(icon::png_bytes),
-                };
-                if colour == IconColour::Teal || png.is_some() {
-                    icon::set_finder_icon(&bundle, png.as_deref());
+                match colour {
+                    IconColour::Teal => {
+                        icon::set_finder_icon(&bundle, None);
+                    }
+                    _ => {
+                        if let Some(png) = &png {
+                            icon::set_finder_icon(&bundle, Some(png));
+                        }
+                    }
                 }
             }
-            let _ = tx.send((colour, data));
+            let _ = tx.send((colour, png));
         });
         self.running = Some(colour);
         self.done = Some(rx);
@@ -65,9 +73,9 @@ impl IconState {
     pub fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.done else { return };
         match rx.try_recv() {
-            Ok((colour, data)) => {
-                if let Some(data) = data {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(std::sync::Arc::new(data))));
+            Ok((colour, png)) => {
+                if let Some(png) = png {
+                    icon::set_dock_icon(&png);
                 }
                 self.shown = colour;
                 self.done = None;
