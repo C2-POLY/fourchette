@@ -1,14 +1,14 @@
 # Fourchette
 
-A Git client for macOS in Rust and egui: the history graph, branches, worktrees, stashes, an undo for every local action, a Claude assistant, the repository switcher and the GitHub project of the open repository. It began as a rebuild of Fork with a look closer to GitKraken.
+A Git client for macOS in Rust and egui: the history graph, branches, worktrees, stashes, an undo for every local action, a Claude assistant, the repository switcher and the GitHub project of the open repository. It began as a rebuild of another Git client, with a look closer to GitKraken.
 
 ## Project state
 
 - `app/`: the application (the only code). `app/MECHANICS.md` and `app/mechanics.json` hold the values measured in the original app, with their evidence ids; keep them in sync when one of those values changes.
-- `investigation.cany/`, `capture/`, `craft.json`, `attachments/`: what the rebuild tool found in the original app. Read them, never edit them by hand.
+- `investigation.cany/`, `capture/`, `craft.json`, `attachments/`: what the rebuild tool found in the original app, kept on disk but ignored by Git. Read them, never edit them by hand. Never write the original app's name in the repository, commits, pull requests, issues or release notes: say "the original app".
 - `ios/`: the companion for iPhone and iPad (#73), a SwiftUI app apart from the Mac one (iOS can't run `git`, `gh` or `claude`): it reads GitHub through its API with a token from the device flow, kept in the keychain, and its only write is moving a card on a project board. `project.yml` is its XcodeGen project (`xcodegen` from `ios/` writes the ignored `Companion.xcodeproj`), `Config.xcconfig` holds the OAuth App's client id (public, no secret), and `-sample` at launch shows invented repositories (`-sample -open board|pulls|history` with the sample project open there). It shows each repository's project board (a card moves by its menu, a swipe on iPhone or a drag on iPad), its pull requests with their checks, and its branches with their history. Build and test with `xcodebuild -project Companion.xcodeproj -scheme Companion -destination 'platform=iOS Simulator,name=<device>' test`.
 - `site/`: the website, an Astro project published on GitHub Pages (<https://c2-poly.github.io/fourchette/>) by `.github/workflows/site.yml` on every push to `main` that touches it. English and French strings live in `site/src/i18n/`; its screenshots in `site/src/assets/shots/` come from the app's screenshot mode, in dark and light. Preview it with `npm install && npm run dev` from `site/`.
-- Git ignores the tool's working state (`feed.json`, `usage.json`, `build-activity.log`, `inbox/`, `pinned/`, `checks/`) and `app/target/`.
+- Git ignores the tool's findings and working state (`investigation.cany/`, `capture/`, `craft.json`, `attachments/`, `feed.json`, `usage.json`, `build-activity.log`, `inbox/`, `pinned/`, `checks/`) and `app/target/`.
 
 ## Stack
 

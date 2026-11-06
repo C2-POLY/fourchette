@@ -54,7 +54,7 @@ Règles de délégation :
 
 ## 1. Analyser
 
-Lis le code et les docs concernés (`CLAUDE.md`, `app/MECHANICS.md` si le sujet touche une valeur mesurée sur Fork, les fichiers de `app/src/` touchés). Reformule le sujet en deux ou trois phrases. Aucun code. Classe le sujet selon « Niveau du sujet » et annonce le niveau.
+Lis le code et les docs concernés (`CLAUDE.md`, `app/MECHANICS.md` si le sujet touche une valeur mesurée sur l'app d'origine, les fichiers de `app/src/` touchés). Reformule le sujet en deux ou trois phrases. Aucun code. Classe le sujet selon « Niveau du sujet » et annonce le niveau.
 
 ## 2. Chercher dans GitHub
 

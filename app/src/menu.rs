@@ -1,4 +1,4 @@
-//! The macOS menu bar, laid out like the original's MainMenu.nib (Fork, File, Edit, View,
+//! The macOS menu bar, laid out like the original's MainMenu.nib (app menu, File, Edit, View,
 //! Repository, Window, Help) with the actions Fourchette already has and the original's shortcuts.
 //!
 //! The model (`bar`, `enabled`, `checked`) is plain Rust and tested on any system. On macOS the

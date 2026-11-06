@@ -37,6 +37,8 @@ git log --format=%s "$RANGE" | awk '
     scope = ""
     if (match(head, /\([^)]*\)/)) scope = substr(head, RSTART + 1, RLENGTH - 2)
     if (scope == "site" || text == "") next
+    # A comparison with another app (", like Xyz") stays out of the notes.
+    sub(/, like [A-Z][A-Za-z]* \(#/, " (#", text)
     text = toupper(substr(text, 1, 1)) substr(text, 2)
     if (type == "feat") nw[++n] = text
     else if (type == "fix") fx[++f] = text

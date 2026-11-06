@@ -1,5 +1,5 @@
 //! A merge, rebase, cherry-pick or revert stopped on conflicts: what the banner says about it, and
-//! its Abort, Continue and Skip (Fork's `abortButton`, "All conflicts resolved"). Each of them
+//! its Abort, Continue and Skip (the original's `abortButton`, "All conflicts resolved"). Each of them
 //! first saves the stopped operation (`Paused`), so Undo (⌘Z) puts it back as it was: its files in
 //! the Git folder, the index with its conflicts, and the files as the person left them.
 use crate::git::{file_list, Repo};

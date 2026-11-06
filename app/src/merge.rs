@@ -46,7 +46,7 @@ pub fn parse_counts(out: &str) -> Option<(usize, usize)> {
 }
 
 impl Merge {
-    /// `branch` against the checked-out branch. Refused on a detached HEAD: Fork merges into a
+    /// `branch` against the checked-out branch. Refused on a detached HEAD: the original merges into a
     /// branch only.
     pub fn read(repo: &Repo, branch: &str, remote: bool) -> Result<Merge, String> {
         let head = repo.current_branch().ok_or_else(|| "Check out the branch to merge into first: HEAD is detached.".to_string())?;
