@@ -150,7 +150,7 @@ impl Tab {
             amend: false,
             search: String::new(),
             filter: String::new(),
-            collapsed: HashSet::new(),
+            collapsed: crate::sidebar::initial_collapsed(),
             collapsed_dirs: HashSet::new(),
             files_tree: false,
             busy: None,
