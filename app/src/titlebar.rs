@@ -20,6 +20,19 @@ pub fn inset(fullscreen: bool) -> f32 {
     }
 }
 
+/// The toolbar's empty background, the window's top edge: dragging it moves the window and a
+/// double-click zooms it. Call it first, so the buttons drawn over it keep their clicks.
+pub fn drag_area(ui: &mut egui::Ui) {
+    let bg = ui.interact(ui.max_rect(), ui.id().with("window_drag"), egui::Sense::click_and_drag());
+    if bg.drag_started_by(egui::PointerButton::Primary) {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
+    if bg.double_clicked() {
+        let zoomed = ui.input(|i| i.viewport().maximized.unwrap_or(false));
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!zoomed));
+    }
+}
+
 /// Where the buttons' container goes, in the window frame's coordinates (origin at the bottom
 /// left): the top `TOOLBAR_H` of a window `window_h` high.
 fn band(window_h: f64) -> (f64, f64) {

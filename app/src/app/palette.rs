@@ -135,6 +135,7 @@ impl App {
             // WorkspaceCommandProvider: repositories ("Open Recent Repository" in the nib), with
             // the whole repository list rather than only the recent ones.
             v.push(item("Repositories", "Switch repository…", "⌘O", Cmd::Switcher));
+            v.push(item("Repositories", "Home — every repository by organisation", "⇧⌘O", Cmd::Home));
             let mut repos: Vec<&crate::library::Entry> = self.library.entries.iter().collect();
             repos.sort_by_key(|e| (std::cmp::Reverse(e.favorite), std::cmp::Reverse(e.last_opened)));
             for e in repos {
