@@ -2,7 +2,6 @@
 //! entries that used to head the sidebar. The active one comes from the tab's state, so ⌘B, the
 //! palette and the "Uncommitted changes" row keep it in step without telling it anything.
 use super::*;
-use crate::ui::board_icon;
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, Rect, Sense, Stroke, StrokeKind, Ui};
 
 /// Height of the strip, in points.
@@ -41,18 +40,35 @@ pub(super) fn project_unavailable(loading: bool, failed: bool, board_has_project
     }
 }
 
-/// A pencil, for the local changes.
-fn pencil_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
-    let s = Stroke::new(1.4_f32, col);
-    p.line_segment([pos2(c.x - 5.0, c.y + 5.0), pos2(c.x + 4.5, c.y - 4.5)], Stroke::new(3.2_f32, col));
-    p.line_segment([pos2(c.x - 6.0, c.y + 6.0), pos2(c.x - 3.0, c.y + 6.0)], s);
+/// The stroke the three icons share.
+const ICON_STROKE: f32 = 1.3;
+
+/// A page with a folded corner and a dot, for the local changes.
+fn changes_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    let s = Stroke::new(ICON_STROKE, col);
+    let (l, r, t, b, fold) = (c.x - 5.0, c.x + 5.0, c.y - 7.0, c.y + 7.0, 3.5);
+    let outline = vec![pos2(l, t), pos2(r - fold, t), pos2(r, t + fold), pos2(r, b), pos2(l, b)];
+    p.add(egui::Shape::closed_line(outline, s));
+    p.add(egui::Shape::line(vec![pos2(r - fold, t), pos2(r - fold, t + fold), pos2(r, t + fold)], s));
+    p.circle_filled(pos2(c.x, c.y + 1.5), 1.9, col);
 }
 
-/// Three lines, for the list of commits.
-fn lines_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
-    for (i, w) in [8.0, 6.0, 8.0].iter().enumerate() {
-        let y = c.y - 4.5 + i as f32 * 4.5;
-        p.line_segment([pos2(c.x - w, y), pos2(c.x + w, y)], Stroke::new(1.5_f32, col));
+/// A commit on its line, for the history.
+fn history_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    let s = Stroke::new(ICON_STROKE, col);
+    let r = 3.2;
+    p.circle_stroke(c, r, s);
+    p.line_segment([pos2(c.x - 7.5, c.y), pos2(c.x - r, c.y)], s);
+    p.line_segment([pos2(c.x + r, c.y), pos2(c.x + 7.5, c.y)], s);
+}
+
+/// Three columns of a board, top-aligned and of different heights, for the project.
+fn project_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    let s = Stroke::new(ICON_STROKE, col);
+    let top = c.y - 6.5;
+    for (i, h) in [13.0, 8.0, 10.5].iter().enumerate() {
+        let r = Rect::from_min_size(pos2(c.x - 6.5 + i as f32 * 5.0, top), vec2(3.0, *h));
+        p.rect_stroke(r, CornerRadius::same(1), s, StrokeKind::Middle);
     }
 }
 
@@ -109,9 +125,9 @@ impl Tab {
             };
             let ic = pos2(seg.left() + 12.0 + 7.0, seg.center().y);
             match view {
-                View::Changes => pencil_icon(&p, ic, ink),
-                View::History => lines_icon(&p, ic, ink),
-                View::Project => board_icon(&p, ic, ink),
+                View::Changes => changes_icon(&p, ic, ink),
+                View::History => history_icon(&p, ic, ink),
+                View::Project => project_icon(&p, ic, ink),
             }
             let tx = seg.left() + 12.0 + 14.0 + 6.0;
             p.text(pos2(tx, seg.center().y), Align2::LEFT_CENTER, label, font.clone(), ink);
