@@ -664,6 +664,7 @@ mod tests {
                 "claude_model": "default",
                 "commit_language": "auto",
                 "update_channel": "prerelease",
+                "app_icon": "teal",
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");

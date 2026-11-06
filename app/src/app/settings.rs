@@ -5,6 +5,7 @@
 use super::*;
 use super::updater::{now_secs, CheckStatus, UpdateState};
 use crate::settings::{count_label, minutes_label, ClaudeModel, CodeFont, CommitLanguage, Settings, UiFont, UpdateChannel, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
+use crate::icon::IconColour;
 use crate::theme::{Appearance, Colors};
 use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
@@ -29,11 +30,17 @@ const LANG_W: f32 = 240.0;
 const CHANNEL_W: f32 = 220.0;
 const SEG_H: f32 = 28.0;
 const FONT_W: f32 = 200.0;
+/// The App icon row: ten preset swatches and the free colour's, round, `SWATCH` across.
+const SWATCH: f32 = 18.0;
+const SWATCH_GAP: f32 = 7.0;
+const SWATCHES_W: f32 = 11.0 * SWATCH + 10.0 * SWATCH_GAP;
 const RADIUS: u8 = crate::modal::RADIUS;
 
 /// What a section draws with: the choices on screen, and where changes go.
 pub(super) struct Pane<'a> {
     appearance: Appearance,
+    /// The icon colour the App icon row shows as chosen (FOURCHETTE_ICON's until one is picked).
+    icon: IconColour,
     settings: &'a mut Settings,
     cmds: &'a mut Vec<Cmd>,
     /// The update checks, for the Updates section.
@@ -274,6 +281,108 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
             s.code_font = f;
         }
     });
+    card(ui, |c| {
+        let ctrl = c.row("App icon", "In the Dock and the Finder", vec2(SWATCHES_W, SWATCH + 8.0), true);
+        if let Some(colour) = icon_swatches(c.ui, ctrl, pane.icon, pane.cmds) {
+            pane.settings.app_icon = colour;
+        }
+    });
+}
+
+fn rgb(c: [u8; 3]) -> Color32 {
+    Color32::from_rgb(c[0], c[1], c[2])
+}
+
+/// The ring around the chosen swatch, a hair away from it.
+fn swatch_ring(p: &Painter, centre: Pos2, colour: Color32) {
+    p.circle_stroke(centre, SWATCH * 0.5 + 3.0, Stroke::new(2.0_f32, colour));
+}
+
+/// A round swatch of `fill`, with a hairline so that light colours keep their edge.
+fn swatch(p: &Painter, centre: Pos2, fill: Color32) {
+    p.circle_filled(centre, SWATCH * 0.5, fill);
+    p.circle_stroke(centre, SWATCH * 0.5 - 0.5, Stroke::new(1.0_f32, Color32::from_black_alpha(40)));
+}
+
+/// The free colour's swatch: a colour wheel, with the colour chosen in its middle once there is one.
+fn wheel_swatch(p: &Painter, centre: Pos2, custom: Option<Color32>) {
+    let r = SWATCH * 0.5;
+    let n = 36;
+    let mut mesh = egui::Mesh::default();
+    mesh.colored_vertex(centre, Color32::WHITE);
+    for i in 0..=n {
+        let t = i as f32 / n as f32;
+        let a = t * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+        let colour: Color32 = egui::ecolor::Hsva::new(t, 0.85, 1.0, 1.0).into();
+        mesh.colored_vertex(centre + vec2(a.cos(), a.sin()) * r, colour);
+        if i > 0 {
+            mesh.add_triangle(0, i, i + 1);
+        }
+    }
+    p.add(egui::Shape::mesh(mesh));
+    if let Some(c) = custom {
+        p.circle_filled(centre, r * 0.55, c);
+        p.circle_stroke(centre, r * 0.55, Stroke::new(1.5_f32, Color32::WHITE));
+    }
+}
+
+/// The App icon row's swatches in `rect`: the presets, then the free colour, whose picker opens in
+/// a popup. While its colour is dragged only the Dock follows (`Cmd::PreviewIcon`); the colour is
+/// chosen, and saved, once the button is released. Returns the colour chosen this frame.
+fn icon_swatches(ui: &mut Ui, rect: Rect, chosen: IconColour, cmds: &mut Vec<Cmd>) -> Option<IconColour> {
+    let k = theme::c();
+    let p = ui.painter().clone();
+    let mut picked = None;
+    let centre = |i: usize| pos2(rect.left() + SWATCH * 0.5 + i as f32 * (SWATCH + SWATCH_GAP), rect.center().y);
+    for (i, preset) in IconColour::PRESETS.into_iter().enumerate() {
+        let c = centre(i);
+        let hit = Rect::from_center_size(c, vec2(SWATCH + 6.0, SWATCH + 6.0));
+        let resp = ui.interact(hit, ui.id().with(("icon_colour", i)), Sense::click()).on_hover_text(preset.label());
+        swatch(&p, c, rgb(preset.base()));
+        if preset == chosen {
+            swatch_ring(&p, c, k.strong);
+        } else if resp.hovered() {
+            swatch_ring(&p, c, k.border_strong);
+        }
+        if resp.clicked() && preset != chosen {
+            picked = Some(preset);
+        }
+    }
+
+    // The free colour.
+    let c = centre(IconColour::PRESETS.len());
+    let hit = Rect::from_center_size(c, vec2(SWATCH + 6.0, SWATCH + 6.0));
+    let resp = ui.interact(hit, ui.id().with("icon_colour_custom"), Sense::click()).on_hover_text("Another colour…");
+    let custom = matches!(chosen, IconColour::Custom(_));
+    wheel_swatch(&p, c, custom.then(|| rgb(chosen.base())));
+    if custom {
+        swatch_ring(&p, c, k.strong);
+    } else if resp.hovered() {
+        swatch_ring(&p, c, k.border_strong);
+    }
+    // The picker's colour, and whether it was dragged since the last chosen one.
+    let id = ui.id().with("icon_colour_picker");
+    egui::Popup::from_toggle_button_response(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).gap(6.0).show(|ui| {
+        let (mut colour, mut dirty) = ui.data_mut(|d| *d.get_temp_mut_or(id, (rgb(chosen.base()), false)));
+        ui.spacing_mut().slider_width = 220.0;
+        if egui::color_picker::color_picker_color32(ui, &mut colour, egui::color_picker::Alpha::Opaque) {
+            dirty = true;
+            cmds.push(Cmd::PreviewIcon(IconColour::Custom([colour.r(), colour.g(), colour.b()])));
+        }
+        let custom = IconColour::Custom([colour.r(), colour.g(), colour.b()]);
+        if dirty && !ui.input(|i| i.pointer.any_down()) {
+            dirty = false;
+            if custom != chosen {
+                picked = Some(custom);
+            }
+        }
+        ui.data_mut(|d| d.insert_temp(id, (colour, dirty)));
+    });
+    if !egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp)) {
+        // Closed: it opens next time on the colour chosen then.
+        ui.data_mut(|d| d.remove::<(Color32, bool)>(id));
+    }
+    picked
 }
 
 fn fetch(ui: &mut Ui, pane: &mut Pane<'_>) {
@@ -601,7 +710,8 @@ impl App {
             let mut bui = ui.new_child(UiBuilder::new().id_salt(("settings_body", sec.key)).max_rect(body).layout(Layout::top_down(Align::Min)));
             egui::ScrollArea::vertical().id_salt(("settings_scroll", sec.key)).auto_shrink([false, false]).show(&mut bui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let mut pane = Pane { appearance: self.library.appearance, settings: &mut s, cmds, update: &self.update };
+                let icon = if s.app_icon == self.library.settings.app_icon { self.icon.chosen(s.app_icon) } else { s.app_icon };
+                let mut pane = Pane { appearance: self.library.appearance, icon, settings: &mut s, cmds, update: &self.update };
                 (sec.body)(ui, &mut pane);
             });
             // Footer, as in every dialog: a hairline, a darker strip and the hint.
