@@ -265,7 +265,7 @@ fn tracking_badges(p: &Painter, t: &Tracking, fit: Fit, right: f32, y: f32) -> f
 /// A local branch: colour dot, name, its pull request badge, then ahead/behind and the tracked
 /// remote on the right. When the name would be cut short, the tracking shrinks first (`Fit`).
 #[allow(clippy::too_many_arguments)]
-pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> egui::Response {
+pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, indent: f32, t: &Tracking, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let p = ui.painter();
     if current {
@@ -283,7 +283,12 @@ pub fn local_branch_row(ui: &mut Ui, name: &str, color: Color32, current: bool, 
     let left = pr_after(p, pr, tracking_badges(p, t, fit, right, y), y);
     let tc = if current { theme::c().strong } else { theme::c().text };
     fit_text(p, pos2(name_left, y), Align2::LEFT_CENTER, name, theme::body(), tc, left - 8.0 - name_left);
-    resp
+    (resp, pr.map(|q| badge_rect(rect, left, q)))
+}
+
+/// The hit area of a row's pull request badge drawn at `left`: a little wider than the badge.
+fn badge_rect(row: Rect, left: f32, pr: &Pull) -> Rect {
+    Rect::from_min_max(pos2(left - 3.0, row.top()), pos2(left + pr_badge_width(pr) + 3.0, row.bottom()))
 }
 
 /// A copy of `p` that measures without drawing.
@@ -322,7 +327,7 @@ pub fn remote_row(ui: &mut Ui, name: &str, short: &str, open: bool) -> egui::Res
 
 /// A remote branch: dot, name, its pull request badge, then a link icon when a local branch
 /// tracks it, else "not local".
-pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, tracked: bool, pr: Option<&Pull>) -> egui::Response {
+pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, tracked: bool, pr: Option<&Pull>) -> (egui::Response, Option<Rect>) {
     let (rect, resp) = row_rect(ui, 0.0);
     let p = ui.painter();
     let c = theme::c();
@@ -342,7 +347,7 @@ pub fn remote_branch_row(ui: &mut Ui, name: &str, color: Color32, indent: f32, t
     let (dot, tc) = if tracked { (color, c.text) } else { (theme::tint(color, c.sidebar, 0.4), c.faint) };
     p.circle_filled(pos2(x + 3.0, y), 3.0, dot);
     fit_text(p, pos2(x + 15.0, y), Align2::LEFT_CENTER, name, theme::body(), tc, right - 8.0 - (x + 15.0));
-    resp
+    (resp, pr.map(|q| badge_rect(rect, right, q)))
 }
 
 #[cfg(test)]

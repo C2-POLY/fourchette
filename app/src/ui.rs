@@ -255,8 +255,13 @@ pub fn draw_ref_pill(p: &egui::Painter, rect: Rect, pill: &RefPill, lane: Color3
     let galley = fit_galley(p, pill.text(), theme::small(), text, rect.right() - PILL_PAD_R - bw - x);
     clip.galley(pos2(x, y - galley.size().y / 2.0), galley, text);
     if let Some(q) = pull {
-        pr_badge(&clip, rect.right() - PILL_PAD_R - pr_badge_width(q), y, q);
+        pr_badge(&clip, pill_badge_left(rect, q), y, q);
     }
+}
+
+/// Where the pull request badge of a pill in `rect` starts.
+pub fn pill_badge_left(rect: Rect, pull: &Pull) -> f32 {
+    rect.right() - PILL_PAD_R - pr_badge_width(pull)
 }
 
 /// The checked-out branch's check mark, smaller than `check_mark`.

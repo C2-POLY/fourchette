@@ -77,6 +77,8 @@ pub struct Tab {
     pub(super) issue: super::issue::IssueFlow,
     /// The repository's pull requests and their CI, shown as badges on the branches.
     pub(super) pulls: project::PullsState,
+    /// The card of a pull request's checks, opened from its badge.
+    pub(super) checks: super::checks::ChecksCard,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -105,6 +107,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.resolve_poll();
         t.project_poll();
         t.pulls_poll();
+        t.checks_poll(ctx);
         t.issue_poll(settings.issue_status_auto);
         if timers {
             t.timers(ctx, settings);
@@ -171,6 +174,7 @@ impl Tab {
             operation: None,
             issue: Default::default(),
             pulls: Default::default(),
+            checks: Default::default(),
         }
     }
 
@@ -515,6 +519,7 @@ impl Tab {
             }
             Cmd::Diff(req) => self.open_diff(req),
             Cmd::CloseDiff => self.diff = None,
+            Cmd::Checks(pull, anchor) => self.checks_open(pull, anchor),
             Cmd::Dialog(d) => self.dialog = Some(d),
             Cmd::Reload => {
                 self.reload();

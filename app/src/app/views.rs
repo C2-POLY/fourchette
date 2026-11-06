@@ -1,5 +1,6 @@
 //! What the window shows: toolbar, sidebar, history, details, diff, dialogs.
 use super::*;
+use super::checks;
 use crate::git::FileChange;
 use crate::library::{DetailsLayout, DetailsPlace};
 use crate::menu;
@@ -212,8 +213,9 @@ impl Tab {
             Some(p) => format!("{tip}\n{}", p.describe()),
             None => tip,
         };
-        let resp = sidebar::local_branch_row(ui, label, self.ref_color(&b.target), b.is_head, indent, &t, pr).on_hover_text(tip);
-        if resp.clicked() {
+        let (resp, badge) = sidebar::local_branch_row(ui, label, self.ref_color(&b.target), b.is_head, indent, &t, pr);
+        let resp = resp.on_hover_text(tip);
+        if !badge_clicked(ui, &resp, badge, pr, cmds) && resp.clicked() {
             cmds.push(Cmd::SelectHash(b.target.clone()));
         }
         if resp.double_clicked() {
@@ -230,8 +232,9 @@ impl Tab {
         if let Some(p) = pr {
             tip = format!("{tip}\n{}", p.describe());
         }
-        let resp = sidebar::remote_branch_row(ui, label, self.ref_color(&r.target), indent, tracked, pr).on_hover_text(tip);
-        if resp.clicked() {
+        let (resp, badge) = sidebar::remote_branch_row(ui, label, self.ref_color(&r.target), indent, tracked, pr);
+        let resp = resp.on_hover_text(tip);
+        if !badge_clicked(ui, &resp, badge, pr, cmds) && resp.clicked() {
             cmds.push(Cmd::SelectHash(r.target.clone()));
         }
         if resp.double_clicked() {
@@ -512,6 +515,8 @@ impl Tab {
                 let msg_right = rect.right() - date_w - author_w - 12.0;
                 // Branch / tag pills first (at most 40% of the message area), then the message.
                 let mut text_x = mx;
+                // The pull request badges of the pills, a click on one opens its checks.
+                let mut badges: Vec<(Rect, &crate::pulls::Pull)> = Vec::new();
                 if let Some(refs) = self.by_target.get(&c.hash) {
                     let all = ref_pills(refs);
                     let max_x = mx + ((msg_right - mx) * 0.4).max(0.0);
@@ -533,6 +538,14 @@ impl Tab {
                         let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min((max_x - x).max(24.0)), 18.0));
                         draw_ref_pill(&p, pr, pill, lane_col, bg, pull);
                         shown.push((pr, pill.main));
+                        if let Some(q) = pull {
+                            let hit = checks::badge_hit(crate::ui::pill_badge_left(pr, q), pr.top(), pr.bottom(), q);
+                            // A screenshot opens a card before its badge is drawn.
+                            if self.checks.open.as_ref().is_some_and(|o| o.anchor.is_none() && o.pull.number == q.number) {
+                                cmds.push(checks::open_cmd(hit, q));
+                            }
+                            badges.push((hit, q));
+                        }
                         x = pr.right() + theme::REF_GAP;
                     }
                     text_x = x + 2.0;
@@ -575,8 +588,12 @@ impl Tab {
                     }
                 }
 
+                let on_badge = if resp.hovered() { checks::badge_under(ui, &badges) } else { None };
                 if resp.clicked() {
-                    cmds.push(Cmd::Select(Sel::Commit(i)));
+                    match on_badge {
+                        Some((hit, q)) => cmds.push(checks::open_cmd(hit, q)),
+                        None => cmds.push(Cmd::Select(Sel::Commit(i))),
+                    }
                 }
                 let (hash, subject, branch) = (c.hash.clone(), c.subject.clone(), self.branch.clone());
                 resp.context_menu(|ui| commit_menu(ui, &hash, &subject, branch.as_deref(), cmds));
@@ -2057,6 +2074,7 @@ impl eframe::App for App {
 
         let t = self.tab_mut();
         t.issue_offer_ui(ctx, &mut cmds);
+        t.checks_ui(ctx, &mut cmds);
         t.dialogs(ctx, &mut cmds);
         t.cleanup_window(ctx, &mut cmds);
         t.changelog_window(ctx);
@@ -2363,4 +2381,17 @@ mod ruler_tests {
         assert_eq!(ruler_runs(&[n, d, d, a, n, a, b, b]), vec![(1, 2, d), (3, 1, a), (5, 1, a), (6, 2, b)]);
         assert!(ruler_runs(&[n, n]).is_empty());
     }
+}
+
+/// A sidebar row's pull request badge (`badge`, its hit area): a hand over it, and a click on it
+/// opens the checks of `pr`. True when the click was on it.
+fn badge_clicked(ui: &Ui, resp: &egui::Response, badge: Option<Rect>, pr: Option<&crate::pulls::Pull>, cmds: &mut Vec<Cmd>) -> bool {
+    let (Some(b), Some(q)) = (badge, pr) else { return false };
+    if !resp.hovered() || checks::badge_under(ui, &[(b, q)]).is_none() {
+        return false;
+    }
+    if resp.clicked() {
+        cmds.push(checks::open_cmd(b, q));
+    }
+    true
 }
