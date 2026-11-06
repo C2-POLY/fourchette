@@ -5,7 +5,8 @@ import SwiftUI
 struct RootView: View {
     @Environment(Session.self) private var session
     @State private var selection: Repo.ID?
-    @State private var path: [Route] = []
+    /// Routes, then the cards and pull requests pushed from them.
+    @State private var path = NavigationPath()
     /// The route to open once the selection has changed (a new selection empties the path).
     @State private var opening: Route?
 
@@ -37,7 +38,7 @@ struct RootView: View {
             await session.load()
         }
         .onChange(of: selection) {
-            path = opening.map { [$0] } ?? []
+            path = NavigationPath(opening.map { [$0] } ?? [])
             opening = nil
         }
     }
