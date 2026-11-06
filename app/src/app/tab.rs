@@ -67,6 +67,7 @@ pub struct Tab {
     pub(super) pr_draft: Option<super::pr_draft::PrDraftView>,
     pub(super) cockpit: Option<super::cockpit::CockpitView>,
     pub(super) resolve: Option<super::resolve::ResolveView>,
+    pub(super) review: Option<super::review::ReviewView>,
     pub(super) worktrees: Vec<crate::worktree::Worktree>,
     /// The remotes and their URLs, for the sidebar's Remote section.
     pub(super) remotes: Vec<(String, String)>,
@@ -109,6 +110,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.pr_draft_poll();
         t.cockpit_poll();
         t.resolve_poll();
+        t.review_poll();
         t.project_poll();
         t.pulls_poll();
         t.checks_poll(ctx);
@@ -173,6 +175,7 @@ impl Tab {
             pr_draft: None,
             cockpit: None,
             resolve: None,
+            review: None,
             worktrees: Vec::new(),
             remotes: Vec::new(),
             details_layout: DetailsLayout::default(),
@@ -601,6 +604,12 @@ impl Tab {
                 self.board.open = false;
             }
             Cmd::Diff(req) => self.open_diff(req),
+            Cmd::DiffAt(req, line) => {
+                self.open_diff(req);
+                if let Some(d) = &mut self.diff {
+                    d.goto = line;
+                }
+            }
             Cmd::CloseDiff => self.diff = None,
             Cmd::Checks(pull, anchor) => self.checks_open(pull, anchor),
             Cmd::Dialog(d) => self.dialog = Some(d),
@@ -655,6 +664,7 @@ impl Tab {
             Cmd::AiDraftPr => self.pr_draft_open(ctx),
             Cmd::Cockpit => self.cockpit_open(ctx),
             Cmd::AiResolve(paths) => self.resolve_open(paths, ctx),
+            Cmd::AiReview => self.review_open(ctx),
             Cmd::AskDeleteBranch { local, remote } => self.ask_delete_branch(local, remote),
             Cmd::DeleteBranch(d) => self.delete_branch(d, ctx),
             Cmd::AskDeleteWorktree(path) => {
@@ -960,14 +970,14 @@ impl Tab {
         self.open_diff(DiffReq::Commit { hash: String::new(), path: "src/lanes.rs".into() });
     }
 
-    fn open_diff(&mut self, req: DiffReq) {
+    pub(super) fn open_diff(&mut self, req: DiffReq) {
         let ctx = if self.diff_whole { git::WHOLE_CONTEXT } else { self.diff_context };
         let (title, text) = match (&self.repo, &req) {
             (None, DiffReq::Commit { path, .. }) | (None, DiffReq::Worktree { path, .. }) => (path.clone(), demo::diff(path, self.diff_whole)),
             (Some(r), DiffReq::Commit { hash, path }) => (path.clone(), r.diff_commit_file(hash, path, ctx)),
             (Some(r), DiffReq::Worktree { path, staged, untracked }) => (path.clone(), r.diff_worktree_file(path, *staged, *untracked, ctx)),
         };
-        self.diff = Some(DiffView { title, text });
+        self.diff = Some(DiffView { title, text, goto: None, scrolled: Default::default() });
         self.diff_req = Some(req);
     }
 

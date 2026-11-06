@@ -91,6 +91,7 @@ impl App {
             }
             if !t.status.staged.is_empty() {
                 v.push(item("Assistant", "Suggest a commit message with Claude", "AI · from staged changes", Cmd::AiCommitMessage));
+                v.push(item("Assistant", "Review the staged changes with Claude", "AI · remarks by file and line", Cmd::AiReview));
             }
             if let Sel::Commit(i) = t.sel {
                 if let Some(c) = t.commits.get(i) {
