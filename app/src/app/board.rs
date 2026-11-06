@@ -99,6 +99,10 @@ pub struct BoardState {
     pub open: bool,
     /// The list rather than the board (kept in memory only).
     pub list: bool,
+    /// The city rather than the board or the list (#190, kept in memory only).
+    pub city_on: bool,
+    /// Where the city view stands once moved; None keeps it fitted.
+    pub city: Option<super::city::CityView>,
     /// How sub-issues show (kept in memory, per repository's tab).
     pub tree: Tree,
     /// Parents whose sub-issues are folded away in the nested view.
@@ -1153,7 +1157,11 @@ impl Tab {
         let mut flip: Option<String> = None;
         let mut fold_flip: Option<String> = None;
         let h = ui.available_height() - 12.0;
-        if st.list {
+        if st.city_on {
+            // Every ticket the filters keep, sub-issues included: each is a plot of its own.
+            let shown: Vec<&Item> = board.items.iter().filter(visible).collect();
+            clicked = self.city_view(ui, &shown, detail.as_deref());
+        } else if st.list {
             let (id, fold) = list_view(ui, &board, &cols, &kids, &self.board.folded, show_repo, detail.as_deref(), cmds);
             if let Some(id) = id {
                 clicked = Some(id);
@@ -1470,8 +1478,10 @@ impl Tab {
         if let Some(i) = segmented(ui, &["This repo", "All"], self.board.all as usize) {
             self.board.all = i == 1;
         }
-        if let Some(i) = segmented(ui, &["Board", "List"], self.board.list as usize) {
+        let view = if self.board.city_on { 2 } else { self.board.list as usize };
+        if let Some(i) = segmented(ui, &["Board", "List", "City"], view) {
             self.board.list = i == 1;
+            self.board.city_on = i == 2;
         }
         let trees = Tree::ALL.map(Tree::label);
         if let Some(i) = segmented(ui, &trees, Tree::ALL.iter().position(|t| *t == self.board.tree).unwrap_or(2)) {
@@ -1485,7 +1495,7 @@ impl Tab {
 
     /// The width `bar_pickers` takes.
     fn bar_pickers_width(&self, ui: &Ui, board: Option<&Board>) -> f32 {
-        let sets: [&[&str]; 3] = [&["This repo", "All"], &["Board", "List"], &Tree::ALL.map(Tree::label)];
+        let sets: [&[&str]; 3] = [&["This repo", "All"], &["Board", "List", "City"], &Tree::ALL.map(Tree::label)];
         let mine = board.is_some_and(|b| !b.me.is_empty());
         12.0 + sets.iter().map(|o| segmented_width(ui, o)).sum::<f32>() + if mine { segmented_width(ui, &["Mine"]) + 8.0 } else { 0.0 } + 4.0 * ui.spacing().item_spacing.x
     }

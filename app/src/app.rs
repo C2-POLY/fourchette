@@ -1,6 +1,7 @@
 mod app_icon;
 mod assistant;
 mod board;
+mod city;
 mod board_full;
 mod issue;
 mod changelog;
@@ -476,6 +477,12 @@ impl App {
         if std::env::var("FOURCHETTE_BOARD_LIST").is_ok() {
             t.board.open = true;
             t.board.list = true;
+        }
+        // FOURCHETTE_BOARD_CITY=1: the board as a city (#190), `=all` with the whole project.
+        if let Ok(v) = std::env::var("FOURCHETTE_BOARD_CITY") {
+            t.board.open = true;
+            t.board.city_on = true;
+            t.board.all = v == "all";
         }
         // FOURCHETTE_BOARD_TREE=parents|all|nested: how the board shows sub-issues.
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD_TREE") {
