@@ -189,7 +189,7 @@ impl Tab {
                         ui.add(egui::Spinner::new().size(10.0));
                     }
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if !pull.url.is_empty() && ui.button("Open the pull request").clicked() {
+                        if !pull.url.is_empty() && crate::modal::button(ui, "Open the pull request", crate::modal::Kind::Plain, true).clicked() {
                             cmds.push(Cmd::OpenUrl(pull.url.clone()));
                         }
                     });

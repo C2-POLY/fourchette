@@ -722,8 +722,43 @@ pub fn tool_button(ui: &mut Ui, icon: &str, label: &str, badge: usize, active: b
     resp
 }
 
+/// A small square button with one of `glyph`'s icons and a tooltip: the row actions of the
+/// sidebar and the cockpit, where a text button would be too heavy.
+pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 22.0), Sense::click());
+    icon_button_at(ui, rect, resp, icon, tip)
+}
+
+fn icon_button_at(ui: &Ui, rect: Rect, resp: egui::Response, icon: &str, tip: &str) -> egui::Response {
+    let p = ui.painter();
+    let c = theme::c();
+    if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(5), c.hover);
+    }
+    glyph(p, rect.center(), icon, 15.0, 1.4, if resp.hovered() { c.strong } else { c.dim });
+    resp.on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Icon buttons on the right of a `section_header`, left of its count: the index of the one
+/// clicked. Drawn after the header, so a click on one doesn't fold the section.
+pub fn header_actions(ui: &mut Ui, header: Rect, count: usize, actions: &[(&str, &str)]) -> Option<usize> {
+    let count_w = ui.painter().layout_no_wrap(count.to_string(), theme::small(), theme::c().faint).size().x;
+    let mut right = header.right() - 14.0 - count_w;
+    let mut clicked = None;
+    for (i, (icon, tip)) in actions.iter().enumerate().rev() {
+        let rect = Rect::from_center_size(pos2(right - 12.0, header.center().y), vec2(24.0, 22.0));
+        let resp = ui.interact(rect, ui.id().with(("header-action", header.min.y as i32, i)), Sense::click());
+        if icon_button_at(ui, rect, resp, icon, tip).clicked() {
+            clicked = Some(i);
+        }
+        right -= 26.0;
+    }
+    clicked
+}
+
 /// One of the toolbar's outline icons ("fetch", "ai", "undo", "pull", "push", "branch", "board",
-/// "stash", "pop"), or the dialogs' ("tag", "trash", "folder", "warning"), centred on `c`, `size`
+/// "stash", "pop"), the dialogs' ("tag", "trash", "folder", "warning"), or the row actions'
+/// ("copy", "terminal", "open", "cockpit"), centred on `c`, `size`
 /// points wide, drawn with lines `width` thick.
 pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col: Color32) {
     let k = Ink { p, c, s: Stroke::new(width, col), scale: size / 24.0 };
@@ -820,6 +855,29 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
         // a folder with its tab
         "folder" => {
             k.closed([(3.0, 6.0), (3.0, 19.0), (21.0, 19.0), (21.0, 8.5), (12.0, 8.5), (10.0, 5.0), (4.0, 5.0)].iter().map(|&(x, y)| k.t(x, y)).collect());
+        }
+        // two overlapping pages
+        "copy" => {
+            k.p.rect_stroke(Rect::from_min_max(k.t(8.0, 8.0), k.t(20.0, 20.0)), CornerRadius::same(2), k.s, StrokeKind::Middle);
+            k.line(&[(16.0, 8.0), (16.0, 4.0), (4.0, 4.0), (4.0, 16.0), (8.0, 16.0)]);
+        }
+        // a window with a prompt and a cursor
+        "terminal" => {
+            k.p.rect_stroke(Rect::from_min_max(k.t(3.0, 4.0), k.t(21.0, 20.0)), CornerRadius::same(3), k.s, StrokeKind::Middle);
+            k.line(&[(7.0, 9.0), (10.5, 12.0), (7.0, 15.0)]);
+            k.line(&[(12.5, 15.5), (17.0, 15.5)]);
+        }
+        // an arrow leaving a box by its top right corner
+        "open" => {
+            k.line(&[(11.0, 4.0), (4.0, 4.0), (4.0, 20.0), (20.0, 20.0), (20.0, 13.0)]);
+            k.line(&[(11.0, 13.0), (20.0, 4.0)]);
+            k.line(&[(14.0, 4.0), (20.0, 4.0), (20.0, 10.0)]);
+        }
+        // four panes: every worktree at a glance
+        "cockpit" => {
+            for (x, y) in [(3.5, 3.5), (13.0, 3.5), (3.5, 13.0), (13.0, 13.0)] {
+                k.p.rect_stroke(Rect::from_min_max(k.t(x, y), k.t(x + 7.5, y + 7.5)), CornerRadius::same(2), k.s, StrokeKind::Middle);
+            }
         }
         // a triangle with an exclamation mark
         "warning" => {
