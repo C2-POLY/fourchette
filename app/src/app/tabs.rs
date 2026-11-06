@@ -86,7 +86,7 @@ impl App {
                         self.tabs.remove(self.active);
                         self.active = self.active.min(self.tabs.len() - 1);
                     } else {
-                        self.tab_mut().load_demo();
+                        self.tab_mut().home = true;
                     }
                 }
             }

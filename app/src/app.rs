@@ -2,6 +2,7 @@ mod assistant;
 mod board;
 mod issue;
 mod changelog;
+mod home;
 mod palette;
 mod pr_draft;
 mod operation;
@@ -186,7 +187,7 @@ pub enum Cmd {
     IssueMove,
     IssueDecline,
     IssueUndo,
-    /// Tabs: pick a repository for a new tab in the switcher (⌘T, "+").
+    /// Tabs: a new tab on the home page (⌘T, "+").
     NewTab,
     /// Open a repository in a new tab, or go to its tab when one shows it.
     OpenTab(PathBuf),
@@ -204,6 +205,14 @@ pub enum Cmd {
     CloseWhatsNew,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
     ShowTab { next: bool },
+    /// The home page (⇧⌘O, File menu, palette): its tab, else a new one (issue #109).
+    Home,
+    /// The home page's "Keep as a group": these repositories go to that group.
+    HomeKeep { name: String, paths: Vec<PathBuf> },
+    /// The home page's "Dismiss" of a proposal, by its key.
+    HomeDismiss(String),
+    /// The home page's "Explore the sample project", in its tab.
+    HomeSample,
 }
 
 impl Cmd {
@@ -268,6 +277,8 @@ pub struct App {
     update: updater::UpdateState,
     /// FOURCHETTE_MENU=<x>,<y>: where a screenshot right-clicks, to show a context menu.
     shot_menu: Option<egui::Pos2>,
+    /// The home page's search and what it read from each repository's folder.
+    home: home::HomeState,
 }
 
 pub fn short(h: &str) -> &str {
@@ -298,6 +309,7 @@ impl App {
             menu_cmds: Vec::new(),
             update: updater::UpdateState::default(),
             shot_menu: None,
+            home: home::HomeState::default(),
         }
     }
 
@@ -317,16 +329,26 @@ impl App {
         let cwd = std::env::current_dir().ok();
         let explicit = repo_arg.or_else(|| cwd.filter(|d| git::find_root(d).is_some()));
         // The tabs open at the last quit come back (not in a screenshot); without any, the
-        // repository given, the current folder or the last one opened, as before tabs.
+        // repository given or the current folder, else the home page (the sample project in a
+        // screenshot, unless FOURCHETTE_HOME=1).
         if app.screenshot.is_some() || !app.restore_tabs(explicit.clone()) {
-            let candidate = explicit.or_else(|| if app.screenshot.is_none() { app.library.recent().first().map(|e| e.path.clone()) } else { None });
-            match candidate.map(|p| Repo::open(&p)) {
+            let home = app.screenshot.is_none() || std::env::var("FOURCHETTE_HOME").is_ok();
+            match explicit.map(|p| Repo::open(&p)) {
                 Some(Ok(r)) => app.set_repo(r),
                 Some(Err(e)) => {
-                    app.tab_mut().load_demo();
+                    app.tab_mut().home = true;
                     app.notify(e, true);
                 }
+                None if home => app.tab_mut().home = true,
                 None => app.tab_mut().load_demo(),
+            }
+        }
+        // FOURCHETTE_HOME=1 shows the home page with invented repositories, never the person's;
+        // FOURCHETTE_HOME=<text> with that search typed.
+        if let (Ok(v), Some(_)) = (std::env::var("FOURCHETTE_HOME"), &app.screenshot) {
+            app.home.sample(&mut app.library);
+            if v != "1" {
+                app.home.query = v;
             }
         }
         // FOURCHETTE_FILES=tree|list shows the local changes (selected) as a tree or a list for a screenshot without saving it.
@@ -579,9 +601,21 @@ impl App {
                 Cmd::Open(p) => self.open_path(p, false),
                 Cmd::OpenTab(p) => self.open_path(p, true),
                 Cmd::NewTab => {
-                    let open = self.switcher.as_ref().is_some_and(|s| s.new_tab);
-                    self.switcher = if open { None } else { Some(repos::Switcher { new_tab: true, ..Default::default() }) };
+                    self.switcher = None;
+                    self.tabs.push(Tab::home());
+                    self.activate(self.tabs.len() - 1);
                 }
+                Cmd::Home => self.show_home(),
+                Cmd::HomeKeep { name, paths } => {
+                    self.library.keep_group(&paths, &name);
+                    self.library.save();
+                    self.notify(format!("{} repositories moved to the group “{name}”", paths.len()), false);
+                }
+                Cmd::HomeDismiss(key) => {
+                    self.library.dismiss(&key);
+                    self.library.save();
+                }
+                Cmd::HomeSample => self.tab_mut().load_demo(),
                 Cmd::SelectTab(i) => self.activate(i),
                 Cmd::CloseTab(i) => self.close_tab(i),
                 Cmd::ShowTab { next } => self.show_next_tab(next),
@@ -661,6 +695,8 @@ impl App {
                 Cmd::OpenUrl(u) => ctx.open_url(egui::OpenUrl::new_tab(u)),
                 Cmd::ProjectReload => self.project_load(),
                 Cmd::ProjectPick(i) => self.project_pick(i),
+                // The home page has no board.
+                Cmd::Board if self.tab().home => {}
                 Cmd::Board => self.board_toggle(),
                 Cmd::IssueDetail(id) => {
                     if !self.tab().board.open {

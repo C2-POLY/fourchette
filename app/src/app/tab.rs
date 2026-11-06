@@ -11,6 +11,8 @@ pub struct Tab {
     pub(super) pending: Option<PathBuf>,
     /// The name a sample-project tab shows (`FOURCHETTE_TABS` screenshots).
     pub(super) sample_name: Option<String>,
+    /// The home page shows in this tab instead of a repository (issue #109).
+    pub(super) home: bool,
     pub(super) repo: Option<Repo>,
     pub(super) commits: Vec<Commit>,
     pub(super) rows: Vec<Row>,
@@ -119,6 +121,7 @@ impl Tab {
             key: NEXT_KEY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             pending: None,
             sample_name: None,
+            home: false,
             repo: None,
             commits: vec![],
             rows: vec![],
@@ -174,6 +177,11 @@ impl Tab {
         }
     }
 
+    /// A tab showing the home page.
+    pub(super) fn home() -> Tab {
+        Tab { home: true, ..Tab::new() }
+    }
+
     /// A tab for `path`, read when it is first shown.
     pub(super) fn unread(path: PathBuf) -> Tab {
         Tab { pending: Some(path), ..Tab::new() }
@@ -193,6 +201,7 @@ impl Tab {
         match (&self.repo, &self.pending) {
             (Some(r), _) => r.name(),
             (None, Some(p)) => p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string()),
+            (None, None) if self.home => "Home".into(),
             (None, None) => self.sample_name.clone().unwrap_or_else(|| "sample-project".into()),
         }
     }
@@ -200,6 +209,7 @@ impl Tab {
     pub(super) fn load_demo(&mut self) {
         let d = demo::build();
         self.repo = None;
+        self.home = false;
         self.commits = d.commits;
         self.refs = d.refs;
         self.remotes = vec![("origin".into(), "https://github.com/example/sample-project.git".into()), ("upstream".into(), "git@github.com:acme/sample-project.git".into())];
@@ -227,6 +237,7 @@ impl Tab {
     /// `App::set_repo` adds what comes from the repository list.
     pub(super) fn set_repo(&mut self, r: Repo) {
         self.repo = Some(r);
+        self.home = false;
         self.sel = Sel::None;
         self.diff = None;
         self.details = None;
@@ -706,6 +717,10 @@ impl Tab {
             | Cmd::SelectTab(_)
             | Cmd::CloseTab(_)
             | Cmd::ShowTab { .. }
+            | Cmd::Home
+            | Cmd::HomeKeep { .. }
+            | Cmd::HomeDismiss(_)
+            | Cmd::HomeSample
             | Cmd::UpdateDialog(_)
             | Cmd::InstallUpdate
             | Cmd::UpdateCheckNow

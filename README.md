@@ -20,7 +20,7 @@ cd fourchette/app
 cargo run --release -- ~/path/to/a/repository
 ```
 
-Without an argument, it opens the current folder if it is a repository, else the last one you opened.
+Without an argument, it opens the current folder if it is a repository, else the tabs you left open, else a home page that lists your repositories by GitHub organisation.
 
 ## Contributing
 

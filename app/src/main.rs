@@ -9,6 +9,7 @@ mod filetree;
 mod git;
 mod github;
 mod graph;
+mod home;
 mod icon;
 mod library;
 mod menu;
