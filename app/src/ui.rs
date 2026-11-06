@@ -89,23 +89,7 @@ pub fn pr_badge(p: &egui::Painter, left: f32, y: f32, pr: &Pull) {
         PrState::Merged => t.renamed,
         PrState::Closed => t.deleted,
     };
-    let s = Stroke::new(1.3_f32, col);
-    let (x0, x1, r) = (left + 1.8, left + 9.0, 1.6);
-    let (top, bottom) = (y - 3.8, y + 3.8);
-    p.circle_stroke(pos2(x0, top), r, s);
-    p.circle_stroke(pos2(x0, bottom), r, s);
-    p.line_segment([pos2(x0, top + r), pos2(x0, bottom - r)], s);
-    p.circle_stroke(pos2(x1, bottom), r, s);
-    if pr.state == PrState::Merged {
-        // Merged: the right branch joins the left one.
-        p.line_segment([pos2(x1, bottom - r), pos2(x1, y - 0.6)], s);
-        p.line_segment([pos2(x1, y - 0.6), pos2(x0 + 0.6, top + r)], s);
-    } else {
-        // The arrow from the right branch back to the left one.
-        let (ax, ay) = (x0 + 3.6, top);
-        p.add(Shape::line(vec![pos2(x1, bottom - r), pos2(x1, ay), pos2(ax, ay)], s));
-        p.add(Shape::line(vec![pos2(ax + 1.5, ay - 1.5), pos2(ax, ay), pos2(ax + 1.5, ay + 1.5)], s));
-    }
+    pr_icon(p, left, y, col, pr.state == PrState::Merged);
     let c = pos2(left + 17.5, y);
     match pr.ci {
         Some(PrCi::Success) => {
@@ -119,6 +103,27 @@ pub fn pr_badge(p: &egui::Painter, left: f32, y: f32, pr: &Pull) {
             p.circle_filled(c, 1.1, t.modified);
         }
         None => {}
+    }
+}
+
+/// The pull request icon, 11 pt wide from `left`: two branches joined by an arrow, or merged.
+pub fn pr_icon(p: &egui::Painter, left: f32, y: f32, col: Color32, merged: bool) {
+    let s = Stroke::new(1.3_f32, col);
+    let (x0, x1, r) = (left + 1.8, left + 9.0, 1.6);
+    let (top, bottom) = (y - 3.8, y + 3.8);
+    p.circle_stroke(pos2(x0, top), r, s);
+    p.circle_stroke(pos2(x0, bottom), r, s);
+    p.line_segment([pos2(x0, top + r), pos2(x0, bottom - r)], s);
+    p.circle_stroke(pos2(x1, bottom), r, s);
+    if merged {
+        // Merged: the right branch joins the left one.
+        p.line_segment([pos2(x1, bottom - r), pos2(x1, y - 0.6)], s);
+        p.line_segment([pos2(x1, y - 0.6), pos2(x0 + 0.6, top + r)], s);
+    } else {
+        // The arrow from the right branch back to the left one.
+        let (ax, ay) = (x0 + 3.6, top);
+        p.add(Shape::line(vec![pos2(x1, bottom - r), pos2(x1, ay), pos2(ax, ay)], s));
+        p.add(Shape::line(vec![pos2(ax + 1.5, ay - 1.5), pos2(ax, ay), pos2(ax + 1.5, ay + 1.5)], s));
     }
 }
 
@@ -188,7 +193,7 @@ const PILL_PAD_R: f32 = 7.0;
 
 /// The remote branch of `local` among `refs`: its upstream, or without one the only
 /// `<remote>/<name>` of the same name.
-fn remote_partner(local: &GitRef, refs: &[GitRef]) -> Option<usize> {
+pub fn remote_partner(local: &GitRef, refs: &[GitRef]) -> Option<usize> {
     if !local.upstream.is_empty() {
         return refs.iter().position(|q| q.kind == RefKind::Remote && q.name == local.upstream);
     }
@@ -1069,7 +1074,9 @@ pub fn menu_rows(ui: &mut Ui) {
     ui.set_min_width(180.0);
 }
 
-pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
+/// The menu of a local branch. `remote`: the remote branch of the same pill in the graph, which
+/// "Delete branch…" ticks too (the checked-out branch then deletes only that one).
+pub fn branch_menu(ui: &mut Ui, b: &GitRef, remote: Option<&GitRef>, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
     menu_rows(ui);
     if !b.is_head && ui.button("Check out").clicked() {
         cmds.push(Cmd::Checkout { name: b.name.clone(), remote: false });
@@ -1107,11 +1114,32 @@ pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], work
     if ui.button("Copy name").clicked() {
         cmds.push(Cmd::Copy(b.name.clone()));
     }
-    if !b.is_head {
+    if !b.is_head || remote.is_some() {
         ui.separator();
         if ui.button(RichText::new("Delete branch…").color(theme::c().deleted)).clicked() {
-            // Opens the delete dialog, which also handles a worktree using the branch.
-            cmds.push(Cmd::AskDeleteBranch(b.name.clone()));
+            // Opens the delete dialog, which also handles a worktree using the branch and offers
+            // its remote branch.
+            cmds.push(Cmd::AskDeleteBranch { local: (!b.is_head).then(|| b.name.clone()), remote: remote.map(|r| r.name.clone()) });
+        }
+    }
+}
+
+/// The menu of a remote branch ("origin/feat/x"), in the sidebar and on a pill of the graph.
+pub fn remote_branch_menu(ui: &mut Ui, r: &GitRef, cmds: &mut Vec<Cmd>) {
+    menu_rows(ui);
+    if ui.button("Check out").clicked() {
+        cmds.push(checkout_remote(r));
+    }
+    if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
+        cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
+    }
+    if ui.button("Copy name").clicked() {
+        cmds.push(Cmd::Copy(r.name.clone()));
+    }
+    if !r.name.ends_with("/HEAD") {
+        ui.separator();
+        if ui.button(RichText::new("Delete branch…").color(theme::c().deleted)).clicked() {
+            cmds.push(Cmd::AskDeleteBranch { local: None, remote: Some(r.name.clone()) });
         }
     }
 }

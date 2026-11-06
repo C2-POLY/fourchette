@@ -148,6 +148,8 @@ pub struct Library {
     pub tabs: Vec<PathBuf>,
     /// The tab on screen, an index of `tabs`.
     pub active_tab: usize,
+    /// The home page's proposals the person dismissed (`home::proposal_key`).
+    pub dismissed: Vec<String>,
     file: Option<PathBuf>,
 }
 
@@ -224,7 +226,15 @@ impl Library {
         // "tabs": {"open": [paths], "active": n}; files written before tabs (issue #59) have none.
         let tabs = v["tabs"]["open"].as_array().map(|a| a.iter().filter_map(|p| p.as_str()).map(PathBuf::from).collect()).unwrap_or_default();
         let active_tab = v["tabs"]["active"].as_u64().unwrap_or(0) as usize;
-        Library { entries, appearance, settings, tabs, active_tab, file: Some(file.to_path_buf()) }
+        // "home": {"dismissed": [keys]}; files written before the home page (issue #109) have none.
+        let dismissed = v["home"]["dismissed"].as_array().map(|a| a.iter().filter_map(|k| k.as_str()).map(String::from).collect()).unwrap_or_default();
+        Library { entries, appearance, settings, tabs, active_tab, dismissed, file: Some(file.to_path_buf()) }
+    }
+
+    /// The same settings with `entries` instead of the person's list, saved (if ever) to a
+    /// temporary file rather than repos.json: screenshots show it.
+    pub fn sample(&self, entries: Vec<Entry>) -> Library {
+        Library { entries, appearance: self.appearance, settings: self.settings, tabs: Vec::new(), active_tab: 0, dismissed: Vec::new(), file: Some(std::env::temp_dir().join("fourchette-sample-repos.json")) }
     }
 
     pub fn save(&self) {
@@ -249,7 +259,8 @@ impl Library {
         let mut settings = self.settings.to_json();
         settings["appearance"] = json!(self.appearance.key());
         let tabs = json!({"open": self.tabs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(), "active": self.active_tab});
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs})).unwrap_or_default());
+        let home = json!({"dismissed": self.dismissed});
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs, "home": home})).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -285,6 +296,21 @@ impl Library {
     pub fn set_group(&mut self, path: &Path, group: Option<String>) {
         if let Some(e) = self.get_mut(path) {
             e.group = group.map(|g| g.trim().to_string()).filter(|g| !g.is_empty());
+        }
+    }
+
+    /// The home page's "Keep as a group": these repositories go to group `name`, as with
+    /// "Move to group".
+    pub fn keep_group(&mut self, paths: &[PathBuf], name: &str) {
+        for p in paths {
+            self.set_group(p, Some(name.to_string()));
+        }
+    }
+
+    /// The home page's "Dismiss": that proposal is not made again.
+    pub fn dismiss(&mut self, key: &str) {
+        if !self.dismissed.iter().any(|k| k == key) {
+            self.dismissed.push(key.to_string());
         }
     }
 
@@ -710,6 +736,31 @@ mod tests {
             let lib = Library::read(&file);
             assert_eq!((lib.tabs.len(), lib.active_tab, lib.entries.len()), (0, 0, 1), "{bad}");
         }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn kept_groups_and_dismissed_proposals_survive_a_save() {
+        let d = tmp("home");
+        let file = d.join("repos.json");
+        // A file written before the home page: nothing dismissed, the rest kept.
+        std::fs::write(&file, r#"{"version": 1, "repos": [{"path": "/code/fourchette"}, {"path": "/code/fourchette-site", "favorite": true}]}"#).unwrap();
+        let mut lib = Library::read(&file);
+        assert!(lib.dismissed.is_empty());
+        let paths = [PathBuf::from("/code/fourchette"), PathBuf::from("/code/fourchette-site")];
+        lib.keep_group(&paths, "fourchette");
+        lib.dismiss("acme/nova");
+        lib.dismiss("acme/nova");
+        lib.save();
+        let back = Library::read(&file);
+        assert_eq!(back.dismissed, ["acme/nova"]);
+        assert_eq!(back.custom_groups(), ["fourchette"]);
+        assert!(back.entries.iter().all(|e| e.group.as_deref() == Some("fourchette")));
+        assert!(back.get(&paths[1]).unwrap().favorite, "the rest is untouched");
+        // Of the wrong shape: nothing dismissed, the repositories still read.
+        std::fs::write(&file, r#"{"version": 1, "home": {"dismissed": "x"}, "repos": [{"path": "/x/y"}]}"#).unwrap();
+        let lib = Library::read(&file);
+        assert_eq!((lib.dismissed.len(), lib.entries.len()), (0, 1));
         let _ = std::fs::remove_dir_all(&d);
     }
 

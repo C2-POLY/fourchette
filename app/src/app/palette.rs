@@ -60,6 +60,7 @@ impl App {
             }
             v.push(item("Commands", "Fetch", "get the latest from the remote", Cmd::Fetch { all: false, quiet: false }));
             v.push(item("Commands", "Fetch all remotes", "", Cmd::Fetch { all: true, quiet: false }));
+            v.push(item("Commands", "Fetch all repositories", "every repository of the list (⌘O)", Cmd::FetchAllRepos));
             let pull = if self.library.settings.pull_rebase { "rebase onto the upstream branch" } else { "merge the upstream branch" };
             v.push(item("Commands", "Pull", pull, Cmd::Pull));
             v.push(item("Commands", "Pull…", "choose the remote branch, merge or rebase", Cmd::PullDialog));
@@ -133,6 +134,7 @@ impl App {
             // WorkspaceCommandProvider: repositories ("Open Recent Repository" in the nib), with
             // the whole repository list rather than only the recent ones.
             v.push(item("Repositories", "Switch repository…", "⌘O", Cmd::Switcher));
+            v.push(item("Repositories", "Home — every repository by organisation", "⇧⌘O", Cmd::Home));
             let mut repos: Vec<&crate::library::Entry> = self.library.entries.iter().collect();
             repos.sort_by_key(|e| (std::cmp::Reverse(e.favorite), std::cmp::Reverse(e.last_opened)));
             for e in repos {

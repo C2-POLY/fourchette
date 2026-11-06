@@ -50,10 +50,11 @@ pub enum Id {
     CloseTab,
     NextTab,
     PrevTab,
+    Home,
 }
 
 impl Id {
-    pub const ALL: [Id; 37] = [
+    pub const ALL: [Id; 38] = [
         Id::About,
         Id::Settings,
         Id::OpenRepository,
@@ -91,6 +92,7 @@ impl Id {
         Id::CloseTab,
         Id::NextTab,
         Id::PrevTab,
+        Id::Home,
     ];
 
     /// Edit actions go to the focused text field when there is one.
@@ -245,6 +247,7 @@ pub fn bar() -> Vec<Menu> {
             title: "File",
             entries: vec![
                 app("New Tab", Id::NewTab, Some(cmd('t'))),
+                app("Home", Id::Home, Some(cmd('o').shift())),
                 app("Open Repository…", Id::OpenRepository, None),
                 Entry::OpenRecent,
                 app("Switch Repository…", Id::Switcher, Some(cmd('o'))),
@@ -371,7 +374,7 @@ pub fn enabled(id: Id, s: &State) -> bool {
         Id::PopStash => git && s.stashes,
         Id::CheckoutBranch | Id::NewBranch | Id::NewTag => git && !s.settings,
         Id::ShowInFinder | Id::OpenInTerminal => s.repo,
-        Id::NewTab => overlay,
+        Id::NewTab | Id::Home => overlay,
         // Never the last tab; and nothing to go to with one.
         Id::CloseTab | Id::NextTab | Id::PrevTab => overlay && s.tabs > 1,
     }
@@ -690,7 +693,7 @@ mod tests {
         let b = bar();
         assert_eq!(titles(&b[0]), ["About Fourchette", "Settings…", "Services", "Hide Fourchette", "Hide Others", "Show All", "Quit Fourchette"]);
         assert_eq!(titles(&b[2]), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
-        assert_eq!(titles(&b[1]), ["New Tab", "Open Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
+        assert_eq!(titles(&b[1]), ["New Tab", "Home", "Open Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
         assert_eq!(titles(&b[5]), ["Minimize", "Zoom", "Show Previous Tab", "Show Next Tab", "Bring All to Front"]);
         assert_eq!(titles(&b[6]), ["Release Notes", "Fourchette on GitHub", "Report an Issue"]);
     }
@@ -729,6 +732,7 @@ mod tests {
             ("Minimize", "⌘M"),
             // Fourchette's own keys.
             ("Switch Repository…", "⌘O"),
+            ("Home", "⇧⌘O"),
             ("Command Palette…", "⌘P"),
             ("Show Details Panel", "⌘J"),
             // The original's New Tab and Close, and the keys of macOS tabs.
