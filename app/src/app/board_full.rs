@@ -204,7 +204,7 @@ impl App {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     // Centred on the window, as long as the branch leaves room.
                     let w = super::board::segmented_width(ui, &["Changes", "History", "Project"]);
-                    let left = ui.ctx().screen_rect().center().x - w / 2.0;
+                    let left = ui.ctx().content_rect().center().x - w / 2.0;
                     let room = ui.available_width() - w;
                     ui.add_space((left - ui.cursor().left()).clamp(8.0, room.max(8.0)));
                     let t = self.tab();
@@ -227,10 +227,10 @@ impl Tab {
         if self.board.detail.is_none() {
             return;
         }
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let rect = Rect::from_min_max(pos2(screen.right() - DRAWER_W, top), screen.max);
         let k = theme::c();
-        egui::Area::new(egui::Id::new(("board_drawer", self.key)))
+        egui::Area::new(egui::Id::unique(("board_drawer", self.key)))
             .order(egui::Order::Middle)
             .fixed_pos(rect.min)
             .show(ctx, |ui| {

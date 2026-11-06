@@ -439,7 +439,7 @@ mod mac {
     use super::{Action, Entry, Id, Pick, Shortcut, State, APP_NAME};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, Sel};
-    use objc2::{declare_class, msg_send_id, mutability, sel, ClassType, DeclaredClass};
+    use objc2::{define_class, msg_send, sel, MainThreadOnly};
     use objc2_app_kit::{
         NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionVersion, NSApplication, NSControlStateValueOff, NSControlStateValueOn,
         NSEventModifierFlags, NSMenu, NSMenuItem, NSMenuItemValidation, NSPasteboard, NSPasteboardTypeString,
@@ -447,23 +447,18 @@ mod mac {
     use objc2_foundation::{ns_string, MainThreadMarker, NSDictionary, NSString};
     use std::cell::RefCell;
 
-    declare_class!(
-        struct Target;
-
+    define_class!(
         // SAFETY: NSObject has no subclassing requirements; the target lives on the main thread
         // and has no Drop.
-        unsafe impl ClassType for Target {
-            type Super = NSObject;
-            type Mutability = mutability::MainThreadOnly;
-            const NAME: &'static str = "FourchetteMenuTarget";
-        }
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "FourchetteMenuTarget"]
+        struct Target;
 
-        impl DeclaredClass for Target {}
-
-        unsafe impl Target {
-            #[method(menuAction:)]
+        impl Target {
+            #[unsafe(method(menuAction:))]
             fn menu_action(&self, sender: &NSMenuItem) {
-                let Some(pick) = Pick::from_tag(unsafe { sender.tag() }) else { return };
+                let Some(pick) = Pick::from_tag(sender.tag()) else { return };
                 if pick == Pick::Item(Id::About) {
                     about();
                     return;
@@ -481,9 +476,9 @@ mod mac {
         unsafe impl NSObjectProtocol for Target {}
 
         unsafe impl NSMenuItemValidation for Target {
-            #[method(validateMenuItem:)]
-            unsafe fn validate_menu_item(&self, item: &NSMenuItem) -> bool {
-                let pick = Pick::from_tag(unsafe { item.tag() });
+            #[unsafe(method(validateMenuItem:))]
+            fn validate_menu_item(&self, item: &NSMenuItem) -> bool {
+                let pick = Pick::from_tag(item.tag());
                 let (on, check) = UI.with(|u| {
                     let u = u.borrow();
                     match pick {
@@ -492,7 +487,7 @@ mod mac {
                         None => (false, false),
                     }
                 });
-                unsafe { item.setState(if check { NSControlStateValueOn } else { NSControlStateValueOff }) };
+                item.setState(if check { NSControlStateValueOn } else { NSControlStateValueOff });
                 on
             }
         }
@@ -500,8 +495,8 @@ mod mac {
 
     impl Target {
         fn new(mtm: MainThreadMarker) -> Retained<Self> {
-            let this = mtm.alloc::<Self>().set_ivars(());
-            unsafe { msg_send_id![super(this), init] }
+            let this = Self::alloc(mtm).set_ivars(());
+            unsafe { msg_send![super(this), init] }
         }
     }
 
@@ -532,26 +527,26 @@ mod mac {
         let bar = NSMenu::new(mtm);
         let mut recent_menu = None;
         for m in super::bar() {
-            let menu = unsafe { NSMenu::initWithTitle(mtm.alloc(), &NSString::from_str(m.title)) };
+            let menu = NSMenu::initWithTitle(mtm.alloc(), &NSString::from_str(m.title));
             for e in &m.entries {
                 match e {
                     Entry::Separator => menu.addItem(&NSMenuItem::separatorItem(mtm)),
                     Entry::Services => {
-                        let sub = unsafe { NSMenu::initWithTitle(mtm.alloc(), ns_string!("Services")) };
+                        let sub = NSMenu::initWithTitle(mtm.alloc(), ns_string!("Services"));
                         let item = item(mtm, "Services", None, None);
                         item.setSubmenu(Some(&sub));
                         menu.addItem(&item);
-                        unsafe { app.setServicesMenu(Some(&sub)) };
+                        app.setServicesMenu(Some(&sub));
                     }
                     Entry::OpenRecent => {
-                        let sub = unsafe { NSMenu::initWithTitle(mtm.alloc(), ns_string!("Open Recent")) };
+                        let sub = NSMenu::initWithTitle(mtm.alloc(), ns_string!("Open Recent"));
                         let item = item(mtm, "Open Recent", None, None);
                         item.setSubmenu(Some(&sub));
                         menu.addItem(&item);
                         recent_menu = Some(sub);
                     }
                     Entry::Item { title, action: Action::System(selector), key } => {
-                        menu.addItem(&item(mtm, title, Some(Sel::register(selector)), *key));
+                        menu.addItem(&item(mtm, title, Some(Sel::register(&std::ffi::CString::new(*selector).expect("a selector has no NUL"))), *key));
                     }
                     Entry::Item { title, action: Action::App(id), key } => {
                         let it = item(mtm, title, Some(sel!(menuAction:)), *key);
@@ -566,12 +561,10 @@ mod mac {
             let top = item(mtm, m.title, None, None);
             top.setSubmenu(Some(&menu));
             bar.addItem(&top);
-            unsafe {
-                match m.title {
-                    "Window" => app.setWindowsMenu(Some(&menu)),
-                    "Help" => app.setHelpMenu(Some(&menu)),
-                    _ => {}
-                }
+            match m.title {
+                "Window" => app.setWindowsMenu(Some(&menu)),
+                "Help" => app.setHelpMenu(Some(&menu)),
+                _ => {}
             }
         }
         app.setMainMenu(Some(&bar));
@@ -597,7 +590,7 @@ mod mac {
             Some((u.recent_menu.clone()?, u.target.clone()?))
         });
         let Some((menu, target)) = refill else { return };
-        unsafe { menu.removeAllItems() };
+        menu.removeAllItems();
         if recent.is_empty() {
             let it = item(mtm, "No Recent Repositories", Some(sel!(menuAction:)), None);
             unsafe {
@@ -633,9 +626,9 @@ mod mac {
         let version = NSString::from_str(env!("CARGO_PKG_VERSION"));
         let keys: [&NSString; 3] = unsafe { [NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionVersion] };
         let values = vec![NSString::from_str(APP_NAME), version, NSString::new()];
-        let dict: Retained<NSDictionary<NSString, NSString>> = NSDictionary::from_vec(&keys, values);
+        let dict: Retained<NSDictionary<NSString, NSString>> = NSDictionary::from_retained_objects(&keys, &values);
         // SAFETY: an NSDictionary of NSString values is an NSDictionary of objects.
-        let dict: Retained<NSDictionary<NSString, AnyObject>> = unsafe { Retained::cast(dict) };
+        let dict: Retained<NSDictionary<NSString, AnyObject>> = unsafe { Retained::cast_unchecked(dict) };
         let app = NSApplication::sharedApplication(mtm);
         unsafe { app.orderFrontStandardAboutPanelWithOptions(&dict) };
     }
@@ -644,15 +637,15 @@ mod mac {
         let k = key.map(|k| k.key_equivalent().0.to_string()).unwrap_or_default();
         let it = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), &NSString::from_str(title), action, &NSString::from_str(&k)) };
         if let Some(k) = key {
-            let mut mask = NSEventModifierFlags::NSEventModifierFlagCommand;
+            let mut mask = NSEventModifierFlags::Command;
             if k.key_equivalent().1 {
-                mask |= NSEventModifierFlags::NSEventModifierFlagShift;
+                mask |= NSEventModifierFlags::Shift;
             }
             if k.alt {
-                mask |= NSEventModifierFlags::NSEventModifierFlagOption;
+                mask |= NSEventModifierFlags::Option;
             }
             if k.ctrl {
-                mask |= NSEventModifierFlags::NSEventModifierFlagControl;
+                mask |= NSEventModifierFlags::Control;
             }
             it.setKeyEquivalentModifierMask(mask);
         }

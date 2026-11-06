@@ -233,17 +233,17 @@ impl App {
         let mut chosen: Option<usize> = if enter && n > 0 { Some(sw.sel) } else { None };
         let mut close = esc;
 
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let left = screen.center().x - SWITCHER_W * 0.5 - 12.0;
         let top = (screen.top() + 70.0).max(screen.center().y - 330.0);
-        let t = crate::modal::appear(ctx, egui::Id::new("switcher"));
-        egui::Area::new(egui::Id::new("switcher_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
+        let t = crate::modal::appear(ctx, egui::Id::unique("switcher"));
+        egui::Area::new(egui::Id::unique("switcher_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
             let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }
         });
-        let area = egui::Area::new(egui::Id::new("switcher")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
+        let area = egui::Area::new(egui::Id::unique("switcher")).order(egui::Order::Foreground).fixed_pos(pos2(left, top)).show(ctx, |ui| {
             ui.multiply_opacity(t);
             crate::modal::card(ui, crate::modal::RADIUS, Margin::same(12), |ui| {
                     ui.set_width(SWITCHER_W);
@@ -279,7 +279,7 @@ impl App {
                             }
                             // The star toggles the favourite without opening the repository.
                             let star = Rect::from_center_size(pos2(rect.left() + 16.0, rect.center().y), vec2(22.0, 22.0));
-                            let star_resp = ui.interact(star, ui.id().with(("star", k)), Sense::click());
+                            let star_resp = ui.interact(star, ui.scope_id().with(("star", k)), Sense::click());
                             let star_col = if e.favorite { theme::c().modified } else if star_resp.hovered() { theme::c().dim } else { theme::c().border };
                             let p = ui.painter().with_clip_rect(rect);
                             p.text(star.center(), Align2::CENTER_CENTER, if e.favorite { "★" } else { "☆" }, FontId::proportional(13.0), star_col);
@@ -300,7 +300,7 @@ impl App {
                             let mut badges_left = rect.right() - 44.0;
                             let mut badge_clicked = false;
                             if !missing {
-                                let (left, link) = state_badges(ui, &p, states, &e.path, rect.right() - 44.0, rect.center().y, ui.id().with(("state", k)));
+                                let (left, link) = state_badges(ui, &p, states, &e.path, rect.right() - 44.0, rect.center().y, ui.scope_id().with(("state", k)));
                                 badges_left = left;
                                 if let Some(u) = link {
                                     badge_clicked = true;

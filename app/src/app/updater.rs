@@ -400,8 +400,8 @@ fn news_row(ui: &mut egui::Ui, it: &NewsItem) {
     if let Some(n) = it.pr {
         job.append(&format!("  #{n}"), 0.0, TextFormat { font_id: font.clone(), color: c.faint, ..Default::default() });
     }
-    let galley = ui.fonts(|f| f.layout_job(job));
-    let line = ui.fonts(|f| f.row_height(&font));
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
+    let line = ui.fonts_mut(|f| f.row_height(&font));
     let (rect, _) = ui.allocate_exact_size(vec2(w, galley.size().y + 2.0), Sense::hover());
     let p = ui.painter();
     p.circle_filled(pos2(rect.left() + 6.0, rect.top() + line / 2.0), 2.0, c.dim);

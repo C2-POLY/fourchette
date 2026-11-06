@@ -23,7 +23,7 @@ pub fn inset(fullscreen: bool) -> f32 {
 /// The toolbar's empty background, the window's top edge: dragging it moves the window and a
 /// double-click zooms it. Call it first, so the buttons drawn over it keep their clicks.
 pub fn drag_area(ui: &mut egui::Ui) {
-    let bg = ui.interact(ui.max_rect(), ui.id().with("window_drag"), egui::Sense::click_and_drag());
+    let bg = ui.interact(ui.max_rect(), ui.scope_id().with("window_drag"), egui::Sense::click_and_drag());
     if bg.drag_started_by(egui::PointerButton::Primary) {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
@@ -86,7 +86,7 @@ mod mac {
         if OBSERVING.swap(true, Ordering::Relaxed) {
             return;
         }
-        let center = unsafe { NSNotificationCenter::defaultCenter() };
+        let center = NSNotificationCenter::defaultCenter();
         let block = RcBlock::new(|_: NonNull<NSNotification>| place_buttons());
         for name in unsafe {
             [
@@ -118,7 +118,7 @@ mod mac {
             if !mask.contains(NSWindowStyleMask::FullSizeContentView) || mask.contains(NSWindowStyleMask::FullScreen) {
                 continue;
             }
-            let buttons: Vec<_> = [NSWindowButton::NSWindowCloseButton, NSWindowButton::NSWindowMiniaturizeButton, NSWindowButton::NSWindowZoomButton]
+            let buttons: Vec<_> = [NSWindowButton::CloseButton, NSWindowButton::MiniaturizeButton, NSWindowButton::ZoomButton]
                 .into_iter()
                 .filter_map(|b| window.standardWindowButton(b))
                 .collect();
@@ -129,7 +129,7 @@ mod mac {
             let (y, h) = super::band(window.frame().size.height, bar_h);
             let c = container.frame();
             if differs(c.origin.y, y) || differs(c.size.height, h) {
-                unsafe { container.setFrame(NSRect::new(NSPoint::new(c.origin.x, y), objc2_foundation::NSSize::new(c.size.width, h))) };
+                container.setFrame(NSRect::new(NSPoint::new(c.origin.x, y), objc2_foundation::NSSize::new(c.size.width, h)));
             }
             let step = buttons.get(1).map(|b| b.frame().origin.x - first.frame().origin.x).unwrap_or(20.0);
             for (n, b) in buttons.iter().enumerate() {
@@ -137,7 +137,7 @@ mod mac {
                 let want = NSPoint::new(super::BUTTONS_X + n as f64 * step, super::centred_y(f.size.height, bar_h));
                 if differs(f.origin.x, want.x) || differs(f.origin.y, want.y) {
                     let view: &NSView = b;
-                    unsafe { view.setFrameOrigin(want) };
+                    view.setFrameOrigin(want);
                 }
             }
         }

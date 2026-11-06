@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn long_label_is_cut_with_an_ellipsis_within_its_width() {
         let ctx = egui::Context::default();
-        let _ = ctx.run(Default::default(), |ctx| {
+        let mut out = ctx.run_pass(Default::default(), |ctx| {
             let p = ctx.layer_painter(egui::LayerId::background());
             let long = "feature/remember-the-last-opened-repository-per-window";
             let g = fit_galley(&p, long, theme::small(), Color32::WHITE, 80.0);
@@ -436,6 +436,8 @@ mod tests {
             let short = fit_galley(&p, "main", theme::small(), Color32::WHITE, 80.0);
             assert_eq!(short.text(), "main");
         });
+        // No renderer takes the font atlas: dropped on purpose.
+        out.textures_delta.clear();
     }
 }
 
@@ -747,7 +749,7 @@ pub fn header_actions(ui: &mut Ui, header: Rect, count: usize, actions: &[(&str,
     let mut clicked = None;
     for (i, (icon, tip)) in actions.iter().enumerate().rev() {
         let rect = Rect::from_center_size(pos2(right - 12.0, header.center().y), vec2(24.0, 22.0));
-        let resp = ui.interact(rect, ui.id().with(("header-action", header.min.y as i32, i)), Sense::click());
+        let resp = ui.interact(rect, ui.scope_id().with(("header-action", header.min.y as i32, i)), Sense::click());
         if icon_button_at(ui, rect, resp, icon, tip).clicked() {
             clicked = Some(i);
         }
@@ -1007,7 +1009,7 @@ pub fn files_view_switch(ui: &mut Ui, tree: bool) -> Option<bool> {
     for (i, label) in ["List", "Tree"].into_iter().enumerate() {
         let r = Rect::from_min_size(pos2(rect.left() + i as f32 * 26.0, rect.top()), vec2(26.0, 20.0)).shrink(2.0);
         let on = tree == (i == 1);
-        let resp = ui.interact(r, ui.id().with(("files_view", i)), Sense::click()).on_hover_text(format!("{label} view"));
+        let resp = ui.interact(r, ui.scope_id().with(("files_view", i)), Sense::click()).on_hover_text(format!("{label} view"));
         let p = ui.painter();
         if on {
             p.rect_filled(r, CornerRadius::same(4), k.select);
@@ -1045,7 +1047,7 @@ pub fn diff_view_switch(ui: &mut Ui, split: bool, whole: bool) -> Option<(bool, 
     // Whole file: one button that is lit while on (the rightmost, so it is drawn first).
     let ww = width(ui, "Whole file") + 20.0;
     let (rect, _) = ui.allocate_exact_size(vec2(ww, 22.0), Sense::hover());
-    let resp = ui.interact(rect, ui.id().with("diff_whole"), Sense::click()).on_hover_text("Show the whole file, with the changes highlighted");
+    let resp = ui.interact(rect, ui.scope_id().with("diff_whole"), Sense::click()).on_hover_text("Show the whole file, with the changes highlighted");
     let p = ui.painter();
     if whole {
         p.rect(rect, CornerRadius::same(6), k.widget_active, Stroke::new(1.0_f32, k.widget_active_border), StrokeKind::Inside);
@@ -1068,7 +1070,7 @@ pub fn diff_view_switch(ui: &mut Ui, split: bool, whole: bool) -> Option<(bool, 
         let r = Rect::from_min_size(pos2(x, rect.top() + 2.0), vec2(widths[i], 18.0));
         x += widths[i];
         let on = split == (i == 1);
-        let resp = ui.interact(r, ui.id().with(("diff_mode", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("diff_mode", i)), Sense::click());
         let p = ui.painter();
         if on {
             p.rect_filled(r, CornerRadius::same(4), k.select);

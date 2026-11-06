@@ -62,6 +62,14 @@ if [ "$PUBLISH" -eq 1 ]; then
   fi
 fi
 
+# The Rust Cargo.toml asks for, from rustup (Homebrew's has no x86_64 target).
+need=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' "$APP_DIR/Cargo.toml")
+have=$(rustc --version | awk '{print $2}')
+if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)" != "$need" ]; then
+  echo "error: Rust $have is older than the $need Cargo.toml asks for; use rustup's (brew uninstall rust, put $(brew --prefix rustup)/bin first in PATH, then rustup update)" >&2
+  exit 1
+fi
+
 # Build both architectures and join them into one binary.
 cargo build --release --target aarch64-apple-darwin
 cargo build --release --target x86_64-apple-darwin

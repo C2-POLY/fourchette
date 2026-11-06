@@ -188,7 +188,7 @@ fn segmented(ui: &mut Ui, rect: Rect, n: usize, chosen: usize, enabled: bool, id
     let mut clicked = None;
     for i in 0..n {
         let seg = Rect::from_min_size(pos2(rect.left() + w * i as f32, rect.top()), vec2(w, rect.height())).shrink(3.0);
-        let resp = ui.interact(seg, ui.id().with((id, i)), if enabled { Sense::click() } else { Sense::hover() });
+        let resp = ui.interact(seg, ui.scope_id().with((id, i)), if enabled { Sense::click() } else { Sense::hover() });
         let on = i == chosen;
         let hovered = enabled && resp.hovered();
         let bg = if on {
@@ -211,8 +211,8 @@ fn segmented(ui: &mut Ui, rect: Rect, n: usize, chosen: usize, enabled: bool, id
 
 /// An on/off switch in `rect`. Returns true when clicked.
 fn toggle(ui: &mut Ui, rect: Rect, id: &str, on: bool) -> bool {
-    let resp = ui.interact(rect, ui.id().with(id), Sense::click());
-    let t = ui.ctx().animate_bool(ui.id().with((id, "anim")), on);
+    let resp = ui.interact(rect, ui.scope_id().with(id), Sense::click());
+    let t = ui.ctx().animate_bool(ui.scope_id().with((id, "anim")), on);
     let k = theme::c();
     let track = theme::tint(k.accent, k.border_strong, t);
     let track = if resp.hovered() { theme::lighten(track, 0.08) } else { track };
@@ -337,7 +337,7 @@ fn icon_swatches(ui: &mut Ui, rect: Rect, chosen: IconColour, cmds: &mut Vec<Cmd
     for (i, preset) in IconColour::PRESETS.into_iter().enumerate() {
         let c = centre(i);
         let hit = Rect::from_center_size(c, vec2(SWATCH + 6.0, SWATCH + 6.0));
-        let resp = ui.interact(hit, ui.id().with(("icon_colour", i)), Sense::click()).on_hover_text(preset.label());
+        let resp = ui.interact(hit, ui.scope_id().with(("icon_colour", i)), Sense::click()).on_hover_text(preset.label());
         swatch(&p, c, rgb(preset.base()));
         if preset == chosen {
             swatch_ring(&p, c, k.strong);
@@ -352,7 +352,7 @@ fn icon_swatches(ui: &mut Ui, rect: Rect, chosen: IconColour, cmds: &mut Vec<Cmd
     // The free colour.
     let c = centre(IconColour::PRESETS.len());
     let hit = Rect::from_center_size(c, vec2(SWATCH + 6.0, SWATCH + 6.0));
-    let resp = ui.interact(hit, ui.id().with("icon_colour_custom"), Sense::click()).on_hover_text("Another colour…");
+    let resp = ui.interact(hit, ui.scope_id().with("icon_colour_custom"), Sense::click()).on_hover_text("Another colour…");
     let custom = matches!(chosen, IconColour::Custom(_));
     wheel_swatch(&p, c, custom.then(|| rgb(chosen.base())));
     if custom {
@@ -361,7 +361,7 @@ fn icon_swatches(ui: &mut Ui, rect: Rect, chosen: IconColour, cmds: &mut Vec<Cmd
         swatch_ring(&p, c, k.border_strong);
     }
     // The picker's colour, and whether it was dragged since the last chosen one.
-    let id = ui.id().with("icon_colour_picker");
+    let id = ui.scope_id().with("icon_colour_picker");
     egui::Popup::from_toggle_button_response(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).gap(6.0).show(|ui| {
         let (mut colour, mut dirty) = ui.data_mut(|d| *d.get_temp_mut_or(id, (rgb(chosen.base()), false)));
         ui.spacing_mut().slider_width = 220.0;
@@ -454,7 +454,7 @@ fn stepper(ui: &mut Ui, rect: Rect, id: &str, value: usize, can_dec: bool, can_i
     let mut out = 0;
     for (i, (sign, on)) in [(-1, can_dec), (1, can_inc)].into_iter().enumerate() {
         let r = if i == 0 { Rect::from_min_size(rect.min, vec2(btn_w, rect.height())) } else { Rect::from_min_size(pos2(rect.right() - btn_w, rect.top()), vec2(btn_w, rect.height())) };
-        let resp = ui.interact(r, ui.id().with((id, i)), if on { Sense::click() } else { Sense::hover() });
+        let resp = ui.interact(r, ui.scope_id().with((id, i)), if on { Sense::click() } else { Sense::hover() });
         if on && resp.hovered() {
             p.rect_filled(r.shrink(3.0), CornerRadius::same(5), k.hover);
         }
@@ -628,7 +628,7 @@ fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
             CheckStatus::Failed(e) => {
                 // The whole error on hover, over the row's text.
                 let row = Rect::from_x_y_ranges(c.ui.min_rect().x_range(), ctrl.expand2(vec2(0.0, 13.0)).y_range());
-                c.ui.interact(row, c.ui.id().with("update_error"), Sense::hover()).on_hover_text(e.as_str());
+                c.ui.interact(row, c.ui.scope_id().with("update_error"), Sense::hover()).on_hover_text(e.as_str());
             }
             _ => {}
         }
@@ -660,16 +660,16 @@ impl App {
         let mut s: Settings = self.library.settings;
         let k = theme::c();
 
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let min = pos2((screen.center().x - WIN_W * 0.5).round(), (screen.top() + 56.0).max(screen.center().y - WIN_H * 0.5).round());
-        let t = crate::modal::appear(ctx, egui::Id::new("settings"));
-        egui::Area::new(egui::Id::new("settings_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
+        let t = crate::modal::appear(ctx, egui::Id::unique("settings"));
+        egui::Area::new(egui::Id::unique("settings_backdrop")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
             let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }
         });
-        egui::Area::new(egui::Id::new("settings")).order(egui::Order::Foreground).fixed_pos(min).show(ctx, |ui| {
+        egui::Area::new(egui::Id::unique("settings")).order(egui::Order::Foreground).fixed_pos(min).show(ctx, |ui| {
             ui.multiply_opacity(t);
             let (win, _) = ui.allocate_exact_size(vec2(WIN_W, WIN_H), Sense::hover());
             let p = ui.painter().clone();
@@ -694,7 +694,7 @@ impl App {
             let sec = &SECTIONS[section];
             p.text(pos2(content.left() + PAD, content.top() + HEADER_H * 0.5), Align2::LEFT_CENTER, sec.label, egui::FontId::proportional(theme::FS_TITLE), k.strong);
             let x = Rect::from_center_size(pos2(content.right() - PAD - 4.0, content.top() + HEADER_H * 0.5), vec2(24.0, 24.0));
-            let xr = ui.interact(x, ui.id().with("settings_close"), Sense::click()).on_hover_text("Close (Esc)");
+            let xr = ui.interact(x, ui.scope_id().with("settings_close"), Sense::click()).on_hover_text("Close (Esc)");
             if xr.hovered() {
                 p.rect_filled(x, CornerRadius::same(6), k.hover);
             }
@@ -723,7 +723,7 @@ impl App {
 
             crate::modal::paint_edge(&p, win);
         });
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("settings"));
+        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("settings"));
         crate::modal::animate_layer(ctx, layer, Rect::from_min_size(min, vec2(WIN_W, WIN_H)).center(), t);
         self.settings_section = section;
         if s != self.library.settings {

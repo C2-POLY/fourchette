@@ -175,20 +175,20 @@ impl App {
 
         // Placement from the original (sub_1001f8330): centred horizontally on the main window,
         // and its frame sits a third of its own height above the window's middle.
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let list_h = VISIBLE_ROWS * PALETTE_ROW_H;
         let total_h = 20.0 + 44.0 + 6.0 + list_h + 24.0;
         let left = screen.center().x - PALETTE_W * 0.5 - 10.0;
         let top = (screen.center().y - total_h * 2.0 / 3.0).max(screen.top() + 12.0);
 
-        let t = crate::modal::appear(ctx, egui::Id::new("palette"));
-        egui::Area::new(egui::Id::new("palette_backdrop")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
+        let t = crate::modal::appear(ctx, egui::Id::unique("palette"));
+        egui::Area::new(egui::Id::unique("palette_backdrop")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
             let (_, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
             if resp.clicked() {
                 close = true;
             }
         });
-        let area = egui::Area::new(egui::Id::new("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
+        let area = egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Tooltip).fixed_pos(pos2(left, top)).show(ctx, |ui| {
             ui.multiply_opacity(t);
             crate::modal::card(ui, crate::modal::RADIUS, Margin::same(12), |ui| {
                     ui.set_width(PALETTE_W);

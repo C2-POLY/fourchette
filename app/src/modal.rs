@@ -125,7 +125,7 @@ pub struct Modal {
 impl Modal {
     /// `icon` is one of `ui::glyph`'s names.
     pub fn new(id: &str, width: Width, icon: &'static str, title: Vec<Seg>) -> Self {
-        Modal { id: Id::new(("modal", id)), width, icon, danger: false, title, status: Vec::new(), hint: Vec::new(), cancel: Some("Cancel".into()), extra: Vec::new(), primary: None, closable: true }
+        Modal { id: Id::unique(("modal", id)), width, icon, danger: false, title, status: Vec::new(), hint: Vec::new(), cancel: Some("Cancel".into()), extra: Vec::new(), primary: None, closable: true }
     }
 
     /// The icon tile in red, for a dialog that deletes something.
@@ -311,7 +311,7 @@ pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option
     if t < 1.0 {
         ctx.request_repaint();
     }
-    egui::Area::new(Id::new("toast")).order(egui::Order::Tooltip).interactable(false).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
+    egui::Area::new(Id::unique("toast")).order(egui::Order::Tooltip).interactable(false).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
         ui.multiply_opacity(t);
         let bottom = if undo.is_some() { 12 } else { 9 };
         let r = card(ui, 10, Margin { left: 12, right: 16, top: 9, bottom }, |ui| {
@@ -441,7 +441,7 @@ fn icon_tile(ui: &mut Ui, icon: &str, danger: bool) {
 /// The header's close cross.
 pub fn close_cross(ui: &mut Ui, x: Rect) -> Response {
     let k = theme::c();
-    let r = ui.interact(x, ui.id().with(("modal_close", x.min.x as i32, x.min.y as i32)), Sense::click()).on_hover_text("Close (Esc)");
+    let r = ui.interact(x, ui.scope_id().with(("modal_close", x.min.x as i32, x.min.y as i32)), Sense::click()).on_hover_text("Close (Esc)");
     if r.hovered() {
         ui.painter().rect_filled(x, CornerRadius::same(7), k.widget_hover);
     }
@@ -659,7 +659,7 @@ pub fn segmented(ui: &mut Ui, options: &[&str], selected: usize, why: &[Option<S
         let cell = Rect::from_min_size(pos2(x, rect.top() + 3.0), vec2(widths[i], 18.0));
         x += widths[i];
         let off = why.get(i).and_then(|w| w.as_deref());
-        let r = ui.interact(cell, ui.id().with(("segmented", options.join("|"), i)), if off.is_some() { Sense::hover() } else { Sense::click() });
+        let r = ui.interact(cell, ui.scope_id().with(("segmented", options.join("|"), i)), if off.is_some() { Sense::hover() } else { Sense::click() });
         let r = match off {
             Some(w) => r.on_hover_text(w),
             None => r.on_hover_cursor(egui::CursorIcon::PointingHand),

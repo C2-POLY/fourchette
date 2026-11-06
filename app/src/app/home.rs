@@ -114,7 +114,8 @@ impl App {
     }
 
     /// The page, in the centre of the window under the toolbar (and the tabs).
-    pub(super) fn home_page(&mut self, ctx: &egui::Context, cmds: &mut Vec<Cmd>) {
+    pub(super) fn home_page(&mut self, root: &mut egui::Ui, cmds: &mut Vec<Cmd>) {
+        let ctx = &root.ctx().clone();
         self.home.poll(&self.library.entries, ctx);
         let sections = crate::home::sections(&self.library.entries, &self.home.info, &self.library.dismissed, &self.home.query);
         let open: Vec<PathBuf> = self.tabs.iter().filter_map(|t| t.root().map(Path::to_path_buf)).collect();
@@ -124,7 +125,7 @@ impl App {
         let overlay = self.palette.is_some() || self.switcher.is_some() || self.settings_open || self.modal();
         let total = self.library.entries.len();
         let home = &mut self.home;
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 let full = ui.available_width();
                 let w = (full - 48.0).min(PAGE_W);
@@ -292,7 +293,7 @@ fn cards(ui: &mut Ui, entries: &[Entry], marks: &Marks, cmds: &mut Vec<Cmd>) {
 /// One repository: its initials, name and folder, when it was last opened, and a star.
 fn card(ui: &mut Ui, r: Rect, e: &Entry, marks: &Marks, cmds: &mut Vec<Cmd>) {
     let k = theme::c();
-    let id = ui.id().with(("home_card", &e.path));
+    let id = ui.scope_id().with(("home_card", &e.path));
     let resp = ui.interact(r, id, Sense::click());
     let star = Rect::from_center_size(pos2(r.right() - 18.0, r.top() + 18.0), vec2(24.0, 24.0));
     let star_resp = ui.interact(star, id.with("star"), Sense::click());

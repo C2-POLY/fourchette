@@ -141,7 +141,7 @@ impl Tab {
         let pull = self.pulls.pulls.as_deref().and_then(|p| p.list.iter().find(|q| q.number == c.pull.number)).unwrap_or(&c.pull);
         let k = theme::c();
         let mut close = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
-        let area = egui::Area::new(egui::Id::new(("checks", self.key))).order(egui::Order::Foreground).fixed_pos(anchor).constrain(true).show(ctx, |ui| {
+        let area = egui::Area::new(egui::Id::unique(("checks", self.key))).order(egui::Order::Foreground).fixed_pos(anchor).constrain(true).show(ctx, |ui| {
             crate::modal::card(ui, 10, Margin { left: 12, right: 12, top: 11, bottom: 10 }, |ui| {
                 ui.set_width(WIDTH);
                 ui.spacing_mut().item_spacing.y = 6.0;

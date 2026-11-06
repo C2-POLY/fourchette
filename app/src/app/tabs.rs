@@ -233,7 +233,7 @@ impl App {
         for (k, t) in self.tabs.iter().enumerate() {
             let r = rect_of(k);
             let is_active = k == self.active;
-            let resp = ui.interact(r, ui.id().with(("tab", t.key)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("tab", t.key)), Sense::click());
             // Drawn a little past the bottom, so the outline has no bottom edge.
             let body = Rect::from_min_max(r.min, pos2(r.max.x, bottom + 8.0));
             if is_active {
@@ -270,7 +270,7 @@ impl App {
             let mut on_close = false;
             if is_active && n > 1 {
                 let x_rect = Rect::from_center_size(pos2(r.right() - 15.0, cy), vec2(18.0, 18.0));
-                let x_resp = ui.interact(x_rect, ui.id().with(("tab_close", t.key)), Sense::click()).on_hover_text("Close tab (⌘W)");
+                let x_resp = ui.interact(x_rect, ui.scope_id().with(("tab_close", t.key)), Sense::click()).on_hover_text("Close tab (⌘W)");
                 if x_resp.hovered() {
                     p.rect_filled(x_rect, CornerRadius::same(4), c.hover);
                 }
@@ -294,7 +294,7 @@ impl App {
 
         let after = rect_of(n - 1).right();
         let plus = Rect::from_center_size(pos2(after + 8.0 + PLUS / 2.0, top + (bottom - top) / 2.0), vec2(PLUS, PLUS));
-        let resp = ui.interact(plus, ui.id().with("tab_new"), Sense::click()).on_hover_text("New tab (⌘T)");
+        let resp = ui.interact(plus, ui.scope_id().with("tab_new"), Sense::click()).on_hover_text("New tab (⌘T)");
         if resp.hovered() {
             p.rect_filled(plus, CornerRadius::same(6), c.hover);
         }

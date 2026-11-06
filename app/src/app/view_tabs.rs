@@ -105,7 +105,7 @@ impl Tab {
             let seg = Rect::from_min_size(pos2(x, track.top() + 3.0), vec2(*w, 24.0));
             x += w + 2.0;
             let enabled = why.is_none() || *view == active;
-            let resp = ui.interact(seg, ui.id().with(("view_tab", *view as u8)), if enabled { Sense::click() } else { Sense::hover() });
+            let resp = ui.interact(seg, ui.scope_id().with(("view_tab", *view as u8)), if enabled { Sense::click() } else { Sense::hover() });
             let on = *view == active;
             if on {
                 p.rect_filled(seg.translate(vec2(0.0, 1.0)), CornerRadius::same(7), theme::c().border);
