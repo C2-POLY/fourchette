@@ -188,7 +188,7 @@ const PILL_PAD_R: f32 = 7.0;
 
 /// The remote branch of `local` among `refs`: its upstream, or without one the only
 /// `<remote>/<name>` of the same name.
-fn remote_partner(local: &GitRef, refs: &[GitRef]) -> Option<usize> {
+pub fn remote_partner(local: &GitRef, refs: &[GitRef]) -> Option<usize> {
     if !local.upstream.is_empty() {
         return refs.iter().position(|q| q.kind == RefKind::Remote && q.name == local.upstream);
     }
@@ -1064,7 +1064,9 @@ pub fn menu_rows(ui: &mut Ui) {
     ui.set_min_width(180.0);
 }
 
-pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
+/// The menu of a local branch. `remote`: the remote branch of the same pill in the graph, which
+/// "Delete branch…" ticks too (the checked-out branch then deletes only that one).
+pub fn branch_menu(ui: &mut Ui, b: &GitRef, remote: Option<&GitRef>, current: &str, refs: &[GitRef], worktrees: &[crate::worktree::Worktree], cmds: &mut Vec<Cmd>) {
     menu_rows(ui);
     if !b.is_head && ui.button("Check out").clicked() {
         cmds.push(Cmd::Checkout { name: b.name.clone(), remote: false });
@@ -1102,11 +1104,32 @@ pub fn branch_menu(ui: &mut Ui, b: &GitRef, current: &str, refs: &[GitRef], work
     if ui.button("Copy name").clicked() {
         cmds.push(Cmd::Copy(b.name.clone()));
     }
-    if !b.is_head {
+    if !b.is_head || remote.is_some() {
         ui.separator();
         if ui.button(RichText::new("Delete branch…").color(theme::c().deleted)).clicked() {
-            // Opens the delete dialog, which also handles a worktree using the branch.
-            cmds.push(Cmd::AskDeleteBranch(b.name.clone()));
+            // Opens the delete dialog, which also handles a worktree using the branch and offers
+            // its remote branch.
+            cmds.push(Cmd::AskDeleteBranch { local: (!b.is_head).then(|| b.name.clone()), remote: remote.map(|r| r.name.clone()) });
+        }
+    }
+}
+
+/// The menu of a remote branch ("origin/feat/x"), in the sidebar and on a pill of the graph.
+pub fn remote_branch_menu(ui: &mut Ui, r: &GitRef, cmds: &mut Vec<Cmd>) {
+    menu_rows(ui);
+    if ui.button("Check out").clicked() {
+        cmds.push(checkout_remote(r));
+    }
+    if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
+        cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
+    }
+    if ui.button("Copy name").clicked() {
+        cmds.push(Cmd::Copy(r.name.clone()));
+    }
+    if !r.name.ends_with("/HEAD") {
+        ui.separator();
+        if ui.button(RichText::new("Delete branch…").color(theme::c().deleted)).clicked() {
+            cmds.push(Cmd::AskDeleteBranch { local: None, remote: Some(r.name.clone()) });
         }
     }
 }

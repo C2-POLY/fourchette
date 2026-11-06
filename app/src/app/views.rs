@@ -219,7 +219,7 @@ impl Tab {
         if resp.double_clicked() {
             cmds.extend(label_checkout(b));
         }
-        resp.context_menu(|ui| branch_menu(ui, b, cur, &self.refs, &self.worktrees, cmds));
+        resp.context_menu(|ui| branch_menu(ui, b, None, cur, &self.refs, &self.worktrees, cmds));
     }
 
     /// A branch of a remote: a link icon when a local branch tracks it, "not local" otherwise.
@@ -237,18 +237,7 @@ impl Tab {
         if resp.double_clicked() {
             cmds.push(checkout_remote(r));
         }
-        resp.context_menu(|ui| {
-            crate::ui::menu_rows(ui);
-            if ui.button("Check out").clicked() {
-                cmds.push(checkout_remote(r));
-            }
-            if ui.button(format!("Merge {} into current branch…", r.name)).clicked() {
-                cmds.push(Cmd::AskMerge { name: r.name.clone(), remote: true });
-            }
-            if ui.button("Copy name").clicked() {
-                cmds.push(Cmd::Copy(r.name.clone()));
-            }
-        });
+        resp.context_menu(|ui| crate::ui::remote_branch_menu(ui, r, cmds));
     }
 
     fn sidebar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>) {
@@ -512,11 +501,13 @@ impl Tab {
                 let msg_right = rect.right() - date_w - author_w - 12.0;
                 // Branch / tag pills first (at most 40% of the message area), then the message.
                 let mut text_x = mx;
+                // The pill under a right-click, whose branch menu shows instead of the commit's.
+                let mut hit_pill: Option<(GitRef, Option<GitRef>)> = None;
                 if let Some(refs) = self.by_target.get(&c.hash) {
                     let all = ref_pills(refs);
                     let max_x = mx + ((msg_right - mx) * 0.4).max(0.0);
                     let mut x = mx;
-                    let mut shown: Vec<(Rect, &GitRef)> = Vec::new();
+                    let mut shown: Vec<(Rect, &GitRef, Option<&GitRef>)> = Vec::new();
                     for (k, pill) in all.iter().enumerate() {
                         // A pull request badge sits inside the pill, after its name.
                         let pull = self.pill_pull(pill);
@@ -532,17 +523,21 @@ impl Tab {
                         // A pill wider than the room left ends its name with "…", never cut at the edge.
                         let pr = Rect::from_min_size(pos2(x, y - 9.0), vec2(w.min((max_x - x).max(24.0)), 18.0));
                         draw_ref_pill(&p, pr, pill, lane_col, bg, pull);
-                        shown.push((pr, pill.main));
+                        shown.push((pr, pill.main, pill.remote));
                         x = pr.right() + theme::REF_GAP;
                     }
                     text_x = x + 2.0;
                     // A double-click on a pill checks its branch out: the local one of a merged pill.
                     if resp.double_clicked() {
                         if let Some(q) = ui.input(|i| i.pointer.interact_pos()) {
-                            if let Some((_, r)) = shown.iter().find(|(pr, _)| pr.contains(q)) {
+                            if let Some((_, r, _)) = shown.iter().find(|(pr, _, _)| pr.contains(q)) {
                                 cmds.extend(label_checkout(r));
                             }
                         }
+                    }
+                    if resp.secondary_clicked() {
+                        let q = ui.input(|i| i.pointer.interact_pos());
+                        hit_pill = q.and_then(|q| shown.iter().find(|(pr, _, _)| pr.contains(q))).map(|(_, m, r)| ((*m).clone(), r.cloned()));
                     }
                     // Hovering the pills lists every one of the commit in full, the hidden ones included.
                     if resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|q| q.x >= mx && q.x < x) {
@@ -579,7 +574,16 @@ impl Tab {
                     cmds.push(Cmd::Select(Sel::Commit(i)));
                 }
                 let (hash, subject, branch) = (c.hash.clone(), c.subject.clone(), self.branch.clone());
-                resp.context_menu(|ui| commit_menu(ui, &hash, &subject, branch.as_deref(), cmds));
+                let pill_key = resp.id.with("pill_menu");
+                if resp.secondary_clicked() {
+                    ui.data_mut(|d| d.insert_temp(pill_key, hit_pill));
+                }
+                let pill_menu: Option<(GitRef, Option<GitRef>)> = ui.data(|d| d.get_temp(pill_key)).flatten();
+                resp.context_menu(|ui| match &pill_menu {
+                    Some((m, rm)) if m.kind == RefKind::Local => branch_menu(ui, m, rm.as_ref(), branch.as_deref().unwrap_or(""), &self.refs, &self.worktrees, cmds),
+                    Some((m, _)) if m.kind == RefKind::Remote => crate::ui::remote_branch_menu(ui, m, cmds),
+                    _ => commit_menu(ui, &hash, &subject, branch.as_deref(), cmds),
+                });
             }
         });
     }
@@ -1141,42 +1145,89 @@ impl Tab {
                 }
                 out.primary || out.close
             }
-            Some(Dialog::DeleteBranch { name, merged, force, worktree, dirty, also_worktree }) => {
-                // Wording of the original's delete-branch sheet (sub_100070d94).
-                let ok = (worktree.is_none() || *also_worktree) && (*merged || *force);
-                let go = if worktree.is_some() && *also_worktree { "Delete branch and worktree" } else { "Delete branch" };
-                let out = Modal::new("delete_branch", Width::Medium, "trash", vec![text("Delete branch"), pill(name.as_str())])
+            Some(Dialog::DeleteBranch(d)) => {
+                // Wording of the original's delete-branch sheet (sub_100070d94), with the remote
+                // branch as a second row: deleting it is asked twice, since ⌘Z can't take it back.
+                let hint = if d.confirm {
+                    vec![Hint::Text(format!("Click again to delete it on {}", d.remote.as_ref().map(|r| r.remote.as_str()).unwrap_or_default()))]
+                } else if d.del_remote {
+                    vec![Hint::Text("Deleting on the remote can't be undone with ⌘Z".into())]
+                } else {
+                    modal::undo_hint()
+                };
+                let title = d.title();
+                let out = Modal::new("delete_branch", Width::Medium, "trash", vec![text("Delete branch"), pill(title.as_str())])
                     .danger(true)
-                    .status(vec![text("Delete local branch from your repository")])
-                    .hint(modal::undo_hint())
-                    .primary(go, true, ok)
+                    .status(vec![text(d.status())])
+                    .hint(hint)
+                    .primary(d.button(), true, d.can_go())
                     .show(ctx, |ui| {
-                        if let Some(w) = worktree.as_ref() {
-                            let k = theme::c();
-                            modal::note(ui, k.modified, |ui| {
-                                ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(k.text)).on_hover_text(w.path.display().to_string());
-                                if *dirty && *also_worktree {
-                                    ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").size(theme::FS_SECONDARY).color(k.dim));
+                        let k = theme::c();
+                        let before = (d.del_local, d.del_remote);
+                        let both = d.both();
+                        if let Some(l) = d.local.as_mut() {
+                            if both {
+                                modal::check_row(ui, &mut d.del_local, &format!("Local branch {}", l.name), Some("⌘Z brings it back"));
+                            }
+                            if d.del_local {
+                                if let Some(w) = l.worktree.as_ref() {
+                                    ui.add_space(8.0);
+                                    modal::note(ui, k.modified, |ui| {
+                                        ui.label(RichText::new(format!("Checked out in worktree “{}”", w.name())).color(k.text)).on_hover_text(w.path.display().to_string());
+                                        if l.dirty && l.also_worktree {
+                                            ui.label(RichText::new("It has uncommitted changes. They're saved before it's removed, so Undo (⌘Z) brings them back.").size(theme::FS_SECONDARY).color(k.dim));
+                                        }
+                                        if !l.also_worktree {
+                                            ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").size(theme::FS_SECONDARY).color(k.deleted));
+                                        }
+                                    });
+                                    ui.add_space(8.0);
+                                    modal::check_row(ui, &mut l.also_worktree, "Also delete worktree", None);
                                 }
-                                if !*also_worktree {
-                                    ui.label(RichText::new("Git can't delete a branch that is checked out in a worktree.").size(theme::FS_SECONDARY).color(k.deleted));
+                                if !l.merged {
+                                    ui.add_space(8.0);
+                                    modal::check_row(ui, &mut l.force, "Delete even though it isn't merged into the current branch", None);
                                 }
-                            });
-                            ui.add_space(8.0);
-                            modal::check_row(ui, also_worktree, "Also delete worktree", None);
+                                if l.worktree.is_none() && l.merged {
+                                    ui.label(RichText::new("It's merged into the current branch, so no work is lost.").color(k.dim));
+                                }
+                            }
                         }
-                        if !*merged {
-                            ui.add_space(8.0);
-                            modal::check_row(ui, force, "Delete even though it isn't merged into the current branch", None);
+                        if let Some(r) = d.remote.as_ref() {
+                            if both {
+                                ui.add_space(8.0);
+                                modal::check_row(ui, &mut d.del_remote, &format!("Remote branch {}", r.name()), Some("can't be undone"));
+                            }
+                            if d.del_remote {
+                                if let Some(p) = r.open_pull.as_ref() {
+                                    ui.add_space(8.0);
+                                    modal::note(ui, k.modified, |ui| {
+                                        ui.label(RichText::new(format!("Pull request {p} is open on this branch: GitHub will close it.")).color(k.text));
+                                    });
+                                }
+                                if d.confirm {
+                                    ui.add_space(8.0);
+                                    modal::note(ui, k.deleted, |ui| {
+                                        ui.label(RichText::new(d.warning()).color(k.text));
+                                    });
+                                }
+                            }
                         }
-                        if worktree.is_none() && *merged {
-                            ui.label(RichText::new("It's merged into the current branch, so no work is lost.").color(theme::c().dim));
+                        if (d.del_local, d.del_remote) != before {
+                            d.confirm = false;
                         }
                     });
-                if out.primary {
-                    cmds.push(Cmd::DeleteBranch { name: name.clone(), force: *force, also_worktree: *also_worktree });
+                // Deleting on the remote takes a second click.
+                let go = out.primary && d.can_go();
+                if go && d.needs_confirm() {
+                    d.confirm = true;
+                    false
+                } else {
+                    if go {
+                        cmds.push(Cmd::DeleteBranch(d.clone()));
+                    }
+                    go || out.close
                 }
-                out.primary || out.close
             }
             Some(Dialog::DeleteWorktree { wt, dirty }) => {
                 // The original's wording (sub_1002008ec).
