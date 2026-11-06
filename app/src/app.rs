@@ -2,6 +2,7 @@ mod assistant;
 mod board;
 mod issue;
 mod changelog;
+mod checks;
 mod home;
 mod palette;
 mod pr_draft;
@@ -183,6 +184,8 @@ pub enum Cmd {
     Board,
     /// The toolbar's issue chip: the Project view with that item's details.
     IssueDetail(String),
+    /// A click on a branch's pull request badge: the card of its checks, under the badge.
+    Checks(crate::pulls::Pull, Option<egui::Pos2>),
     /// The offer to move the branch's issue: Move, Not now, and the confirmation's Undo.
     IssueMove,
     IssueDecline,
@@ -453,6 +456,12 @@ impl App {
         if let Some(n) = std::env::var("FOURCHETTE_BOARD_DRAG").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
             t.board.open = true;
             t.board.drag_demo = Some(n);
+        }
+        // FOURCHETTE_CHECKS=<n> opens the checks of sample pull request #n under its badge.
+        if let Some(n) = std::env::var("FOURCHETTE_CHECKS").ok().and_then(|v| v.trim_start_matches('#').parse::<u64>().ok()) {
+            if let Some(p) = t.pulls.pulls.as_deref().and_then(|p| p.list.iter().find(|q| q.number == n)).cloned() {
+                t.checks_open(p, None);
+            }
         }
         // FOURCHETTE_ISSUE=<n>[,progress|review|moved]: on a branch of issue #n, with its offer.
         if let Ok(v) = std::env::var("FOURCHETTE_ISSUE") {
