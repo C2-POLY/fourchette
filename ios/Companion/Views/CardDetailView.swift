@@ -77,6 +77,7 @@ struct LinkedRow: View {
             }
             .font(.subheadline)
         }
+        .buttonStyle(.plain)
     }
 
     private var icon: String {
