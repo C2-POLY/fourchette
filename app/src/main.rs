@@ -2,6 +2,7 @@ mod ai;
 mod app;
 mod changelog;
 mod checkout;
+mod delete;
 mod demo;
 mod diff;
 mod filetree;

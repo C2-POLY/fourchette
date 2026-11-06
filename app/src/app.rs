@@ -58,8 +58,9 @@ pub struct DiffView {
 pub enum Dialog {
     NewRef { at: String, label: String, name: String, checkout: bool, tag: bool },
     /// The original's RemoveLocalBranchController (sub_100070d94): "Delete local branch from your
-    /// repository", with "Also delete worktree" when the branch is checked out in one.
-    DeleteBranch { name: String, merged: bool, force: bool, worktree: Option<crate::worktree::Worktree>, dirty: bool, also_worktree: bool },
+    /// repository", with "Also delete worktree" when the branch is checked out in one, and its
+    /// remote branch as a second check row when it has one.
+    DeleteBranch(crate::delete::Delete),
     /// The original's RemoveWorktreeController (sub_1002008ec).
     DeleteWorktree { wt: crate::worktree::Worktree, dirty: bool },
     Confirm { title: String, message: String, label: String, args: Vec<String>, network: bool },
@@ -153,8 +154,10 @@ pub enum Cmd {
     /// Claude proposes a resolution for these conflicted files (all of them when empty).
     AiResolve(Vec<String>),
     /// Worktrees.
-    AskDeleteBranch(String),
-    DeleteBranch { name: String, force: bool, also_worktree: bool },
+    /// Delete a branch: the one clicked, local or remote (both for a merged pill); the dialog
+    /// offers the other side too.
+    AskDeleteBranch { local: Option<String>, remote: Option<String> },
+    DeleteBranch(crate::delete::Delete),
     AskDeleteWorktree(PathBuf),
     DeleteWorktree(PathBuf),
     PruneWorktrees,
@@ -739,7 +742,15 @@ fn sample_dialog(name: &str, worktrees: &[crate::worktree::Worktree]) -> Option<
         "tag" => Dialog::NewRef { at: "ca2a04c".into(), label: "commit ca2a04c".into(), name: String::new(), checkout: false, tag: true },
         "delete-branch" => {
             let name = wt.as_ref().and_then(|w| w.branch.clone()).unwrap_or_else(|| "feature/search".into());
-            Dialog::DeleteBranch { name, merged: false, force: false, worktree: wt, dirty: true, also_worktree: true }
+            let local = crate::delete::Local { name: name.clone(), merged: false, force: false, worktree: wt, dirty: true, also_worktree: true };
+            let mut remote = crate::delete::Remote::of(&format!("origin/{name}"));
+            if let Some(r) = remote.as_mut() {
+                r.open_pull = Some("#52 Search across branches".into());
+            }
+            let both = std::env::var("FOURCHETTE_DELETE").ok();
+            let mut d = crate::delete::Delete::new(Some(local), remote, true, both.is_some());
+            d.confirm = both.as_deref() == Some("confirm");
+            Dialog::DeleteBranch(d)
         }
         "delete-worktree" => Dialog::DeleteWorktree { wt: wt?, dirty: true },
         "abort" => Dialog::Abort { op: std::env::var("FOURCHETTE_OPERATION").map(|v| crate::operation::sample(&v).op).unwrap_or_else(|_| "merge".into()) },

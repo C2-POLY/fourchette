@@ -384,6 +384,75 @@ impl Tab {
         });
     }
 
+    /// Opens the Delete branch dialog on what was clicked, with the other side of the branch
+    /// (its remote branch, or its local one) offered unticked.
+    fn ask_delete_branch(&mut self, local: Option<String>, remote: Option<String>) {
+        use crate::delete::{self, Delete, Local, Remote};
+        let Some(r) = &self.repo else {
+            self.notify("This is the sample project — open one of your repositories to do that.", true);
+            return;
+        };
+        let find = |name: &str, kind: RefKind| self.refs.iter().find(|x| x.kind == kind && x.name == name);
+        let (clicked_local, clicked_remote) = (local.is_some(), remote.is_some());
+        let local_ref = local.as_deref().and_then(|n| find(n, RefKind::Local)).or_else(|| remote.as_deref().and_then(|n| find(n, RefKind::Remote)).and_then(|x| delete::local_of(x, &self.refs)));
+        let remote_ref = remote.as_deref().and_then(|n| find(n, RefKind::Remote)).or_else(|| local_ref.and_then(|x| delete::remote_of(x, &self.refs)));
+        // The checked-out branch can't be deleted here, only its remote branch.
+        let local = local_ref.filter(|b| !b.is_head).map(|b| {
+            let merged = r.git(&["branch", "--format=%(refname:short)", "--merged", "HEAD"]).unwrap_or_default().lines().any(|l| l.trim() == b.name);
+            let worktree = r.worktree_of(&b.name);
+            let dirty = worktree.as_ref().map(|w| crate::worktree::is_dirty(&w.path)).unwrap_or(false);
+            Local { name: b.name.clone(), merged, force: false, worktree, dirty, also_worktree: true }
+        });
+        let remote = remote_ref.and_then(|x| {
+            let mut rm = Remote::of(&x.name)?;
+            rm.open_pull = self.pull_of(x).filter(|p| p.state.is_open()).map(|p| format!("#{} {}", p.number, p.title));
+            Some(rm)
+        });
+        if local.is_none() && remote.is_none() {
+            self.notify("The checked-out branch can't be deleted. Check out another branch first.", true);
+            return;
+        }
+        self.dialog = Some(Dialog::DeleteBranch(Delete::new(local, remote, clicked_local, clicked_remote)));
+    }
+
+    /// Deletes the local branch (one Undo step, its worktree too), then the remote one in the
+    /// background, which no Undo takes back. A failed local deletion leaves the remote alone.
+    fn delete_branch(&mut self, d: crate::delete::Delete, ctx: &egui::Context) {
+        let Some(r) = &self.repo else { return };
+        if let Some(l) = d.local.as_ref().filter(|_| d.del_local) {
+            let name = &l.name;
+            let mut snap = r.snapshot(&format!("Delete branch {name}"), false, false);
+            let (removed, res) = crate::worktree::delete_branch(r, name, l.force, l.also_worktree);
+            let had_wt = removed.is_some();
+            snap.worktrees.extend(removed);
+            self.reload();
+            if had_wt {
+                self.push_undo(snap);
+            } else {
+                self.record(Some(snap));
+            }
+            match res {
+                Ok(_) if had_wt => self.notify(format!("Deleted {name} and its worktree"), false),
+                Ok(_) => self.notify(format!("Deleted {name}"), false),
+                Err(e) => {
+                    self.notify(e, true);
+                    return;
+                }
+            }
+        }
+        let Some(rm) = d.remote.filter(|_| d.del_remote) else { return };
+        self.spawn(&format!("Delete {}", rm.name()), false, ctx, move |root| {
+            let args = rm.args();
+            let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let (res, gone) = crate::delete::pushed(&rm, git::exec(root, &a).map(|(o, e)| format!("{o}{e}")));
+            if gone {
+                // Already deleted on the remote: drop the stale remote-tracking branch here.
+                let _ = git::exec(root, &["branch", "-dr", &rm.name()]);
+            }
+            res
+        });
+    }
+
     /// Opens the Push dialog on the current branch (the sample project's too, for a look).
     pub(super) fn ask_push(&mut self) {
         let Some(branch) = self.branch.clone() else {
@@ -566,34 +635,8 @@ impl Tab {
             Cmd::AiChangelog => self.changelog_open(ctx),
             Cmd::AiDraftPr => self.pr_draft_open(ctx),
             Cmd::AiResolve(paths) => self.resolve_open(paths, ctx),
-            Cmd::AskDeleteBranch(name) => {
-                let Some(r) = &self.repo else {
-                    self.notify("This is the sample project — open one of your repositories to do that.", true);
-                    return;
-                };
-                let merged = r.git(&["branch", "--format=%(refname:short)", "--merged", "HEAD"]).unwrap_or_default().lines().any(|l| l.trim() == name);
-                let worktree = r.worktree_of(&name);
-                let dirty = worktree.as_ref().map(|w| crate::worktree::is_dirty(&w.path)).unwrap_or(false);
-                self.dialog = Some(Dialog::DeleteBranch { name, merged, force: false, worktree, dirty, also_worktree: true });
-            }
-            Cmd::DeleteBranch { name, force, also_worktree } => {
-                let Some(r) = &self.repo else { return };
-                let mut snap = r.snapshot(&format!("Delete branch {name}"), false, false);
-                let (removed, res) = crate::worktree::delete_branch(r, &name, force, also_worktree);
-                let had_wt = removed.is_some();
-                snap.worktrees.extend(removed);
-                self.reload();
-                if had_wt {
-                    self.push_undo(snap);
-                } else {
-                    self.record(Some(snap));
-                }
-                match res {
-                    Ok(_) if had_wt => self.notify(format!("Deleted {name} and its worktree"), false),
-                    Ok(_) => self.notify(format!("Deleted {name}"), false),
-                    Err(e) => self.notify(e, true),
-                }
-            }
+            Cmd::AskDeleteBranch { local, remote } => self.ask_delete_branch(local, remote),
+            Cmd::DeleteBranch(d) => self.delete_branch(d, ctx),
             Cmd::AskDeleteWorktree(path) => {
                 if let Some(wt) = self.worktrees.iter().find(|w| w.path == path).cloned() {
                     let dirty = crate::worktree::is_dirty(&wt.path);
@@ -839,7 +882,7 @@ impl Tab {
         };
         if let Some((res, quiet)) = done {
             // A fetch or a pull may bring news of the pull requests too.
-            let fetched = self.busy.as_ref().is_some_and(|(label, _, _)| label.starts_with("Fetch") || label.starts_with("Pull"));
+            let fetched = self.busy.as_ref().is_some_and(|(label, _, _)| label.starts_with("Fetch") || label.starts_with("Pull") || label.starts_with("Delete "));
             self.busy = None;
             if fetched && res.is_ok() {
                 self.pulls_load();
