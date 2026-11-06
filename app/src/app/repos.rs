@@ -176,6 +176,18 @@ impl App {
         self.states = States::sample(&paths, missing, fetch);
     }
 
+    /// The repositories "Remove N missing" takes off: those whose folder is gone, except on an
+    /// external disk not plugged in (`Library::missing`); in a screenshot, the sample's.
+    pub(super) fn missing_repos(&self) -> Vec<PathBuf> {
+        if self.home.sample {
+            return self.home.sample_missing.clone();
+        }
+        if let Some(m) = self.states.sample_missing() {
+            return m.to_vec();
+        }
+        self.library.missing()
+    }
+
     fn switcher_rows(&self, query: &str) -> Vec<Row> {
         let row = |section: &str, e: &Entry, shortcut: Option<usize>| Row { section: section.into(), entry: e.clone(), shortcut };
         if !query.trim().is_empty() {
@@ -219,6 +231,7 @@ impl App {
         let groups = self.library.custom_groups();
         let all: Vec<PathBuf> = self.library.entries.iter().map(|e| e.path.clone()).collect();
         self.states.ensure(&all, &open, ctx);
+        let missing = self.missing_repos();
         let states = &self.states;
         let (up, down, enter, esc) = ctx.input(|i| (i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown), i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
         let Some(sw) = self.switcher.as_mut() else { return };
@@ -382,16 +395,22 @@ impl App {
                         if button(ui, "Fetch all", Kind::Plain, !running).on_hover_text("git fetch --all --prune in every repository of the list, a few at a time").clicked() {
                             cmds.push(Cmd::FetchAllRepos);
                         }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // Right to left: the last hint first.
-                            ui.spacing_mut().item_spacing.x = 5.0;
-                            let faint = |t: &str| RichText::new(t).size(theme::FS_SECONDARY).color(theme::c().faint);
-                            ui.label(faint("close"));
-                            crate::modal::keycap(ui, Cap::Text("Esc"));
-                            ui.add_space(6.0);
-                            ui.label(faint("open"));
-                            crate::modal::keycap(ui, Cap::Text("Enter"));
-                        });
+                        if remove_missing_button(ui, &missing) {
+                            cmds.push(Cmd::RepoRemoveMissing(missing.clone()));
+                        }
+                        // No room left for the keyboard hints beside "Remove N missing".
+                        if missing.is_empty() {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Right to left: the last hint first.
+                                ui.spacing_mut().item_spacing.x = 5.0;
+                                let faint = |t: &str| RichText::new(t).size(theme::FS_SECONDARY).color(theme::c().faint);
+                                ui.label(faint("close"));
+                                crate::modal::keycap(ui, Cap::Text("Esc"));
+                                ui.add_space(6.0);
+                                ui.label(faint("open"));
+                                crate::modal::keycap(ui, Cap::Text("Enter"));
+                            });
+                        }
                     });
                     match &states.fetch {
                         Some(f) if f.running() => {
@@ -440,6 +459,17 @@ impl App {
             }
         }
     }
+}
+
+/// "Remove N missing", shown only when some repositories of the list lost their folder (the home
+/// page and the switcher). Returns true when clicked.
+pub(super) fn remove_missing_button(ui: &mut egui::Ui, missing: &[PathBuf]) -> bool {
+    if missing.is_empty() {
+        return false;
+    }
+    crate::modal::button(ui, &format!("Remove {} missing", missing.len()), crate::modal::Kind::Plain, true)
+        .on_hover_text("Takes the repositories whose folder is gone off the list. The folders on disk are not touched, and those on an external disk that is not plugged in stay.")
+        .clicked()
 }
 
 #[cfg(test)]

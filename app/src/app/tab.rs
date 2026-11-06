@@ -93,7 +93,13 @@ pub struct Notice {
     pub at: Instant,
     /// What it reports can be taken back with Cmd+Z: the toast says so, and stays `UNDO_SECS`.
     pub undo: bool,
+    /// A button on the toast and the command it runs, such as the Undo of "Remove N missing",
+    /// which is the repository list's and not Git's (Cmd+Z). The toast then stays `UNDO_SECS`.
+    pub action: Option<ToastAction>,
 }
+
+/// A toast's button: its label, and the command it runs.
+pub type ToastAction = (&'static str, fn() -> Cmd);
 
 /// How long a toast stays, and one that offers Cmd+Z.
 pub const TOAST_SECS: f32 = 4.0;
@@ -569,7 +575,7 @@ impl Tab {
     }
 
     pub(super) fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.notice = Some(Notice { msg: msg.into(), error, at: Instant::now(), undo: false });
+        self.notice = Some(Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None });
     }
 
     pub(super) fn ensure_details(&mut self) {
@@ -723,6 +729,8 @@ impl Tab {
             | Cmd::RepoFavorite(_)
             | Cmd::RepoGroup(..)
             | Cmd::RepoForget(_)
+            | Cmd::RepoRemoveMissing(_)
+            | Cmd::RepoPutBack
             | Cmd::ScanFolder
             | Cmd::FetchAllRepos
             | Cmd::Reveal(_)

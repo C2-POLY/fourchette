@@ -23,13 +23,18 @@ pub struct HomeState {
     info: HashMap<PathBuf, RepoInfo>,
     rx: Option<Receiver<(PathBuf, RepoInfo)>>,
     /// `FOURCHETTE_HOME`: invented repositories, whose folders are never read.
-    sample: bool,
+    pub(super) sample: bool,
+    /// `FOURCHETTE_HOME=missing`: the invented repositories shown with their folder gone.
+    pub(super) sample_missing: Vec<PathBuf>,
 }
 
 impl HomeState {
     /// For `FOURCHETTE_HOME=1` screenshots: the invented repositories in place of the list.
-    pub(super) fn sample(&mut self, library: &mut crate::library::Library) {
+    pub(super) fn sample(&mut self, library: &mut crate::library::Library, missing: bool) {
         let (entries, info) = crate::home::sample();
+        if missing {
+            self.sample_missing = entries.iter().map(|e| e.path.clone()).filter(|p| ["fourchette-board-drag", "infra", "scratch"].iter().any(|n| p.ends_with(n))).collect();
+        }
         *library = library.sample(entries);
         self.info = info;
         self.sample = true;
@@ -119,9 +124,10 @@ impl App {
         self.home.poll(&self.library.entries, ctx);
         let sections = crate::home::sections(&self.library.entries, &self.home.info, &self.library.dismissed, &self.home.query);
         let open: Vec<PathBuf> = self.tabs.iter().filter_map(|t| t.root().map(Path::to_path_buf)).collect();
-        // The sample's folders are invented: none of them is there.
-        let missing = if self.home.sample { HashSet::new() } else { self.library.entries.iter().filter(|e| !e.path.exists()).map(|e| e.path.clone()).collect() };
+        // The sample's folders are invented: only those of FOURCHETTE_HOME=missing count as gone.
+        let missing = if self.home.sample { self.home.sample_missing.iter().cloned().collect() } else { self.library.entries.iter().filter(|e| !e.path.exists()).map(|e| e.path.clone()).collect() };
         let marks = Marks { open, missing };
+        let removable = self.missing_repos();
         let overlay = self.palette.is_some() || self.switcher.is_some() || self.settings_open || self.modal();
         let total = self.library.entries.len();
         let home = &mut self.home;
@@ -135,7 +141,7 @@ impl App {
                     ui.add_space(side);
                     ui.vertical(|ui| {
                     ui.set_width(w);
-                    header(ui, home, total, overlay, &sections, cmds);
+                    header(ui, home, total, overlay, &sections, &removable, cmds);
                     ui.add_space(18.0);
                     if total == 0 {
                         ui.add_space(40.0);
@@ -168,7 +174,7 @@ struct Marks {
 }
 
 /// The title, the search and the buttons that add repositories.
-fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sections: &[Section], cmds: &mut Vec<Cmd>) {
+fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sections: &[Section], missing: &[PathBuf], cmds: &mut Vec<Cmd>) {
     let k = theme::c();
     ui.label(RichText::new("Repositories").size(22.0).strong().color(k.strong));
     let n = if total == 1 { "1 repository".to_string() } else { format!("{total} repositories") };
@@ -178,7 +184,8 @@ fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sectio
         let edit = ui.add(
             egui::TextEdit::singleline(&mut home.query)
                 .hint_text(crate::ui::faint_hint("Search by name, folder or organisation…"))
-                .desired_width(340.0)
+                // Narrower when "Remove N missing" joins the buttons, so the row still fits.
+                .desired_width(if missing.is_empty() { 340.0 } else { 280.0 })
                 .margin(Margin::symmetric(10, 7)),
         );
         // Typing searches at once, unless something on top has the keyboard.
@@ -203,6 +210,9 @@ fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sectio
         }
         if button(ui, "Add every repository in a folder…", Btn::Plain, true).clicked() {
             cmds.push(Cmd::ScanFolder);
+        }
+        if super::repos::remove_missing_button(ui, missing) {
+            cmds.push(Cmd::RepoRemoveMissing(missing.to_vec()));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let link = ui.add(egui::Label::new(RichText::new("Explore the sample project").color(k.accent_text)).sense(Sense::click()));
