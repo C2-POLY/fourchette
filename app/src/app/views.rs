@@ -2233,12 +2233,18 @@ impl eframe::App for App {
         }
 
         if let Some(t) = &self.toast {
-            let (age, life) = (t.at.elapsed().as_secs_f32(), if t.undo { tab::UNDO_SECS } else { tab::TOAST_SECS });
+            let timed = t.undo || t.action.is_some();
+            let (age, life) = (t.at.elapsed().as_secs_f32(), if timed { tab::UNDO_SECS } else { tab::TOAST_SECS });
             if age < life {
-                // A toast that offers Cmd+Z shows the time left as a bar that shrinks.
-                let left = t.undo.then(|| 1.0 - age / life);
-                crate::modal::toast(ctx, &t.msg, t.error, age as f64, left);
-                ctx.request_repaint_after(std::time::Duration::from_millis(if t.undo { 33 } else { 250 }));
+                // A toast that offers Cmd+Z or a button shows the time left as a bar that shrinks.
+                let left = timed.then(|| 1.0 - age / life);
+                if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label)) {
+                    if let Some((_, cmd)) = t.action {
+                        cmds.push(cmd());
+                    }
+                    self.toast = None;
+                }
+                ctx.request_repaint_after(std::time::Duration::from_millis(if timed { 33 } else { 250 }));
             } else {
                 self.toast = None;
             }

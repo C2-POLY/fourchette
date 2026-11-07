@@ -171,6 +171,38 @@ pub fn restore_tabs(tabs: &[PathBuf], active: usize, exists: impl Fn(&Path) -> b
     (out, at.unwrap_or(last))
 }
 
+/// Whether a repository whose folder is not there counts as missing: yes, unless it sits on an
+/// external disk that is not mounted (`/Volumes/<disk>/…` with `/Volumes/<disk>` itself gone),
+/// which may come back when the disk is plugged in.
+pub fn is_missing(path: &Path, exists: impl Fn(&Path) -> bool) -> bool {
+    if exists(path) {
+        return false;
+    }
+    let mut parts = path.components();
+    let disk = match (parts.next(), parts.next(), parts.next()) {
+        (Some(std::path::Component::RootDir), Some(std::path::Component::Normal(v)), Some(std::path::Component::Normal(d))) if v == "Volumes" => Some(Path::new("/Volumes").join(d)),
+        _ => None,
+    };
+    disk.is_none_or(|d| exists(&d))
+}
+
+/// The temporary folders: a repository opened there (a demo made for a moment) is not kept in
+/// the list nor in the tabs reopened at launch.
+pub fn temp_roots() -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"].into_iter().map(PathBuf::from).collect();
+    v.push(std::env::temp_dir());
+    v
+}
+
+/// Whether `path` is inside one of the temporary folders `roots` (`temp_roots`).
+pub fn is_temporary(path: &Path, roots: &[PathBuf]) -> bool {
+    roots.iter().any(|r| !r.as_os_str().is_empty() && path.starts_with(r))
+}
+
+/// Entries taken off the list, each with its place in it, so that `Library::put_back` restores
+/// them as they were.
+pub type Removed = Vec<(usize, Entry)>;
+
 pub(crate) fn support_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Fourchette"))
 }
@@ -338,6 +370,42 @@ impl Library {
 
     pub fn forget(&mut self, path: &Path) {
         self.entries.retain(|e| e.path != path);
+    }
+
+    /// The entries whose folder is gone (`is_missing`): what "Remove N missing" takes off.
+    pub fn missing(&self) -> Vec<PathBuf> {
+        self.missing_with(|p| p.exists())
+    }
+
+    pub fn missing_with(&self, exists: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
+        self.entries.iter().filter(|e| is_missing(&e.path, &exists)).map(|e| e.path.clone()).collect()
+    }
+
+    /// Takes these repositories off the list (never anything on disk), and gives them back with
+    /// their place for `put_back`.
+    pub fn remove(&mut self, paths: &[PathBuf]) -> Removed {
+        let mut removed = Vec::new();
+        let mut k = 0;
+        self.entries.retain(|e| {
+            let gone = paths.contains(&e.path);
+            if gone {
+                removed.push((k, e.clone()));
+            }
+            k += 1;
+            !gone
+        });
+        removed
+    }
+
+    /// Puts entries taken off by `remove` back where they were, with all they held. One added
+    /// again since keeps its new entry.
+    pub fn put_back(&mut self, removed: Removed) {
+        for (k, e) in removed {
+            if self.get(&e.path).is_none() {
+                let at = k.min(self.entries.len());
+                self.entries.insert(at, e);
+            }
+        }
     }
 
     /// Most recently opened first.
@@ -780,5 +848,72 @@ mod tests {
         // An index past the end keeps the last tab; nothing left gives nothing.
         assert_eq!(restore_tabs(&tabs, 99, exists).1, 2);
         assert_eq!(restore_tabs(&[p("/gone")], 0, exists), (vec![], 0));
+    }
+
+    #[test]
+    fn missing_skips_present_folders_and_unmounted_disks() {
+        let p = |s: &str| PathBuf::from(s);
+        let there = [p("/Users/me/dev/here"), p("/Volumes/Work"), p("/Volumes/Work/here")];
+        let exists = |x: &Path| there.iter().any(|t| t == x);
+        assert!(!is_missing(&p("/Users/me/dev/here"), exists));
+        assert!(is_missing(&p("/Users/me/dev/gone"), exists));
+        // On a mounted disk: gone. On a disk that is not plugged in: kept.
+        assert!(is_missing(&p("/Volumes/Work/gone"), exists));
+        assert!(!is_missing(&p("/Volumes/Backup/repo"), exists));
+        assert!(!is_missing(&p("/Volumes/Backup"), exists));
+        // Only directly under /Volumes.
+        assert!(is_missing(&p("/Users/me/Volumes/Backup/repo"), exists));
+        assert!(is_missing(&p("/Volumes"), exists));
+
+        let entry = |s: &str| Entry { path: p(s), group: None, favorite: false, last_opened: 0, project: None, details: None };
+        let lib = Library { entries: ["/Users/me/dev/here", "/Users/me/dev/gone", "/Volumes/Backup/repo", "/Volumes/Work/gone"].into_iter().map(entry).collect(), ..Default::default() };
+        assert_eq!(lib.missing_with(exists), [p("/Users/me/dev/gone"), p("/Volumes/Work/gone")]);
+    }
+
+    #[test]
+    fn removed_entries_go_back_as_they_were() {
+        let d = tmp("remove");
+        let file = d.join("repos.json");
+        let p = |s: &str| PathBuf::from(s);
+        let entry = |s: &str| Entry { path: p(s), group: None, favorite: false, last_opened: 0, project: None, details: None };
+        let mut lib = Library::read(&file);
+        lib.entries = ["/a", "/b", "/c", "/d", "/e"].into_iter().map(entry).collect();
+        lib.entries[1] = Entry { group: Some("Work".into()), favorite: true, last_opened: 42, project: Some("acme#3".into()), details: Some(DetailsLayout { place: DetailsPlace::Bottom, hidden: true }), ..entry("/b") };
+        let before = lib.entries.clone();
+
+        let removed = lib.remove(&[p("/b"), p("/d"), p("/nowhere")]);
+        assert_eq!(removed.iter().map(|(k, _)| *k).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(lib.entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>(), [p("/a"), p("/c"), p("/e")]);
+        lib.save();
+        assert_eq!(Library::read(&file).entries.len(), 3, "saved without them");
+
+        lib.put_back(removed.clone());
+        assert_eq!(lib.entries, before, "same places, same favourite, group, project, last opened, layout");
+
+        // One added again in the meantime keeps its new entry, and is not doubled.
+        let mut lib2 = Library { entries: before.clone(), ..Default::default() };
+        let removed = lib2.remove(&[p("/b"), p("/e")]);
+        lib2.add(&p("/b"));
+        lib2.put_back(removed);
+        assert_eq!(lib2.entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>(), [p("/a"), p("/c"), p("/d"), p("/b"), p("/e")]);
+        assert!(!lib2.get(&p("/b")).unwrap().favorite);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn temporary_folders_are_recognised() {
+        let roots = [PathBuf::from("/tmp"), PathBuf::from("/private/var/folders"), PathBuf::from("/var/folders/xy/T/"), PathBuf::new()];
+        for t in ["/tmp/demo", "/tmp", "/private/var/folders/xy/T/demo", "/var/folders/xy/T/demo/sub"] {
+            assert!(is_temporary(Path::new(t), &roots), "{t}");
+        }
+        for t in ["/tmpfiles/demo", "/Users/me/tmp/demo", "/var/foldersx/a", "/private/tmp2", "/"] {
+            assert!(!is_temporary(Path::new(t), &roots), "{t}");
+        }
+        let defaults = temp_roots();
+        for t in ["/private/tmp/claude-501/x", "/tmp/x", "/var/folders/ab/cd/T/x"] {
+            assert!(is_temporary(Path::new(t), &defaults), "{t}");
+        }
+        assert!(is_temporary(&std::env::temp_dir().join("repo"), &defaults));
+        assert!(!is_temporary(Path::new("/Users/me/dev/fourchette"), &defaults));
     }
 }

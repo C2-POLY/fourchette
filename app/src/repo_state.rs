@@ -121,6 +121,11 @@ impl States {
         self.fetch_errors.get(p).map(|s| s.as_str())
     }
 
+    /// Screenshots: the sample paths that count as missing.
+    pub fn sample_missing(&self) -> Option<&[PathBuf]> {
+        self.sample.as_deref()
+    }
+
     pub fn missing(&self, p: &Path) -> bool {
         match &self.sample {
             Some(gone) => gone.iter().any(|g| g == p),

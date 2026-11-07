@@ -150,7 +150,8 @@ impl App {
         if self.screenshot.is_some() {
             return false;
         }
-        let open: Vec<PathBuf> = self.tabs.iter().filter_map(|t| t.root().map(Path::to_path_buf)).collect();
+        // A repository in a temporary folder is not reopened at the next launch.
+        let open: Vec<PathBuf> = self.tabs.iter().filter_map(|t| t.root()).filter(|r| !crate::library::is_temporary(r, &self.temp_roots)).map(Path::to_path_buf).collect();
         let active = self.tab().root().and_then(|r| open.iter().position(|p| p == r)).unwrap_or(0);
         if self.library.tabs == open && self.library.active_tab == active {
             return false;
@@ -342,7 +343,10 @@ mod tests {
 
     /// An app on the repository list in `dir`, with one blank tab, as at launch.
     fn app(dir: &Path) -> App {
-        App::with_library(crate::library::Library::read(&dir.join("repos.json")), None)
+        let mut a = App::with_library(crate::library::Library::read(&dir.join("repos.json")), None);
+        // The test repositories live in the temporary folder.
+        a.temp_roots.clear();
+        a
     }
 
     fn roots(a: &App) -> Vec<PathBuf> {
@@ -594,6 +598,59 @@ mod tests {
         assert_eq!(a.tabs[0].commit_limit, 5_000);
         // Kept for the next launch.
         assert_eq!(crate::library::Library::read(&d.join("repos.json")).settings.max_commits, 5_000);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_repository_in_a_temporary_folder_opens_but_is_not_kept() {
+        let d = tmp("temporary");
+        let (r1, r2) = (repo(&d, "kept"), repo(&d, "demo"));
+        let mut a = app(&d);
+        a.open_path(r1.clone(), false);
+        // Now the folder of r2 counts as temporary.
+        a.temp_roots = vec![r2.clone()];
+        a.open_path(r2.clone(), true);
+        assert_eq!(roots(&a), vec![r1.clone(), r2.clone()], "it opens in its tab");
+        let back = crate::library::Library::read(&d.join("repos.json"));
+        assert_eq!(back.entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>(), vec![r1.clone()]);
+        assert_eq!(back.tabs, vec![r1], "only the other tab is reopened at launch");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn remove_missing_says_how_many_and_its_undo_puts_them_back() {
+        let d = tmp("missing");
+        let (r1, r2, r3) = (repo(&d, "one"), repo(&d, "two"), repo(&d, "three"));
+        let mut a = app(&d);
+        for r in [&r1, &r2, &r3] {
+            a.open_path(r.clone(), false);
+        }
+        a.library.toggle_favorite(&r2);
+        a.library.set_group(&r2, Some("Work".into()));
+        let before = a.library.entries.clone();
+        std::fs::remove_dir_all(&r2).unwrap();
+        std::fs::remove_dir_all(&r3).unwrap();
+        let ctx = egui::Context::default();
+
+        a.run(vec![Cmd::RepoRemoveMissing(a.missing_repos())], &ctx);
+        assert_eq!(toast(&a), Some("2 repositories removed"));
+        assert!(a.toast.as_ref().is_some_and(|t| t.action.is_some_and(|(l, _)| l == "Undo") && !t.undo), "an Undo button, not Cmd+Z");
+        let saved = crate::library::Library::read(&d.join("repos.json"));
+        assert_eq!(saved.entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>(), vec![r1.clone()]);
+        assert!(a.missing_repos().is_empty());
+
+        let (_, undo) = a.toast.as_ref().and_then(|t| t.action).unwrap();
+        a.run(vec![undo()], &ctx);
+        assert_eq!(a.library.entries, before, "back in their places, favourite and group included");
+        assert_eq!(crate::library::Library::read(&d.join("repos.json")).entries, before);
+        assert_eq!(toast(&a), Some("2 repositories put back"));
+        // A second Undo has nothing left to put back.
+        a.run(vec![Cmd::RepoPutBack], &ctx);
+        assert_eq!(a.library.entries.len(), 3);
+
+        // One alone: singular.
+        a.run(vec![Cmd::RepoRemoveMissing(vec![r3.clone()])], &ctx);
+        assert_eq!(toast(&a), Some("1 repository removed"));
         let _ = std::fs::remove_dir_all(&d);
     }
 }
