@@ -107,6 +107,9 @@ pub struct Outcome {
     pub extra: Option<usize>,
 }
 
+/// A header icon drawn rather than a glyph: its tile's fill, and what draws it round a point.
+type IconArt = (Color32, fn(&egui::Painter, Pos2));
+
 /// A dialog, built then shown with its body.
 pub struct Modal {
     id: Id,
@@ -120,12 +123,20 @@ pub struct Modal {
     extra: Vec<String>,
     primary: Option<Primary>,
     closable: bool,
+    /// A drawing in place of the glyph, on its own fill: the Big eater's fork (#212).
+    art: Option<IconArt>,
 }
 
 impl Modal {
     /// `icon` is one of `ui::glyph`'s names.
     pub fn new(id: &str, width: Width, icon: &'static str, title: Vec<Seg>) -> Self {
-        Modal { id: Id::unique(("modal", id)), width, icon, danger: false, title, status: Vec::new(), hint: Vec::new(), cancel: Some("Cancel".into()), extra: Vec::new(), primary: None, closable: true }
+        Modal { id: Id::unique(("modal", id)), width, icon, danger: false, title, status: Vec::new(), hint: Vec::new(), cancel: Some("Cancel".into()), extra: Vec::new(), primary: None, closable: true, art: None }
+    }
+
+    /// The icon tile shows `draw` (round the tile's centre) on `fill` instead of the glyph.
+    pub fn icon_art(mut self, fill: Color32, draw: fn(&egui::Painter, Pos2)) -> Self {
+        self.art = Some((fill, draw));
+        self
     }
 
     /// The icon tile in red, for a dialog that deletes something.
@@ -197,7 +208,7 @@ impl Modal {
             // Header: icon tile, title and status line; the cross is placed once its row is known.
             let head = egui::Frame::new().inner_margin(Margin { left: PAD as i8, right: 14, top: 18, bottom: 16 }).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    icon_tile(ui, self.icon, self.danger);
+                    icon_tile(ui, self.icon, self.danger, self.art);
                     ui.add_space(14.0);
                     let text_w = w - PAD - 14.0 - 38.0 - 14.0 - 40.0;
                     ui.allocate_ui_with_layout(vec2(text_w, 38.0), Layout::top_down(Align::Min), |ui| {
@@ -443,9 +454,14 @@ pub fn pill_ui(ui: &mut Ui, text: &str, remote: bool, beside: f32) -> Response {
 }
 
 /// The rounded square at the left of the header, with the dialog's icon.
-fn icon_tile(ui: &mut Ui, icon: &str, danger: bool) {
+fn icon_tile(ui: &mut Ui, icon: &str, danger: bool, art: Option<IconArt>) {
     let k = theme::c();
     let (rect, _) = ui.allocate_exact_size(vec2(38.0, 38.0), Sense::hover());
+    if let Some((fill, draw)) = art {
+        ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
+        draw(ui.painter(), rect.center());
+        return;
+    }
     let (fill, fg) = if danger { (theme::tint(k.deleted, k.elevated, 0.16), k.deleted) } else { (k.accent_soft, k.accent_text) };
     ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
     crate::ui::glyph(ui.painter(), rect.center(), icon, 20.0, 1.7, fg);

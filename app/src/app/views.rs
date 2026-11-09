@@ -43,11 +43,20 @@ fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
     (a, b)
 }
 
+/// What a skin shows as a pill in the toolbar.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum SkinPill {
+    /// The Runner's race of the day, in metres (#206).
+    Metres(u32),
+    /// The Big eater's daily menu: the kcal and the combo running (#212).
+    Kcal(u32, u32),
+}
+
 impl Tab {
     // ---------------------------------------------------------------- toolbar
 
-    /// `metres`: the Runner skin's race, shown as a pill.
-    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool, metres: Option<u32>) {
+    /// `pill`: the skin's pill, the Runner's race or the Big eater's menu.
+    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool, pill: Option<SkinPill>) {
         // The toolbar is the window's top edge (no title bar).
         crate::titlebar::drag_area(ui);
         let fullscreen = ui.input(|i| i.viewport().fullscreen.unwrap_or(false));
@@ -146,10 +155,17 @@ impl Tab {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
                 ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(240.0).margin(Margin::symmetric(10, 6)));
-                // The Runner skin's race of the day (#206).
-                if let Some(m) = metres {
-                    ui.add_space(10.0);
-                    super::course::metres_pill(ui, m);
+                // The Runner skin's race of the day (#206), the Big eater's menu (#212).
+                match pill {
+                    Some(SkinPill::Metres(m)) => {
+                        ui.add_space(10.0);
+                        super::course::metres_pill(ui, m);
+                    }
+                    Some(SkinPill::Kcal(kcal, combo)) => {
+                        ui.add_space(10.0);
+                        super::meal::kcal_pill(ui, kcal, combo);
+                    }
+                    None => {}
                 }
                 // A newer release on GitHub (issue #80).
                 if update {
@@ -2068,13 +2084,17 @@ impl eframe::App for App {
             .show(root, |ui| {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
-                let metres = (self.library.settings.skin == crate::settings::Skin::Runner).then_some(self.race.course.metres);
+                let pill = match self.library.settings.skin {
+                    crate::settings::Skin::Runner => Some(SkinPill::Metres(self.race.course.metres)),
+                    crate::settings::Skin::Eater => Some(SkinPill::Kcal(self.meal.meal.kcal, self.meal.meal.combo(self.meal.secs()))),
+                    _ => None,
+                };
                 if full {
                     ui.push_id(key, |ui| self.board_full_bar(ui, &mut cmds));
                 } else if self.tab().home {
                     self.home_toolbar(ui, &mut cmds);
                 } else {
-                    ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update, metres));
+                    ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update, pill));
                 }
             });
 
@@ -2250,6 +2270,12 @@ impl eframe::App for App {
             self.settings_ui(ctx, &mut cmds);
         }
 
+        let eater = self.library.settings.skin == crate::settings::Skin::Eater;
+        if eater {
+            // The daily menu's bar, which takes no click, and its card (#212).
+            self.meal_bar(ctx);
+            self.golden_fork_dialog(ctx, &mut cmds);
+        }
         if self.library.settings.skin == crate::settings::Skin::Gamer {
             let (now, dt, pointer) = ctx.input(|i| (i.time as f32, i.stable_dt.min(0.1), i.pointer.hover_pos()));
             let pointer = self.mess.pin.or(pointer);
@@ -2273,10 +2299,11 @@ impl eframe::App for App {
             if age < life {
                 // A toast that offers Cmd+Z or a button shows the time left as a bar that shrinks.
                 let left = timed.then(|| 1.0 - age / life);
-                // Under the Runner skin the coach speaks, and the other toasts sit above the course bar.
-                if let (Some(coach), true) = (&t.coach, runner) {
+                // Under the Runner skin the coach speaks, under the Big eater the announcer, and
+                // the other toasts sit above their bar.
+                if let (Some(coach), true) = (&t.coach, runner || eater) {
                     super::course::coach_toast(ctx, coach, &t.msg, age as f64);
-                } else if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label), if runner { 100.0 } else { 0.0 }) {
+                } else if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label), if runner || eater { 100.0 } else { 0.0 }) {
                     if let Some((_, cmd)) = t.action {
                         cmds.push(cmd());
                     }

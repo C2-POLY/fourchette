@@ -251,10 +251,12 @@ pub enum Skin {
     Gamer,
     /// The city becomes a stadium, and each Git action moves you along an 8,000 m race (#206).
     Runner,
+    /// The city becomes a food court, and each Git action is a bite of a daily menu (#212).
+    Eater,
 }
 
 impl Skin {
-    pub const ALL: [Skin; 3] = [Skin::Normal, Skin::Gamer, Skin::Runner];
+    pub const ALL: [Skin; 4] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Eater];
 
     /// Its name in repos.json.
     pub fn key(self) -> &'static str {
@@ -262,6 +264,7 @@ impl Skin {
             Skin::Normal => "normal",
             Skin::Gamer => "gamer",
             Skin::Runner => "runner",
+            Skin::Eater => "eater",
         }
     }
 
@@ -270,6 +273,7 @@ impl Skin {
             Skin::Normal => "Normal",
             Skin::Gamer => "Messy gamer",
             Skin::Runner => "Runner",
+            Skin::Eater => "Big eater",
         }
     }
 
@@ -279,6 +283,7 @@ impl Skin {
             Skin::Normal => "The plain interface",
             Skin::Gamer => "Litter, and a vacuum to clean it",
             Skin::Runner => "A stadium and a race of the day",
+            Skin::Eater => "A food court and a daily menu",
         }
     }
 
@@ -466,6 +471,11 @@ mod tests {
             assert_eq!(Settings::from_json(&s.to_json()), s);
         }
         assert_eq!(Settings::from_json(&json!({"skin": "runner"})).skin, Skin::Runner);
+        assert_eq!(Settings::from_json(&json!({"skin": "eater"})).skin, Skin::Eater);
+        assert_eq!((Skin::Eater.key(), Skin::Eater.label()), ("eater", "Big eater"));
+        // The messy gamer stays as it was, the Big eater beside it.
+        assert_eq!(Skin::Gamer.about(), "Litter, and a vacuum to clean it");
+        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Eater]);
     }
 
     #[test]

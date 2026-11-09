@@ -83,10 +83,11 @@ pub struct Tab {
     pub(super) pulls: project::PullsState,
     /// The card of a pull request's checks, opened from its badge.
     pub(super) checks: super::checks::ChecksCard,
-    /// The skin of the settings, copied here each frame: Runner shows the board's city as a stadium.
+    /// The skin of the settings, copied here each frame: Runner shows the board's city as a
+    /// stadium, the Big eater as a food court.
     pub(super) skin: crate::settings::Skin,
-    /// What moved the Runner skin's runner since the app last looked, with the toast's message
-    /// (`App::course_strides` takes them).
+    /// What moved the Runner skin's runner, or fed the Big eater, since the app last looked,
+    /// with the toast's message (`App::take_strides` takes them).
     pub(super) strides: Vec<(crate::course::Stride, String)>,
 }
 
@@ -101,7 +102,8 @@ pub struct Notice {
     /// A button on the toast and the command it runs, such as the Undo of "Remove N missing",
     /// which is the repository list's and not Git's (Cmd+Z). The toast then stays `UNDO_SECS`.
     pub action: Option<ToastAction>,
-    /// The Runner skin's coach says it instead (#206): a title, the km and its colour.
+    /// The Runner skin's coach, or the Big eater's announcer, says it instead (#206, #212): a
+    /// title, the metres or kcal and its colour.
     pub coach: Option<super::course::Coach>,
 }
 
@@ -728,6 +730,7 @@ impl Tab {
             | Cmd::SetAppearance(_)
             | Cmd::SetSkin(_)
             | Cmd::Finisher { .. }
+            | Cmd::GoldenFork { .. }
             | Cmd::SetDetails(_)
             | Cmd::ToggleDetails
             | Cmd::Settings

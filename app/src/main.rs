@@ -33,6 +33,7 @@ mod theme;
 mod titlebar;
 mod track;
 mod course;
+mod meal;
 mod ui;
 mod undo;
 mod update;

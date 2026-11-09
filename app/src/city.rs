@@ -149,6 +149,8 @@ pub struct City {
     pub trees: Vec<(i32, i32)>,
     /// Parks where a row of blocks ends short of the widest one: top-left tile and size.
     pub parks: Vec<(i32, i32, i32, i32)>,
+    /// The block `layout_with` kept free in the middle: top-left tile and size.
+    pub reserved: Option<(i32, i32, i32, i32)>,
 }
 
 /// The district a ticket goes to: its first `zone:` label, else "Elsewhere".
@@ -162,6 +164,12 @@ pub fn zone(it: &Item) -> String {
 /// comes from its name, moved on to the next one when the block on its left or one above it
 /// already has it.
 pub fn layout(items: &[&Item]) -> City {
+    layout_with(items, None)
+}
+
+/// The same city, with a free block of `reserve` tiles (width, height) among the districts, in
+/// the middle of the middle row (`City::reserved`): the food court puts the big eater's table there.
+pub fn layout_with(items: &[&Item], reserve: Option<(i32, i32)>) -> City {
     let mut by_zone: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
     for it in items {
         by_zone.entry(zone(it)).or_default().push(it);
@@ -169,14 +177,22 @@ pub fn layout(items: &[&Item]) -> City {
     let mut zones: Vec<(String, Vec<&Item>)> = by_zone.into_iter().collect();
     zones.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)));
 
-    let per_row = (zones.len() as f32).sqrt().ceil().max(1.0) as usize;
+    // The blocks in order, None for the reserved one.
+    let blocks = zones.len() + reserve.is_some() as usize;
+    let per_row = (blocks as f32).sqrt().ceil().max(1.0) as usize;
+    let mut blocks: Vec<Option<(String, Vec<&Item>)>> = zones.into_iter().map(Some).collect();
+    if reserve.is_some() {
+        let rows = blocks.len().div_ceil(per_row);
+        let middle = (rows / 2 * per_row + (per_row - 1) / 2).min(blocks.len());
+        blocks.insert(middle, None);
+    }
     let mut city = City::default();
     let (mut x, mut y, mut row_h, mut width) = (1, 1, 0, 0);
     // Each row of blocks: its top, its height and where its last block ends.
     let mut rows: Vec<(i32, i32, i32)> = Vec::new();
     // The top of the row above the one being laid out.
     let mut above: Option<i32> = None;
-    for (n, (name, mut tickets)) in zones.into_iter().enumerate() {
+    for (n, block) in blocks.into_iter().enumerate() {
         if n > 0 && n % per_row == 0 {
             above = Some(y);
             rows.push((y, row_h, x));
@@ -184,6 +200,14 @@ pub fn layout(items: &[&Item]) -> City {
             y += row_h + 1;
             row_h = 0;
         }
+        let Some((name, mut tickets)) = block else {
+            let (w, h) = reserve.unwrap_or((1, 1));
+            city.reserved = Some((x, y, w, h));
+            x += w + 1;
+            width = width.max(x);
+            row_h = row_h.max(h);
+            continue;
+        };
         tickets.sort_by_key(|it| (std::cmp::Reverse(Stage::of(&it.status)), it.number.unwrap_or(u64::MAX)));
         let w = (tickets.len() as f32).sqrt().ceil().max(1.0) as i32;
         let h = (tickets.len() as i32 + w - 1) / w;
@@ -391,6 +415,46 @@ mod tests {
         let items = [item(7, "Done", Some("git"), None, 0)];
         let refs: Vec<&Item> = items.iter().collect();
         assert_eq!(layout(&refs).plots[0].seed, stable_hash("7"));
+    }
+
+    #[test]
+    fn the_food_court_keeps_a_block_in_the_middle() {
+        let zones = ["graphe", "git", "github", "historique", "palette", "sélecteur", "thème", "worktrees"];
+        let items: Vec<Item> = zones.iter().enumerate().flat_map(|(i, z)| (0..1 + i as u64 % 4).map(move |k| item(i as u64 * 10 + k + 1, "Done", Some(z), None, 0))).collect();
+        let refs: Vec<&Item> = items.iter().collect();
+        let city = layout_with(&refs, Some((4, 4)));
+        let (rx, ry, rw, rh) = city.reserved.expect("a reserved block");
+        assert_eq!((rw, rh), (4, 4));
+        // Nine blocks in rows of three: the reserved one is the middle of the middle row.
+        let mut tops: Vec<i32> = city.districts.iter().map(|d| d.y).chain([ry]).collect();
+        tops.sort();
+        tops.dedup();
+        assert_eq!(tops.len(), 3);
+        assert_eq!(ry, tops[1]);
+        let row: Vec<&District> = city.districts.iter().filter(|d| d.y == ry).collect();
+        assert_eq!(row.len(), 2);
+        assert!(row.iter().any(|d| d.x < rx) && row.iter().any(|d| d.x > rx));
+        // Nothing stands on it: no district, plot, tree or park, and it is inside the city.
+        let inside = |x: i32, y: i32| x >= rx && x < rx + rw && y >= ry && y < ry + rh;
+        let overlaps = |x: i32, y: i32, w: i32, h: i32| x < rx + rw && rx < x + w && y < ry + rh && ry < y + h;
+        assert!(city.districts.iter().all(|d| !overlaps(d.x, d.y, d.w, d.h)));
+        assert!(city.plots.iter().all(|p| !inside(p.x, p.y)));
+        assert!(city.trees.iter().all(|&(x, y)| !inside(x, y)));
+        assert!(city.parks.iter().all(|&(x, y, w, h)| !overlaps(x, y, w, h)));
+        assert!(rx + rw < city.size.0 && ry + rh < city.size.1);
+        assert_eq!(city.plots.len(), items.len());
+    }
+
+    #[test]
+    fn the_reserve_leaves_the_city_unchanged_without_it() {
+        let items: Vec<Item> = vec![item(1, "Done", Some("a"), None, 0), item(2, "Ready", Some("b"), None, 0), item(3, "Backlog", None, None, 0)];
+        let refs: Vec<&Item> = items.iter().collect();
+        assert_eq!(layout(&refs), layout_with(&refs, None));
+        assert_eq!(layout(&refs).reserved, None);
+        // A small project still gets its block, and the big eater an empty project.
+        assert!(layout_with(&refs, Some((4, 4))).reserved.is_some());
+        let alone = layout_with(&[], Some((4, 4)));
+        assert_eq!((alone.reserved, alone.size), (Some((1, 1, 4, 4)), (6, 6)));
     }
 
     #[test]

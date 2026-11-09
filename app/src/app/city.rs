@@ -18,16 +18,16 @@ use crate::pulls::{Ci, Pulls};
 use egui::{vec2, Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2};
 
 /// A tile's width and height on screen at zoom 1, and a floor's height.
-const TILE_W: f32 = 64.0;
-const TILE_H: f32 = 32.0;
-const FLOOR: f32 = 14.0;
+pub(super) const TILE_W: f32 = 64.0;
+pub(super) const TILE_H: f32 = 32.0;
+pub(super) const FLOOR: f32 = 14.0;
 /// How far the blocks' pavements stand above the road, and how thick the slab is, in floors.
-const KERB: f32 = 0.25;
-const SLAB: f32 = 1.0;
+pub(super) const KERB: f32 = 0.25;
+pub(super) const SLAB: f32 = 1.0;
 /// How far a shadow reaches along x for each floor of what casts it, in tiles.
 const SHADOW_PER_FLOOR: f32 = 0.28;
 /// How far the vehicles drive from the middle of the road, in tiles.
-const LANE: f32 = 0.17;
+pub(super) const LANE: f32 = 0.17;
 
 /// Where the view stands once the person has moved it; None keeps the city fitted.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,20 +39,20 @@ pub struct CityView {
 /// The colours of a box's three visible faces: the south one on the left, the east one on the
 /// right, and its top.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Faces {
-    left: Color32,
-    right: Color32,
-    top: Color32,
+pub(super) struct Faces {
+    pub(super) left: Color32,
+    pub(super) right: Color32,
+    pub(super) top: Color32,
 }
 
 impl Faces {
-    fn of(c: Color32) -> Faces {
+    pub(super) fn of(c: Color32) -> Faces {
         Faces { left: c, right: theme::shade(c, 0.16), top: theme::lighten(c, 0.14) }
     }
 }
 
 /// The flat colours of the city: light grey stone, asphalt, brick, white render, blue glass.
-mod paint {
+pub(super) mod paint {
     use super::Faces;
     use egui::Color32;
 
@@ -120,30 +120,30 @@ mod paint {
 }
 
 #[derive(Clone, Copy)]
-struct Iso {
-    origin: Pos2,
-    zoom: f32,
+pub(super) struct Iso {
+    pub(super) origin: Pos2,
+    pub(super) zoom: f32,
 }
 
 impl Iso {
     /// A point of the city, in tiles (z in floors), on screen.
-    fn at(&self, x: f32, y: f32, z: f32) -> Pos2 {
+    pub(super) fn at(&self, x: f32, y: f32, z: f32) -> Pos2 {
         self.origin + vec2((x - y) * TILE_W / 2.0, (x + y) * TILE_H / 2.0 - z * FLOOR) * self.zoom
     }
 
     /// A rectangle of ground from (x0, y0) to (x1, y1) at height z: north, east, south, west.
-    fn quad(&self, x0: f32, y0: f32, x1: f32, y1: f32, z: f32) -> [Pos2; 4] {
+    pub(super) fn quad(&self, x0: f32, y0: f32, x1: f32, y1: f32, z: f32) -> [Pos2; 4] {
         [self.at(x0, y0, z), self.at(x1, y0, z), self.at(x1, y1, z), self.at(x0, y1, z)]
     }
 
-    fn px(&self, v: f32) -> f32 {
+    pub(super) fn px(&self, v: f32) -> f32 {
         v * self.zoom
     }
 }
 
 /// A flat face. One seen edge-on (a roof slope as steep as the line of sight) has no area on
 /// screen and is left out: egui's anti-aliasing would draw it as spikes across the view.
-fn poly(p: &Painter, pts: Vec<Pos2>, fill: Color32) {
+pub(super) fn poly(p: &Painter, pts: Vec<Pos2>, fill: Color32) {
     if area(&pts).abs() > 0.5 {
         p.add(Shape::convex_polygon(pts, fill, Stroke::NONE));
     }
@@ -155,7 +155,7 @@ fn area(pts: &[Pos2]) -> f32 {
 }
 
 /// A box from (x0, y0) to (x1, y1), from floor z0 to z1: three flat faces, no outline.
-fn cuboid(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z0: f32, z1: f32, f: Faces) {
+pub(super) fn cuboid(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z0: f32, z1: f32, f: Faces) {
     let lo = iso.quad(x0, y0, x1, y1, z0);
     let hi = iso.quad(x0, y0, x1, y1, z1);
     poly(p, vec![lo[3], lo[2], hi[2], hi[3]], f.left);
@@ -163,24 +163,24 @@ fn cuboid(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z0: f3
     poly(p, hi.to_vec(), f.top);
 }
 
-fn shadow() -> Color32 {
+pub(super) fn shadow() -> Color32 {
     Color32::from_rgba_unmultiplied(30, 32, 40, 66)
 }
 
 /// Where the shadow of something whose east side is at `x1`, `h` floors high, ends: the sun
 /// stands low to the west, so it falls along x, and stops at `reach`, the edge of its pavement.
-fn shadow_end(x1: f32, h: f32, reach: f32) -> f32 {
+pub(super) fn shadow_end(x1: f32, h: f32, reach: f32) -> f32 {
     (x1 + h * SHADOW_PER_FLOOR).min(reach.max(x1))
 }
 
 /// The hard shadow a box from (x0, y0) to (x1, y1), `h` floors high, casts on the ground at z.
-fn cast_shadow(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z: f32, h: f32, reach: f32) {
+pub(super) fn cast_shadow(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z: f32, h: f32, reach: f32) {
     poly(p, iso.quad(x0, y0, shadow_end(x1, h, reach), y1, z).to_vec(), shadow());
 }
 
 /// A rectangle on a face: the south one (y = `face`, along x) or the east one (x = `face`,
 /// along y), from a0 to a1, from z0 to z1.
-fn on_face(iso: &Iso, south: bool, face: f32, (a0, a1): (f32, f32), (z0, z1): (f32, f32)) -> Vec<Pos2> {
+pub(super) fn on_face(iso: &Iso, south: bool, face: f32, (a0, a1): (f32, f32), (z0, z1): (f32, f32)) -> Vec<Pos2> {
     let pt = |a: f32, z: f32| if south { iso.at(a, face, z) } else { iso.at(face, a, z) };
     vec![pt(a0, z0), pt(a1, z0), pt(a1, z1), pt(a0, z1)]
 }
@@ -226,7 +226,7 @@ fn wire(p: &Painter, iso: &Iso, a: (f32, f32), b: (f32, f32)) {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Tree {
+pub(super) enum Tree {
     Pine,
     Round,
     Bush,
@@ -243,11 +243,11 @@ enum Tree {
 
 impl Tree {
     /// The trees a park mixes, for variety.
-    const PARK: [Tree; 14] = [Tree::Leafy(0), Tree::Leafy(1), Tree::Leafy(2), Tree::Leafy(3), Tree::Leafy(4), Tree::Leafy(5), Tree::Pine, Tree::Round, Tree::Birch, Tree::Spruce, Tree::Bush, Tree::Flowers(0), Tree::Flowers(1), Tree::Flowers(2)];
+    pub(super) const PARK: [Tree; 14] = [Tree::Leafy(0), Tree::Leafy(1), Tree::Leafy(2), Tree::Leafy(3), Tree::Leafy(4), Tree::Leafy(5), Tree::Pine, Tree::Round, Tree::Birch, Tree::Spruce, Tree::Bush, Tree::Flowers(0), Tree::Flowers(1), Tree::Flowers(2)];
 }
 
 /// A tree in low poly, its lit half and its shaded one, and its shadow along x.
-fn tree(p: &Painter, iso: &Iso, x: f32, y: f32, kind: Tree) {
+pub(super) fn tree(p: &Painter, iso: &Iso, x: f32, y: f32, kind: Tree) {
     let reach = match kind {
         Tree::Pine => 0.45,
         Tree::Round => 0.38,
@@ -334,7 +334,7 @@ fn tree(p: &Painter, iso: &Iso, x: f32, y: f32, kind: Tree) {
 }
 
 /// A lamp post: a grey pole, its arm and its head.
-fn lamp(p: &Painter, iso: &Iso, x: f32, y: f32) {
+pub(super) fn lamp(p: &Painter, iso: &Iso, x: f32, y: f32) {
     p.line_segment([iso.at(x, y, KERB), iso.at(x + 0.4, y, KERB)], Stroke::new(iso.px(1.2), shadow()));
     let s = iso.zoom * 0.62;
     let b = iso.at(x, y, KERB);
@@ -346,7 +346,7 @@ fn lamp(p: &Painter, iso: &Iso, x: f32, y: f32) {
 }
 
 /// A few numbers that stay the same for a place, to vary what stands there.
-fn mix(a: i32, b: i32) -> usize {
+pub(super) fn mix(a: i32, b: i32) -> usize {
     ((a as u32).wrapping_mul(73_856_093) ^ (b as u32).wrapping_mul(19_349_663)) as usize
 }
 
@@ -417,7 +417,7 @@ const SKIN: [Color32; 6] = [
 
 /// What makes one worker look unlike another, always the same for a person: a skin tone, and
 /// a beard for some.
-fn looks(who: &str) -> (Color32, bool) {
+pub(super) fn looks(who: &str) -> (Color32, bool) {
     let h = who.bytes().fold(17u32, |a, b| a.wrapping_mul(131).wrapping_add(b as u32)) as usize;
     (SKIN[h % SKIN.len()], (h / SKIN.len()).is_multiple_of(3))
 }
@@ -447,15 +447,15 @@ fn worker(p: &Painter, iso: &Iso, (x, y): (f32, f32), who: &str, t: f32) {
 
 /// Where a vehicle is: on the road at (x, y), heading along x or y, forward (+1) or back (-1).
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct OnRoad {
-    x: f32,
-    y: f32,
-    along_x: bool,
-    dir: f32,
+pub(super) struct OnRoad {
+    pub(super) x: f32,
+    pub(super) y: f32,
+    pub(super) along_x: bool,
+    pub(super) dir: f32,
 }
 
 /// The same place, moved into the lane on the right of the way it heads.
-fn in_lane(at: OnRoad) -> OnRoad {
+pub(super) fn in_lane(at: OnRoad) -> OnRoad {
     let mut a = at;
     if at.along_x {
         a.y += LANE * at.dir;
@@ -526,7 +526,7 @@ fn vehicle(p: &Painter, iso: &Iso, at: OnRoad, v: Vehicle) {
     }
 }
 
-fn ci_color(ci: Option<Ci>) -> Color32 {
+pub(super) fn ci_color(ci: Option<Ci>) -> Color32 {
     match ci {
         Some(Ci::Success) => Color32::from_rgb(92, 178, 96),
         Some(Ci::Failure) => Color32::from_rgb(214, 74, 70),
@@ -536,7 +536,7 @@ fn ci_color(ci: Option<Ci>) -> Color32 {
 }
 
 /// A point on the road round a block, `t` from 0 to 1 clockwise from its north corner.
-fn round_block(d: &District, t: f32) -> OnRoad {
+pub(super) fn round_block(d: &District, t: f32) -> OnRoad {
     let (x0, y0) = (d.x as f32 - 0.5, d.y as f32 - 0.5);
     let (x1, y1) = (x0 + d.w as f32 + 1.0, y0 + d.h as f32 + 1.0);
     let (w, h) = (x1 - x0, y1 - y0);
@@ -655,21 +655,15 @@ fn lot(p: &Painter, iso: &Iso, pl: &Plot) {
 }
 
 impl Tab {
-    /// Draws the city of `items` (the tickets the board's filters keep) and returns the ticket
-    /// clicked.
-    pub(super) fn city_view(&mut self, ui: &mut Ui, items: &[&Item], detail: Option<&str>) -> Option<String> {
-        let city = crate::city::layout(items);
-        let area = ui.available_rect_before_wrap().shrink2(vec2(12.0, 6.0));
+    /// Takes `area` for an isometric view of a city of `size` tiles, fitted in `room` and
+    /// centred there, then moved by the person: drag pans, pinch or ⌘-scroll zooms round the
+    /// pointer, double-click fits again. The City view and the food court share it.
+    pub(super) fn iso_view(&mut self, ui: &mut Ui, area: Rect, room: Rect, size: (i32, i32)) -> (egui::Response, Iso) {
         let resp = ui.allocate_rect(area, Sense::click_and_drag());
-        let p = ui.painter().with_clip_rect(area);
-        let k = theme::c();
-        let time = ui.input(|i| i.time) as f32;
-
-        // Fitted: the whole city in the area, centred; then the person's pan and zoom.
-        let (cols, rows) = (city.size.0.max(1) as f32, city.size.1.max(1) as f32);
+        let (cols, rows) = (size.0.max(1) as f32, size.1.max(1) as f32);
         let world_w = (cols + rows) * TILE_W / 2.0;
         let world_h = (cols + rows) * TILE_H / 2.0 + (10.0 + SLAB) * FLOOR;
-        let fit = (area.width() / world_w).min((area.height() - 40.0) / world_h).clamp(0.3, 1.6);
+        let fit = (room.width() / world_w).min((room.height() - 40.0) / world_h).clamp(0.3, 1.6);
         let mut view = self.board.city.unwrap_or(CityView { pan: Vec2::ZERO, zoom: fit });
         if resp.dragged() {
             view.pan += resp.drag_delta();
@@ -679,9 +673,9 @@ impl Tab {
             let (zoom, scroll) = ui.input(|i| (i.zoom_delta(), i.smooth_scroll_delta));
             if zoom != 1.0 {
                 // Zoom around the pointer: the point under it stays there.
-                let at = ui.input(|i| i.pointer.hover_pos()).unwrap_or(area.center());
+                let at = ui.input(|i| i.pointer.hover_pos()).unwrap_or(room.center());
                 let z = (view.zoom * zoom).clamp(0.25, 3.0);
-                let centre = area.center() + view.pan;
+                let centre = room.center() + view.pan;
                 view.pan += (at - centre) * (1.0 - z / view.zoom);
                 view.zoom = z;
                 self.board.city = Some(view);
@@ -696,7 +690,19 @@ impl Tab {
         }
         let iso0 = Iso { origin: Pos2::ZERO, zoom: view.zoom };
         let mid = iso0.at(cols / 2.0, rows / 2.0, 0.0).to_vec2();
-        let iso = Iso { origin: area.center() + view.pan - mid + vec2(0.0, 3.0 * FLOOR * view.zoom), zoom: view.zoom };
+        (resp, Iso { origin: room.center() + view.pan - mid + vec2(0.0, 3.0 * FLOOR * view.zoom), zoom: view.zoom })
+    }
+
+    /// Draws the city of `items` (the tickets the board's filters keep) and returns the ticket
+    /// clicked.
+    pub(super) fn city_view(&mut self, ui: &mut Ui, items: &[&Item], detail: Option<&str>) -> Option<String> {
+        let city = crate::city::layout(items);
+        let area = ui.available_rect_before_wrap().shrink2(vec2(12.0, 6.0));
+        let (resp, iso) = self.iso_view(ui, area, area, city.size);
+        let p = ui.painter().with_clip_rect(area);
+        let k = theme::c();
+        let time = ui.input(|i| i.time) as f32;
+        let (cols, rows) = (city.size.0.max(1) as f32, city.size.1.max(1) as f32);
 
         // The slab, then the asphalt on it.
         cuboid(&p, &iso, (0.0, 0.0, cols, rows), -SLAB, 0.0, paint::SLAB);
@@ -854,7 +860,7 @@ impl Tab {
         // Each block's name on a tag by its south-west edge, over the traffic.
         for d in &city.districts {
             let at = iso.at(d.x as f32 - 0.07, (d.y + d.h) as f32 + 0.54, 0.0);
-            let font = FontId::proportional((theme::FS_SMALL * view.zoom.sqrt()).max(9.0));
+            let font = FontId::proportional((theme::FS_SMALL * iso.zoom.sqrt()).max(9.0));
             let g = p.layout_no_wrap(d.name.clone(), font, paint::WIRE);
             p.rect_filled(Rect::from_min_size(at, g.size()).expand2(vec2(5.0, 2.0)), 4.0, Color32::from_white_alpha(235));
             p.galley(at, g, paint::WIRE);
