@@ -80,6 +80,36 @@ impl Building {
     }
 }
 
+/// The architecture of a district: each zone has its own, so the city reads by quarter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Style {
+    /// Brick buildings, pink towers with a slate curtain wall, white workshops.
+    Town,
+    /// Rendered walls, tile roofs, shutters, domes and bell towers, cypresses and olive trees.
+    Mediterranean,
+    /// Glass and steel: curtain walls, set-back towers, glass pavilions.
+    Glass,
+    /// Corrugated sheds with saw-tooth roofs, brick warehouses, chimneys and silos.
+    Industrial,
+    /// Pagodas, wooden houses under curved eaves, shrines, cherry trees and maples.
+    Japanese,
+    /// Painted wooden houses under steep roofs, a stave church, a lighthouse, birches and spruces.
+    Nordic,
+    /// Sand walls with crenellations, domes, minarets, wind towers, palm trees.
+    Desert,
+    /// Narrow canal houses with stepped gables, windmills, greenhouses, tulips.
+    Dutch,
+}
+
+impl Style {
+    pub const ALL: [Style; 8] = [Style::Town, Style::Mediterranean, Style::Glass, Style::Industrial, Style::Japanese, Style::Nordic, Style::Desert, Style::Dutch];
+}
+
+/// A hash that stays the same from one launch to the next (FNV-1a), unlike std's.
+pub fn stable_hash(s: &str) -> u32 {
+    s.bytes().fold(0x811c_9dc5u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193))
+}
+
 /// A ticket's tile.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plot {
@@ -93,6 +123,8 @@ pub struct Plot {
     pub floors: u32,
     /// Index of its district in `City::districts`.
     pub district: usize,
+    /// Picks its building's variant and colours: the same for a ticket every time.
+    pub seed: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,6 +135,7 @@ pub struct District {
     pub y: i32,
     pub w: i32,
     pub h: i32,
+    pub style: Style,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -125,7 +158,9 @@ pub fn zone(it: &Item) -> String {
 
 /// Lays the tickets out: districts by size (the biggest first, then by name), each a near-square
 /// block with the built plots at the back and the bare ones at the front, one tile of road
-/// around every block, the blocks in rows of about the city's square root.
+/// around every block, the blocks in rows of about the city's square root. A district's style
+/// comes from its name, moved on to the next one when the block on its left or one above it
+/// already has it.
 pub fn layout(items: &[&Item]) -> City {
     let mut by_zone: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
     for it in items {
@@ -139,8 +174,11 @@ pub fn layout(items: &[&Item]) -> City {
     let (mut x, mut y, mut row_h, mut width) = (1, 1, 0, 0);
     // Each row of blocks: its top, its height and where its last block ends.
     let mut rows: Vec<(i32, i32, i32)> = Vec::new();
+    // The top of the row above the one being laid out.
+    let mut above: Option<i32> = None;
     for (n, (name, mut tickets)) in zones.into_iter().enumerate() {
         if n > 0 && n % per_row == 0 {
+            above = Some(y);
             rows.push((y, row_h, x));
             x = 1;
             y += row_h + 1;
@@ -160,12 +198,16 @@ pub fn layout(items: &[&Item]) -> City {
                 building,
                 floors: building.floors(it.sub_progress.1),
                 district,
+                seed: stable_hash(&it.number.map(|n| n.to_string()).unwrap_or_else(|| it.id.clone())),
             });
         }
         for i in tickets.len() as i32..w * h {
             city.trees.push((x + i % w, y + i / w));
         }
-        city.districts.push(District { name, x, y, w, h });
+        let taken: Vec<Style> = city.districts.iter().filter(|d| next_to(d, x, y, w, above)).map(|d| d.style).collect();
+        let first = stable_hash(&name) as usize;
+        let style = (0..Style::ALL.len()).map(|k| Style::ALL[(first + k) % Style::ALL.len()]).find(|s| !taken.contains(s)).unwrap_or(Style::ALL[first % Style::ALL.len()]);
+        city.districts.push(District { name, x, y, w, h, style });
         x += w + 1;
         width = width.max(x);
         row_h = row_h.max(h);
@@ -187,6 +229,43 @@ pub fn layout(items: &[&Item]) -> City {
     // The painter's order of an isometric view: the farther a tile from the viewer, first.
     city.plots.sort_by_key(|p| (p.x + p.y, p.x));
     city
+}
+
+/// A bigger city for the screenshot mode (`FOURCHETTE_BOARD_CITY=town`): ten districts, most of
+/// their tickets built, so every style and its variants show.
+pub fn sample() -> Vec<Item> {
+    let zones = ["graphe", "git", "github", "historique", "sélecteur", "palette", "thème", "worktrees", "assistant", "annuler"];
+    let statuses = ["Done", "Done", "Done", "Done", "To test", "In review", "In progress", "Done", "Ready", "Done", "Backlog", "Done"];
+    let types = ["Task", "Feature", "Bug", "Task", "Task", "Bug", "Feature", "Task"];
+    let mut items = Vec::new();
+    for (z, zone) in zones.iter().enumerate() {
+        for k in 0..6 + z % 3 * 2 {
+            let n = 100 + z as u64 * 20 + k as u64;
+            let ty = types[(k + z) % types.len()];
+            items.push(Item {
+                id: format!("city-{n}"),
+                title: format!("Sample ticket {n}"),
+                status: statuses[(k * 5 + z) % statuses.len()].into(),
+                number: Some(n),
+                kind: Kind::Issue,
+                repo: "example/sample-project".into(),
+                assignees: vec![["me", "camille", "sami"][k % 3].into()],
+                issue_type: Some((ty.into(), "BLUE".into())),
+                labels: vec![crate::github::Label { name: format!("zone:{zone}"), color: "ededed".into() }],
+                sub_progress: (0, (k as u32 * 3 + z as u32) % 7),
+                ..Default::default()
+            });
+        }
+    }
+    items
+}
+
+/// Whether a district is the block just left of one at (x, y) and `w` wide on its row, or a
+/// block of the row above (whose top is `above`) that overlaps it.
+fn next_to(d: &District, x: i32, y: i32, w: i32, above: Option<i32>) -> bool {
+    let left = d.y == y && d.x + d.w + 1 == x;
+    let over = above == Some(d.y) && d.x < x + w && x < d.x + d.w;
+    left || over
 }
 
 /// How many tickets are built, under construction and still to do.
@@ -279,6 +358,39 @@ mod tests {
         // The park is road-free land past the last block of its row, inside the city.
         assert!(city.districts.iter().all(|d| d.y != py || d.x + d.w < px));
         assert!(px + pw < city.size.0);
+    }
+
+    #[test]
+    fn a_district_keeps_its_style_and_neighbours_differ() {
+        let zones = ["graphe", "git", "github", "historique", "palette", "sélecteur", "thème", "worktrees", "assistant", "annuler"];
+        let items: Vec<Item> = zones.iter().enumerate().flat_map(|(i, z)| (0..1 + i as u64 % 3).map(move |k| item(i as u64 * 10 + k + 1, "Done", Some(z), None, 0))).collect();
+        let refs: Vec<&Item> = items.iter().collect();
+        let a = layout(&refs);
+        assert_eq!(a, layout(&refs));
+        let mut tops: Vec<i32> = a.districts.iter().map(|d| d.y).collect();
+        tops.dedup();
+        assert!(tops.len() >= 3);
+        for d in &a.districts {
+            let row = tops.iter().position(|t| *t == d.y).unwrap();
+            for e in &a.districts {
+                let left = e.y == d.y && e.x + e.w + 1 == d.x;
+                let above = row > 0 && e.y == tops[row - 1] && e.x < d.x + d.w && d.x < e.x + e.w;
+                assert!(!(left || above) || e.style != d.style, "{} and {} share {:?}", e.name, d.name, d.style);
+            }
+        }
+        let styles: std::collections::HashSet<Style> = a.districts.iter().map(|d| d.style).collect();
+        assert!(styles.len() >= 3, "only {styles:?} among ten districts");
+    }
+
+    #[test]
+    fn a_ticket_keeps_its_seed() {
+        // FNV-1a's published values: the same on every machine and every launch.
+        assert_eq!(stable_hash(""), 0x811c_9dc5);
+        assert_eq!(stable_hash("a"), 0xe40c_292c);
+        assert_ne!(stable_hash("190"), stable_hash("191"));
+        let items = [item(7, "Done", Some("git"), None, 0)];
+        let refs: Vec<&Item> = items.iter().collect();
+        assert_eq!(layout(&refs).plots[0].seed, stable_hash("7"));
     }
 
     #[test]

@@ -3,13 +3,16 @@
 //! pavements between asphalt roads with dashed lines and zebra crossings. Every face is one flat
 //! colour and everything that stands casts a long hard shadow along x. Free tiles are fenced
 //! gardens with pines and round trees, lamp posts stand at the corners of the blocks, cars drive
-//! round them. Each building site has its crane, its workers in hard hats and a supply lorry; each
+//! round them. Each district has its own architecture (`styles`): the town, the Mediterranean,
+//! glass and steel, or industry. Each building site has its crane, its workers in hard hats and a supply lorry; each
 //! open pull request linked to a ticket adds a lorry in the colour of its checks. Drag to pan,
 //! pinch or ⌘-scroll to zoom, double-click to fit; a hover shows the ticket, a click opens its
 //! detail. Read only.
 
+mod styles;
+
 use super::*;
-use crate::city::{Building, District, Plot, Stage};
+use crate::city::{Building, District, Plot, Stage, Style};
 use crate::github::Item;
 use crate::pulls::{Ci, Pulls};
 use egui::{vec2, Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2};
@@ -80,15 +83,12 @@ mod paint {
     pub const CABLE: Color32 = rgb(0x444444);
     pub const RED: Color32 = rgb(0xb03a2e);
     pub const DOOR: Color32 = rgb(0xc0392b);
-    // The modular tower: a blue glazed base, pink and slate floors, a pink roof.
+    // The town's tower: a blue glazed base.
     pub(super) const BASE: Faces = faces(0x5b9bd5, 0x4a85bd, 0x5b9bd5);
-    pub(super) const TOWER: Faces = faces(0xefd3d0, 0x2f3e56, 0xe59586);
-    pub const TOWER_ROOF: Color32 = rgb(0xd97f71);
     pub const SHOP: Color32 = rgb(0x2c3a4f);
     pub const PANE: Color32 = rgb(0x8fa6c9);
     pub const CURTAIN: Color32 = rgb(0x5b7fa8);
-    // The brick building and the white one.
-    pub(super) const BRICK: Faces = faces(0xa8402e, 0x8b3122, 0xe2e2e2);
+    // The brick building's roof and the white one.
     pub const BRICK_ROOF: Color32 = rgb(0xd0d0d0);
     pub(super) const WHITE: Faces = faces(0xf2f2f2, 0xd5d5d5, 0xa0a0a0);
     pub const WHITE_ROOF: Color32 = rgb(0x8a8a8a);
@@ -99,6 +99,15 @@ mod paint {
     pub const TRUNK: Color32 = rgb(0x7a5236);
     pub const PINE: (Color32, Color32) = (rgb(0x5cc26b), rgb(0x3e9c4f));
     pub const ROUND: (Color32, Color32) = (rgb(0x79c66b), rgb(0x58a84d));
+    pub const CYPRESS: (Color32, Color32) = (rgb(0x3f8a4f), rgb(0x2c6b3c));
+    pub const OLIVE: (Color32, Color32) = (rgb(0xa3b06e), rgb(0x86955a));
+    pub const LEAVES: [(Color32, Color32); 6] = [(rgb(0x8fd06a), rgb(0x6aaf4c)), (rgb(0x4f9a5a), rgb(0x3a7d47)), (rgb(0xf0a23a), rgb(0xd9822a)), (rgb(0xe0533a), rgb(0xb83d2c)), (rgb(0xf2cf4a), rgb(0xd6b03a)), (rgb(0xf7bfd2), rgb(0xe896b4))];
+    pub const BIRCH: (Color32, Color32) = (rgb(0xb6d77a), rgb(0x95bb5c));
+    pub const BIRCH_BARK: Color32 = rgb(0xf1efe8);
+    pub const SPRUCE: (Color32, Color32) = (rgb(0x2f7a55), rgb(0x225e42));
+    pub const PALM: (Color32, Color32) = (rgb(0x6fbf4f), rgb(0x4f9a3a));
+    pub const PALM_TRUNK: Color32 = rgb(0x9a7b52);
+    pub const FLOWERS: [Color32; 5] = [rgb(0xe8435a), rgb(0xf2c230), rgb(0xa86bd9), rgb(0xf58a3a), rgb(0xffffff)];
     pub const LAMP: Color32 = rgb(0x8a8d92);
     pub const LAMP_HEAD: Color32 = rgb(0x6d7075);
     pub const TYRE: Color32 = rgb(0x2a2a2e);
@@ -132,8 +141,17 @@ impl Iso {
     }
 }
 
+/// A flat face. One seen edge-on (a roof slope as steep as the line of sight) has no area on
+/// screen and is left out: egui's anti-aliasing would draw it as spikes across the view.
 fn poly(p: &Painter, pts: Vec<Pos2>, fill: Color32) {
-    p.add(Shape::convex_polygon(pts, fill, Stroke::NONE));
+    if area(&pts).abs() > 0.5 {
+        p.add(Shape::convex_polygon(pts, fill, Stroke::NONE));
+    }
+}
+
+/// A polygon's signed area on screen, in square points.
+fn area(pts: &[Pos2]) -> f32 {
+    pts.iter().zip(pts.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f32>() / 2.0
 }
 
 /// A box from (x0, y0) to (x1, y1), from floor z0 to z1: three flat faces, no outline.
@@ -168,6 +186,7 @@ fn on_face(iso: &Iso, south: bool, face: f32, (a0, a1): (f32, f32), (z0, z1): (f
 }
 
 /// A window: a pane of `fill` in a thin `frame`.
+#[allow(clippy::too_many_arguments)]
 fn pane(p: &Painter, iso: &Iso, south: bool, face: f32, along: (f32, f32), z: (f32, f32), fill: Color32, frame: Color32) {
     p.add(Shape::convex_polygon(on_face(iso, south, face, along, z), fill, Stroke::new(iso.px(0.9).clamp(0.5, 1.6), frame)));
 }
@@ -183,82 +202,9 @@ fn ac(p: &Painter, iso: &Iso, x: f32, y: f32, z: f32) {
     cuboid(p, iso, (x, y, x + 0.14, y + 0.12), z, z + 0.24, paint::AC);
 }
 
-/// A finished building on its tile, `floors` high. A tower: a blue glazed shop floor, then pink
-/// floors with framed windows on the south and a slate curtain wall on the east, a pink roof
-/// with two AC units. A brick building: three rows of blue windows, a red door, skylights. A
-/// white building: low, a grey roof and its AC unit.
-fn building(p: &Painter, iso: &Iso, (x, y): (f32, f32), kind: Building, floors: u32) {
-    let z0 = KERB;
-    let h = floors as f32;
-    match kind {
-        Building::Tower => {
-            let r @ (x0, y0, x1, y1) = (x + 0.15, y + 0.15, x + 0.85, y + 0.85);
-            let (lx, ly) = (x1 - x0, y1 - y0);
-            cuboid(p, iso, r, z0, z0 + 1.0, paint::BASE);
-            pane(p, iso, true, y1, (x0 + lx * 0.08, x0 + lx * 0.66), (z0 + 0.15, z0 + 0.8), paint::SHOP, paint::LINE);
-            poly(p, on_face(iso, false, x1, (y0 + ly * 0.62, y0 + ly * 0.8), (z0, z0 + 0.6)), paint::RED);
-            pane(p, iso, false, x1, (y0 + ly * 0.1, y0 + ly * 0.48), (z0 + 0.3, z0 + 0.8), paint::SHOP, paint::SOFT_LINE);
-            cuboid(p, iso, r, z0 + 1.0, z0 + h, paint::TOWER);
-            let mullion = Stroke::new(iso.px(1.1), paint::TOWER.right);
-            for f in 1..floors {
-                let z = z0 + f as f32;
-                for a in [0.1, 0.56] {
-                    pane(p, iso, true, y1, (x0 + lx * a, x0 + lx * (a + 0.3)), (z + 0.18, z + 0.82), paint::PANE, paint::LINE);
-                }
-                poly(p, on_face(iso, false, x1, (y0 + ly * 0.08, y0 + ly * 0.92), (z + 0.1, z + 0.9)), paint::CURTAIN);
-                let m = y0 + ly * 0.5;
-                p.line_segment([iso.at(x1, m, z + 0.1), iso.at(x1, m, z + 0.9)], mullion);
-            }
-            parapet(p, iso, r, z0 + h, paint::TOWER_ROOF);
-            ac(p, iso, x0 + 0.12, y0 + 0.12, z0 + h);
-            ac(p, iso, x0 + 0.36, y0 + 0.34, z0 + h);
-        }
-        Building::House => {
-            let r @ (x0, y0, x1, y1) = (x + 0.15, y + 0.15, x + 0.85, y + 0.85);
-            let (lx, ly) = (x1 - x0, y1 - y0);
-            cuboid(p, iso, r, z0, z0 + h, paint::BRICK);
-            for f in 0..floors {
-                let z = z0 + f as f32;
-                for (k, a) in [0.08, 0.39, 0.7].into_iter().enumerate() {
-                    if f == 0 && k == 1 {
-                        pane(p, iso, true, y1, (x0 + lx * a, x0 + lx * (a + 0.2)), (z, z + 0.72), paint::DOOR, paint::LINE);
-                    } else {
-                        pane(p, iso, true, y1, (x0 + lx * a, x0 + lx * (a + 0.2)), (z + 0.25, z + 0.78), paint::WINDOW_LEFT, paint::LINE);
-                    }
-                    pane(p, iso, false, x1, (y0 + ly * a, y0 + ly * (a + 0.2)), (z + 0.25, z + 0.78), paint::WINDOW_RIGHT, paint::SOFT_LINE);
-                }
-            }
-            parapet(p, iso, r, z0 + h, paint::BRICK_ROOF);
-            for (sx, sy) in [(0.14, 0.2), (0.4, 0.42)] {
-                poly(p, iso.quad(x0 + sx, y0 + sy, x0 + sx + 0.16, y0 + sy + 0.08, z0 + h).to_vec(), paint::LINE);
-            }
-        }
-        Building::Workshop => {
-            let r @ (x0, y0, x1, y1) = (x + 0.12, y + 0.12, x + 0.88, y + 0.88);
-            let (lx, ly) = (x1 - x0, y1 - y0);
-            cuboid(p, iso, r, z0, z0 + h, paint::WHITE);
-            for f in 0..floors {
-                let z = z0 + f as f32;
-                for a in [0.08, 0.36, 0.64] {
-                    pane(p, iso, true, y1, (x0 + lx * a, x0 + lx * (a + 0.18)), (z + 0.25, z + 0.78), paint::WINDOW_LEFT, paint::LINE);
-                }
-                for a in [0.12, 0.42] {
-                    pane(p, iso, false, x1, (y0 + ly * a, y0 + ly * (a + 0.18)), (z + 0.25, z + 0.78), paint::WINDOW_RIGHT, paint::SOFT_LINE);
-                }
-                if f == 0 {
-                    poly(p, on_face(iso, false, x1, (y0 + ly * 0.72, y0 + ly * 0.86), (z, z + 0.7)), paint::DOOR);
-                } else {
-                    pane(p, iso, false, x1, (y0 + ly * 0.72, y0 + ly * 0.9), (z + 0.25, z + 0.78), paint::WINDOW_RIGHT, paint::SOFT_LINE);
-                }
-            }
-            parapet(p, iso, r, z0 + h, paint::WHITE_ROOF);
-            ac(p, iso, x0 + 0.36, y0 + 0.3, z0 + h);
-        }
-    }
-}
-
 /// A fence from `a` to `b` on the ground at z, `h` floors high: a post every `step` tiles and a
 /// rail along the top.
+#[allow(clippy::too_many_arguments)]
 fn fence(p: &Painter, iso: &Iso, a: (f32, f32), b: (f32, f32), z: f32, h: f32, step: f32, post: Stroke, rail: Stroke) {
     let n = (((b.0 - a.0).abs() + (b.1 - a.1).abs()) / step).ceil().max(1.0) as i32;
     for i in 0..=n {
@@ -284,6 +230,20 @@ enum Tree {
     Pine,
     Round,
     Bush,
+    Cypress,
+    Olive,
+    /// A leafy tree in one of `paint::LEAVES`: greens, autumn, blossom.
+    Leafy(usize),
+    Birch,
+    Spruce,
+    Palm,
+    /// A bed of flowers in one of `paint::FLOWERS`.
+    Flowers(usize),
+}
+
+impl Tree {
+    /// The trees a park mixes, for variety.
+    const PARK: [Tree; 14] = [Tree::Leafy(0), Tree::Leafy(1), Tree::Leafy(2), Tree::Leafy(3), Tree::Leafy(4), Tree::Leafy(5), Tree::Pine, Tree::Round, Tree::Birch, Tree::Spruce, Tree::Bush, Tree::Flowers(0), Tree::Flowers(1), Tree::Flowers(2)];
 }
 
 /// A tree in low poly, its lit half and its shaded one, and its shadow along x.
@@ -292,6 +252,13 @@ fn tree(p: &Painter, iso: &Iso, x: f32, y: f32, kind: Tree) {
         Tree::Pine => 0.45,
         Tree::Round => 0.38,
         Tree::Bush => 0.16,
+        Tree::Cypress => 0.5,
+        Tree::Olive => 0.32,
+        Tree::Leafy(_) => 0.38,
+        Tree::Birch => 0.42,
+        Tree::Spruce => 0.48,
+        Tree::Palm => 0.5,
+        Tree::Flowers(_) => 0.1,
     };
     poly(p, iso.quad(x - 0.04, y - 0.05, x + reach, y + 0.05, KERB).to_vec(), shadow());
     let s = iso.zoom * 0.62;
@@ -312,6 +279,56 @@ fn tree(p: &Painter, iso: &Iso, x: f32, y: f32, kind: Tree) {
         Tree::Bush => {
             poly(p, vec![pt(0.0, -10.0), pt(-7.0, -6.0), pt(-7.0, 0.0), pt(0.0, 3.0)], paint::ROUND.0);
             poly(p, vec![pt(0.0, -10.0), pt(0.0, 3.0), pt(7.0, 0.0), pt(7.0, -6.0)], paint::ROUND.1);
+        }
+        Tree::Cypress => {
+            p.line_segment([pt(0.0, 2.0), pt(0.0, -4.0)], trunk);
+            poly(p, vec![pt(0.0, -42.0), pt(-5.0, -24.0), pt(-4.5, -6.0), pt(0.0, -3.0)], paint::CYPRESS.0);
+            poly(p, vec![pt(0.0, -42.0), pt(0.0, -3.0), pt(4.5, -6.0), pt(5.0, -24.0)], paint::CYPRESS.1);
+        }
+        Tree::Leafy(i) => {
+            let (lit, dark) = paint::LEAVES[i % paint::LEAVES.len()];
+            p.line_segment([pt(0.0, 2.0), pt(0.0, -8.0)], trunk);
+            poly(p, vec![pt(0.0, -30.0), pt(-8.0, -27.0), pt(-12.0, -19.0), pt(-9.0, -10.0), pt(0.0, -6.0)], lit);
+            poly(p, vec![pt(0.0, -30.0), pt(0.0, -6.0), pt(9.0, -10.0), pt(12.0, -19.0), pt(8.0, -27.0)], dark);
+        }
+        Tree::Birch => {
+            p.line_segment([pt(0.0, 2.0), pt(0.0, -16.0)], Stroke::new(2.2 * s, paint::BIRCH_BARK));
+            for m in [-4.0, -9.0, -13.0] {
+                p.line_segment([pt(-1.0, m), pt(1.0, m)], Stroke::new(1.0 * s, paint::TYRE));
+            }
+            poly(p, vec![pt(0.0, -34.0), pt(-7.0, -26.0), pt(-6.0, -15.0), pt(0.0, -12.0)], paint::BIRCH.0);
+            poly(p, vec![pt(0.0, -34.0), pt(0.0, -12.0), pt(6.0, -15.0), pt(7.0, -26.0)], paint::BIRCH.1);
+        }
+        Tree::Spruce => {
+            p.line_segment([pt(0.0, 2.0), pt(0.0, -4.0)], trunk);
+            for (top, base, w) in [(-18.0, -2.0, 10.0), (-28.0, -12.0, 8.0), (-38.0, -22.0, 6.0)] {
+                poly(p, vec![pt(0.0, top), pt(-w, base), pt(0.0, base + 2.0)], paint::SPRUCE.0);
+                poly(p, vec![pt(0.0, top), pt(0.0, base + 2.0), pt(w, base)], paint::SPRUCE.1);
+            }
+        }
+        Tree::Palm => {
+            let palm = Stroke::new(2.4 * s, paint::PALM_TRUNK);
+            p.line_segment([pt(0.0, 2.0), pt(2.0, -14.0)], palm);
+            p.line_segment([pt(2.0, -14.0), pt(5.0, -30.0)], palm);
+            let top = pt(5.0, -30.0);
+            for (dx, dy, c) in [(-14.0, 6.0, paint::PALM.1), (14.0, 7.0, paint::PALM.1), (-10.0, -6.0, paint::PALM.0), (11.0, -5.0, paint::PALM.0), (1.0, -10.0, paint::PALM.0)] {
+                let tip = top + vec2(dx, dy) * s;
+                let side = vec2(-(dy), dx).normalized() * 2.2 * s;
+                poly(p, vec![top + side, tip, top - side], c);
+            }
+        }
+        Tree::Flowers(i) => {
+            poly(p, vec![pt(0.0, -6.0), pt(-8.0, -3.0), pt(-8.0, 1.0), pt(0.0, 4.0)], paint::ROUND.0);
+            poly(p, vec![pt(0.0, -6.0), pt(0.0, 4.0), pt(8.0, 1.0), pt(8.0, -3.0)], paint::ROUND.1);
+            let c = paint::FLOWERS[i % paint::FLOWERS.len()];
+            for (dx, dy) in [(-5.0, -2.0), (-1.0, -4.0), (3.0, -2.0), (6.0, -0.5), (-3.0, 1.0), (1.5, 1.5)] {
+                p.circle_filled(pt(dx, dy), 1.5 * s, c);
+            }
+        }
+        Tree::Olive => {
+            p.line_segment([pt(0.0, 2.0), pt(-2.0, -10.0)], trunk);
+            poly(p, vec![pt(-1.0, -24.0), pt(-12.0, -19.0), pt(-11.0, -11.0), pt(-1.0, -8.0)], paint::OLIVE.0);
+            poly(p, vec![pt(-1.0, -24.0), pt(-1.0, -8.0), pt(10.0, -11.0), pt(11.0, -18.0)], paint::OLIVE.1);
         }
     }
 }
@@ -340,11 +357,11 @@ fn garden(p: &Painter, iso: &Iso, x: i32, y: i32) {
     let (x0, y0, x1, y1) = (x + 0.08, y + 0.08, x + 0.92, y + 0.92);
     slats(p, iso, (x0, y0), (x1, y0));
     slats(p, iso, (x0, y0), (x0, y1));
-    let first = if h % 2 == 0 { Tree::Pine } else { Tree::Round };
-    let second = if h % 3 == 0 { Tree::Round } else { Tree::Pine };
+    let first = Tree::PARK[h % Tree::PARK.len()];
+    let second = Tree::PARK[(h / 7 + 3) % Tree::PARK.len()];
     // Back to front.
     tree(p, iso, x + 0.32, y + 0.36, first);
-    tree(p, iso, x + 0.72, y + 0.3, Tree::Bush);
+    tree(p, iso, x + 0.72, y + 0.3, if h.is_multiple_of(3) { Tree::Flowers(h / 3) } else { Tree::Bush });
     tree(p, iso, x + 0.62, y + 0.66, second);
     slats(p, iso, (x0, y1), (x1, y1));
     slats(p, iso, (x1, y0), (x1, y1));
@@ -565,7 +582,7 @@ fn plot_hit(iso: &Iso, pl: &Plot) -> Rect {
 /// Something to draw, at its depth: the farther from the viewer, the sooner.
 enum Thing<'a> {
     Plot(&'a Plot),
-    Garden(i32, i32),
+    Garden(i32, i32, Style),
     Tree(f32, f32, Tree),
     Lamp(f32, f32),
     Vehicle(OnRoad, Vehicle),
@@ -715,11 +732,12 @@ impl Tab {
         // The blocks: pavements a kerb above the road.
         for d in &city.districts {
             let (x0, y0, x1, y1) = (d.x as f32 - 0.12, d.y as f32 - 0.12, (d.x + d.w) as f32 + 0.12, (d.y + d.h) as f32 + 0.12);
-            cuboid(&p, &iso, (x0, y0, x1, y1), 0.0, KERB, paint::PAVEMENT);
+            cuboid(&p, &iso, (x0, y0, x1, y1), 0.0, KERB, styles::pavement(d.style));
         }
-        // The grass of the gardens and the parks; the parks' fences.
+        // The ground of the free tiles, in their district's style, and the parks'; the parks' fences.
+        let style_at = |x: i32, y: i32| city.districts.iter().find(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h).map_or(Style::Town, |d| d.style);
         for &(x, y) in &city.trees {
-            poly(&p, iso.quad(x as f32 + 0.08, y as f32 + 0.08, x as f32 + 0.92, y as f32 + 0.92, KERB).to_vec(), paint::GRASS);
+            poly(&p, iso.quad(x as f32 + 0.08, y as f32 + 0.08, x as f32 + 0.92, y as f32 + 0.92, KERB).to_vec(), styles::ground(style_at(x, y)));
         }
         for &(px, py, pw, ph) in &city.parks {
             let (x0, y0, x1, y1) = (px as f32 - 0.12, py as f32 - 0.12, (px + pw) as f32 + 0.12, (py + ph) as f32 + 0.12);
@@ -781,15 +799,18 @@ impl Tab {
             }
         }
         for &(x, y) in &city.trees {
-            things.push(((x + y) as f32 + 1.0, Thing::Garden(x, y)));
+            things.push(((x + y) as f32 + 1.0, Thing::Garden(x, y, style_at(x, y))));
         }
         for &(px, py, pw, ph) in &city.parks {
             for i in px..px + pw {
                 for j in py..py + ph {
-                    let h = mix(i, j);
-                    let kind = [Tree::Pine, Tree::Round, Tree::Pine, Tree::Bush][h % 4];
-                    let (tx, ty) = (i as f32 + 0.3 + (h % 5) as f32 * 0.1, j as f32 + 0.3 + (h / 5 % 5) as f32 * 0.1);
-                    things.push((tx + ty, Thing::Tree(tx, ty, kind)));
+                    // Three trees or flower beds a tile, of every kind and colour a park mixes.
+                    for k in 0..3 {
+                        let h = mix(i * 3 + k, j * 5 - k);
+                        let kind = Tree::PARK[h % Tree::PARK.len()];
+                        let (tx, ty) = (i as f32 + 0.18 + (h % 7) as f32 * 0.1, j as f32 + 0.18 + (h / 7 % 7) as f32 * 0.1);
+                        things.push((tx + ty, Thing::Tree(tx, ty, kind)));
+                    }
                 }
             }
         }
@@ -800,7 +821,7 @@ impl Tab {
 
         for (_, thing) in &things {
             match thing {
-                Thing::Garden(x, y) => garden(&p, &iso, *x, *y),
+                Thing::Garden(x, y, style) => styles::yard(&p, &iso, (*x, *y), *style),
                 Thing::Tree(x, y, kind) => tree(&p, &iso, *x, *y, *kind),
                 Thing::Lamp(x, y) => lamp(&p, &iso, *x, *y),
                 Thing::Vehicle(at, v) => vehicle(&p, &iso, *at, *v),
@@ -816,10 +837,10 @@ impl Tab {
                         Stage::Lot | Stage::Staked => lot(&p, &iso, pl),
                         Stage::Foundations | Stage::Frame => site(&p, &iso, pl, it, time),
                         Stage::Testing | Stage::Built => {
-                            building(&p, &iso, (x, y), pl.building, pl.floors);
+                            let roof = styles::building(&p, &iso, (x, y), city.districts[pl.district].style, pl.building, pl.floors, pl.seed);
                             if pl.stage == Stage::Testing {
                                 // To test: a flag on the roof.
-                                let base = iso.at(x + 0.62, y + 0.62, KERB + height(pl));
+                                let base = roof;
                                 let tip = base - vec2(0.0, iso.px(16.0));
                                 p.line_segment([base, tip], Stroke::new(iso.px(1.0), paint::WIRE));
                                 poly(&p, vec![tip, tip + vec2(iso.px(10.0), iso.px(3.0)), tip + vec2(0.0, iso.px(6.5))], paint::TAPE);
@@ -880,7 +901,7 @@ mod tests {
     #[test]
     fn a_built_tower_reaches_above_its_tile() {
         let iso = Iso { origin: Pos2::ZERO, zoom: 1.0 };
-        let pl = Plot { id: "I1".into(), x: 2, y: 2, stage: Stage::Built, building: Building::Tower, floors: 5, district: 0 };
+        let pl = Plot { id: "I1".into(), x: 2, y: 2, stage: Stage::Built, building: Building::Tower, floors: 5, district: 0, seed: 1 };
         let r = plot_hit(&iso, &pl);
         assert!(r.top() < iso.at(2.0, 2.0, 0.0).y - 3.0 * FLOOR);
         assert!(r.contains(iso.at(2.5, 2.5, 0.0)));
@@ -888,11 +909,21 @@ mod tests {
 
     #[test]
     fn a_frame_rises_half_the_building() {
-        let pl = |stage, floors| Plot { id: "I1".into(), x: 0, y: 0, stage, building: Building::Tower, floors, district: 0 };
+        let pl = |stage, floors| Plot { id: "I1".into(), x: 0, y: 0, stage, building: Building::Tower, floors, district: 0, seed: 1 };
         assert_eq!(frame_floors(&pl(Stage::Frame, 5)), 3);
         assert_eq!(frame_floors(&pl(Stage::Frame, 1)), 1);
         assert_eq!(frame_floors(&pl(Stage::Foundations, 5)), 0);
         assert!(height(&pl(Stage::Built, 5)) > height(&pl(Stage::Frame, 5)));
+    }
+
+    #[test]
+    fn a_face_seen_edge_on_has_no_area() {
+        let iso = Iso { origin: Pos2::ZERO, zoom: 1.0 };
+        // A west roof slope 0.35 tiles across rising 32 x 0.35 / 14 floors lies along the line of sight.
+        let (hw, rise) = (0.35, 32.0 * 0.35 / 14.0);
+        let slope = [iso.at(0.0, 0.0, 0.0), iso.at(hw, 0.0, rise), iso.at(hw, 0.7, rise), iso.at(0.0, 0.7, 0.0)];
+        assert!(area(&slope).abs() < 0.5);
+        assert!(area(&iso.quad(0.0, 0.0, 1.0, 1.0, 0.0)).abs() > 100.0);
     }
 
     #[test]
@@ -913,7 +944,7 @@ mod tests {
 
     #[test]
     fn lorries_go_round_the_block_on_the_road() {
-        let d = District { name: "z".into(), x: 1, y: 1, w: 2, h: 2 };
+        let d = District { name: "z".into(), x: 1, y: 1, w: 2, h: 2, style: Style::Town };
         // Along the north road first, heading east, then down the east road.
         assert_eq!(round_block(&d, 0.0), OnRoad { x: 0.5, y: 0.5, along_x: true, dir: 1.0 });
         let r = round_block(&d, 0.3);
@@ -924,7 +955,7 @@ mod tests {
 
     #[test]
     fn traffic_keeps_to_the_lane_by_its_block() {
-        let d = District { name: "z".into(), x: 1, y: 1, w: 2, h: 2 };
+        let d = District { name: "z".into(), x: 1, y: 1, w: 2, h: 2, style: Style::Town };
         // Heading east on the north road: the lane on the block's side, south of the middle.
         let north = in_lane(round_block(&d, 0.05));
         assert!(north.y > 0.5 && north.y < 1.0 - 0.12);
