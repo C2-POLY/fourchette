@@ -395,6 +395,27 @@ main:focus {
   background: var(--sidebar);
 }
 
+.phones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 300px));
+  justify-content: center;
+  gap: clamp(10px, 3vw, 32px);
+}
+
+.phone {
+  border-radius: clamp(16px, 4vw, 40px);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--sidebar);
+}
+
+.phone img {
+  vertical-align: top;
+  width: 100%;
+  height: auto;
+}
+
 .shot-light {
   display: none;
 }

@@ -12,7 +12,7 @@ It runs on macOS 11 or later, on Apple Silicon or Intel, and needs Git. The GitH
 
 ## Build from source
 
-You need macOS, Rust 1.85 or later and Git. The GitHub CLI (`gh`) is optional, for the project board, and so is Claude Code, for the assistant.
+You need macOS, Rust 1.95 or later and Git. The GitHub CLI (`gh`) is optional, for the project board, and so is Claude Code, for the assistant.
 
 ```bash
 git clone https://github.com/C2-POLY/fourchette.git
