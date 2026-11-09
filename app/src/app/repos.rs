@@ -461,13 +461,16 @@ impl App {
     }
 }
 
+/// The text of "Remove N missing", when there is something to remove.
+pub(super) fn remove_missing_label(missing: &[PathBuf]) -> Option<String> {
+    (!missing.is_empty()).then(|| format!("Remove {} missing", missing.len()))
+}
+
 /// "Remove N missing", shown only when some repositories of the list lost their folder (the home
 /// page and the switcher). Returns true when clicked.
 pub(super) fn remove_missing_button(ui: &mut egui::Ui, missing: &[PathBuf]) -> bool {
-    if missing.is_empty() {
-        return false;
-    }
-    crate::modal::button(ui, &format!("Remove {} missing", missing.len()), crate::modal::Kind::Plain, true)
+    let Some(label) = remove_missing_label(missing) else { return false };
+    crate::modal::button(ui, &label, crate::modal::Kind::Plain, true)
         .on_hover_text("Takes the repositories whose folder is gone off the list. The folders on disk are not touched, and those on an external disk that is not plugged in stay.")
         .clicked()
 }

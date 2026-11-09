@@ -103,6 +103,7 @@ impl App {
                 }
             }
             v.push(item("Commands", "Open repository…", "", Cmd::OpenDialog));
+            v.push(item("Commands", "Clone repository…", "from your GitHub account, its organisations or a URL", Cmd::CloneDialog));
             v.push(item("Commands", "Refresh", "⌘R", Cmd::Reload));
             v.push(item("Commands", "Settings…", "⌘, · appearance, fonts, automatic fetch", Cmd::Settings));
             // "theme" in the hint so that typing it finds the modes too.

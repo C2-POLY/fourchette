@@ -150,6 +150,8 @@ pub struct Library {
     pub active_tab: usize,
     /// The home page's proposals the person dismissed (`home::proposal_key`).
     pub dismissed: Vec<String>,
+    /// The folder the last clone went into (#204); None until the person clones.
+    pub clone_parent: Option<PathBuf>,
     file: Option<PathBuf>,
 }
 
@@ -260,13 +262,15 @@ impl Library {
         let active_tab = v["tabs"]["active"].as_u64().unwrap_or(0) as usize;
         // "home": {"dismissed": [keys]}; files written before the home page (issue #109) have none.
         let dismissed = v["home"]["dismissed"].as_array().map(|a| a.iter().filter_map(|k| k.as_str()).map(String::from).collect()).unwrap_or_default();
-        Library { entries, appearance, settings, tabs, active_tab, dismissed, file: Some(file.to_path_buf()) }
+        // "clone": {"parent": path}; files written before cloning (issue #204) have none.
+        let clone_parent = v["clone"]["parent"].as_str().map(PathBuf::from);
+        Library { entries, appearance, settings, tabs, active_tab, dismissed, clone_parent, file: Some(file.to_path_buf()) }
     }
 
     /// The same settings with `entries` instead of the person's list, saved (if ever) to a
     /// temporary file rather than repos.json: screenshots show it.
     pub fn sample(&self, entries: Vec<Entry>) -> Library {
-        Library { entries, appearance: self.appearance, settings: self.settings, tabs: Vec::new(), active_tab: 0, dismissed: Vec::new(), file: Some(std::env::temp_dir().join("fourchette-sample-repos.json")) }
+        Library { entries, appearance: self.appearance, settings: self.settings, tabs: Vec::new(), active_tab: 0, dismissed: Vec::new(), clone_parent: None, file: Some(std::env::temp_dir().join("fourchette-sample-repos.json")) }
     }
 
     pub fn save(&self) {
@@ -292,7 +296,11 @@ impl Library {
         settings["appearance"] = json!(self.appearance.key());
         let tabs = json!({"open": self.tabs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(), "active": self.active_tab});
         let home = json!({"dismissed": self.dismissed});
-        let _ = std::fs::write(file, serde_json::to_string_pretty(&json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs, "home": home})).unwrap_or_default());
+        let mut all = json!({"version": 1, "settings": settings, "repos": repos, "tabs": tabs, "home": home});
+        if let Some(p) = &self.clone_parent {
+            all["clone"] = json!({"parent": p.display().to_string()});
+        }
+        let _ = std::fs::write(file, serde_json::to_string_pretty(&all).unwrap_or_default());
     }
 
     pub fn get(&self, path: &Path) -> Option<&Entry> {
@@ -510,6 +518,17 @@ mod tests {
         assert_eq!(lib.custom_groups(), ["Side projects"]);
         assert_eq!(lib.get(Path::new("/code/work/api")).unwrap().project.as_deref(), Some("acme#3"));
         assert!(!Library::read(&file).add(Path::new("/code/work/api")), "no duplicates");
+    }
+
+    #[test]
+    fn clone_folder_survives_a_save_and_older_files_have_none() {
+        let d = tmp("clone-parent");
+        let file = d.join("repos.json");
+        assert_eq!(Library::read(&file).clone_parent, None);
+        let mut lib = Library::read(&file);
+        lib.clone_parent = Some(PathBuf::from("/Users/me/code"));
+        lib.save();
+        assert_eq!(Library::read(&file).clone_parent, Some(PathBuf::from("/Users/me/code")));
     }
 
     #[test]

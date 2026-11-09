@@ -181,11 +181,17 @@ fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sectio
     ui.label(RichText::new(format!("{n}, by GitHub organisation — names that start alike are proposed as a group")).color(k.faint));
     ui.add_space(14.0);
     ui.horizontal(|ui| {
+        // The search takes what the buttons and the link leave, so the row always fits.
+        let text_w = |s: &str| ui.painter().layout_no_wrap(s.to_string(), theme::body(), k.text).size().x;
+        let gap = ui.spacing().item_spacing.x;
+        let mut buttons = vec!["Clone a repository…", "Add a repository…", "Add every repository in a folder…"];
+        let remove = super::repos::remove_missing_label(missing);
+        buttons.extend(remove.as_deref());
+        let taken = buttons.iter().map(|b| text_w(b) + 28.0 + gap).sum::<f32>() + text_w("Explore the sample project") + 8.0 + 2.0 * gap + 16.0;
         let edit = ui.add(
             egui::TextEdit::singleline(&mut home.query)
                 .hint_text(crate::ui::faint_hint("Search by name, folder or organisation…"))
-                // Narrower when "Remove N missing" joins the buttons, so the row still fits.
-                .desired_width(if missing.is_empty() { 340.0 } else { 280.0 })
+                .desired_width((ui.available_width() - taken).clamp(140.0, 340.0))
                 .margin(Margin::symmetric(10, 7)),
         );
         // Typing searches at once, unless something on top has the keyboard.
@@ -205,6 +211,9 @@ fn header(ui: &mut Ui, home: &mut HomeState, total: usize, overlay: bool, sectio
         }
         ui.add_space(8.0);
         use crate::modal::{button, Kind as Btn};
+        if button(ui, "Clone a repository…", Btn::Plain, true).on_hover_text("From your GitHub account and its organisations, or any address").clicked() {
+            cmds.push(Cmd::CloneDialog);
+        }
         if button(ui, "Add a repository…", Btn::Plain, true).clicked() {
             cmds.push(Cmd::OpenDialog);
         }
