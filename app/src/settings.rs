@@ -242,6 +242,38 @@ impl UpdateChannel {
     }
 }
 
+/// A skin over the interface (#202).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Skin {
+    #[default]
+    Normal,
+    /// Chips, cans and spills pile up where the pointer goes; a vacuum cleaner takes them away.
+    Gamer,
+}
+
+impl Skin {
+    pub const ALL: [Skin; 2] = [Skin::Normal, Skin::Gamer];
+
+    /// Its name in repos.json.
+    pub fn key(self) -> &'static str {
+        match self {
+            Skin::Normal => "normal",
+            Skin::Gamer => "gamer",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Skin::Normal => "Normal",
+            Skin::Gamer => "Messy gamer",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Skin> {
+        Self::ALL.into_iter().find(|k| k.key() == key)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// The font of the interface (`UiFont::Inter` by default).
@@ -283,6 +315,7 @@ pub struct Settings {
     pub update_channel: UpdateChannel,
     /// The colour of the app icon in the Dock and the Finder (#159).
     pub app_icon: IconColour,
+    pub skin: Skin,
 }
 
 impl Default for Settings {
@@ -307,6 +340,7 @@ impl Default for Settings {
             commit_language: CommitLanguage::Auto,
             update_channel: UpdateChannel::default(),
             app_icon: IconColour::default(),
+            skin: Skin::default(),
         }
     }
 }
@@ -341,6 +375,7 @@ impl Settings {
             commit_language: v["commit_language"].as_str().and_then(CommitLanguage::from_key).unwrap_or(d.commit_language),
             update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
             app_icon: v["app_icon"].as_str().and_then(IconColour::parse).unwrap_or(d.app_icon),
+            skin: v["skin"].as_str().and_then(Skin::from_key).unwrap_or(d.skin),
         }
     }
 
@@ -365,6 +400,7 @@ impl Settings {
             "commit_language": self.commit_language.key(),
             "update_channel": self.update_channel.key(),
             "app_icon": self.app_icon.key(),
+            "skin": self.skin.key(),
         })
     }
 
@@ -406,6 +442,14 @@ mod tests {
         assert_eq!(d.fetch_minutes, 10);
         assert_eq!(d.fetch_secs(), 600.0);
         assert!(FETCH_MINUTES.contains(&d.fetch_minutes));
+    }
+
+    #[test]
+    fn the_skin_survives_a_round_trip_and_defaults_to_normal() {
+        assert_eq!(Settings::default().skin, Skin::Normal);
+        assert_eq!(Settings::from_json(&json!({"skin": "disco"})).skin, Skin::Normal);
+        let s = Settings { skin: Skin::Gamer, ..Settings::default() };
+        assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 
     #[test]

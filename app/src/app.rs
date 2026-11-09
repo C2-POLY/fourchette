@@ -4,6 +4,7 @@ mod board;
 mod city;
 mod board_full;
 mod issue;
+mod mess;
 mod changelog;
 mod checks;
 mod cockpit;
@@ -141,6 +142,8 @@ pub enum Cmd {
     SetCommitLimit(usize),
     /// System, dark or light, kept in repos.json.
     SetAppearance(theme::Appearance),
+    /// The skin over the interface (#202).
+    SetSkin(crate::settings::Skin),
     /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
@@ -290,6 +293,8 @@ pub struct App {
     states: crate::repo_state::States,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
+    /// The messy gamer skin's litter and vacuum (#202).
+    mess: mess::Mess,
     /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
     font_previews: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -337,6 +342,7 @@ impl App {
             switcher: None,
             states: Default::default(),
             settings_open: false,
+            mess: mess::Mess::default(),
             font_previews: false,
             settings_section: 0,
             screenshot,
@@ -598,6 +604,17 @@ impl App {
             let (x, y) = v.split_once(',')?;
             Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
         });
+        // FOURCHETTE_SKIN=gamer: the messy gamer skin with litter all over (#202), `=carried`
+        // with the vacuum in hand, sucking (not saved).
+        if let Ok(v) = std::env::var("FOURCHETTE_SKIN") {
+            app.library.settings.skin = crate::settings::Skin::Gamer;
+            app.mess.sample = true;
+            if v == "carried" {
+                app.mess.carried = true;
+                app.mess.cleaned = 7;
+                app.mess.pin = Some(egui::pos2(640.0, 420.0));
+            }
+        }
         // FOURCHETTE_TOAST=<message> shows a toast, FOURCHETTE_TOAST=error:<message> an error's,
         // FOURCHETTE_TOAST=undo:<message> one that offers Cmd+Z, FOURCHETTE_TOAST=button:<message>
         // one with an Undo button (as after "Remove N missing").
@@ -720,6 +737,10 @@ impl App {
                     self.library.appearance = a;
                     self.library.save();
                     theme::set_appearance(ctx, a);
+                }
+                Cmd::SetSkin(skin) => {
+                    self.library.settings.skin = skin;
+                    self.library.save();
                 }
                 Cmd::Settings => {
                     self.settings_open = !self.settings_open;

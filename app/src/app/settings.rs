@@ -282,6 +282,18 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
         }
     });
     card(ui, |c| {
+        let s = &mut *pane.settings;
+        let ctrl = c.row("Skin", "Messy gamer: litter piles up, a vacuum takes it away", vec2(SEG_W, SEG_H), true);
+        let skins = crate::settings::Skin::ALL;
+        let chosen = skins.iter().position(|k| *k == s.skin).unwrap_or(0);
+        let picked = segmented(c.ui, ctrl, skins.len(), chosen, true, "skin", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, skins[i].label(), theme::body(), fg);
+        });
+        if let Some(i) = picked {
+            s.skin = skins[i];
+        }
+    });
+    card(ui, |c| {
         let ctrl = c.row("App icon", "In the Dock and the Finder", vec2(SWATCHES_W, SWATCH + 8.0), true);
         if let Some(colour) = icon_swatches(c.ui, ctrl, pane.icon, pane.cmds) {
             pane.settings.app_icon = colour;

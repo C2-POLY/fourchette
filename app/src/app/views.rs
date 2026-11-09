@@ -2015,6 +2015,11 @@ impl eframe::App for App {
             });
             self.menu_cmds.extend(keys);
         }
+        // The messy skin's litter catches the clicks on it, and the vacuum its own (#202).
+        if self.library.settings.skin == crate::settings::Skin::Gamer {
+            let now = ctx.input(|i| i.time) as f32;
+            self.mess.filter(&mut raw.events, now, ctx.content_rect());
+        }
         for pick in menu::take() {
             match pick {
                 menu::Pick::Recent(n) => self.menu_cmds.extend(self.library.recent().get(n).map(|e| Cmd::Open(e.path.clone()))),
@@ -2230,6 +2235,17 @@ impl eframe::App for App {
         if !self.modal() {
             self.switcher_ui(ctx, &mut cmds);
             self.settings_ui(ctx, &mut cmds);
+        }
+
+        if self.library.settings.skin == crate::settings::Skin::Gamer {
+            let (now, dt, pointer) = ctx.input(|i| (i.time as f32, i.stable_dt.min(0.1), i.pointer.hover_pos()));
+            let pointer = self.mess.pin.or(pointer);
+            let screen = ctx.content_rect();
+            self.mess.step(dt, now, pointer, screen);
+            self.mess.paint(ctx, now, pointer, screen);
+            ctx.request_repaint_after(std::time::Duration::from_millis(if self.mess.carried { 16 } else { 200 }));
+        } else if !self.mess.litter.is_empty() || self.mess.carried {
+            self.mess.clear();
         }
 
         if let Some(t) = &self.toast {
