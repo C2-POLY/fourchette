@@ -2,13 +2,56 @@
 //! Git action moves the runner on (a commit 100 m, a push 300, a merge 500) and Undo takes 100 m
 //! back. A split every 1,000 m, the finish at 8,000. Kept in memory only: it starts again at 0
 //! at each launch. `app/course.rs` draws the course bar, the toolbar pill, the coach's toasts and
-//! the medal.
+//! the medal. The Ultra-trail skin (#207) runs the same race on a mountain: 160 km, each action
+//! twenty times further, a checkpoint every 20 km (`Race::Ultra`). Metres stay the unit.
 
-/// The race's length and a lap, in metres.
+/// The track race's length and a lap, in metres.
 pub const LENGTH: u32 = 8000;
 pub const LAP: u32 = 400;
 /// A split every this many metres (the last one before the finish at 7,000).
 pub const SPLIT_EVERY: u32 = 1000;
+
+/// Which race the runner runs: the Runner's 8,000 m on the track or the Ultra-trail's 160 km.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Race {
+    #[default]
+    Track,
+    Ultra,
+}
+
+impl Race {
+    /// The finish, in metres.
+    pub fn length(self) -> u32 {
+        match self {
+            Race::Track => LENGTH,
+            Race::Ultra => 160_000,
+        }
+    }
+
+    /// A split (a checkpoint on the ultra) every this many metres.
+    pub fn split_every(self) -> u32 {
+        match self {
+            Race::Track => SPLIT_EVERY,
+            Race::Ultra => 20_000,
+        }
+    }
+
+    /// How many times further than on the track an action takes the runner.
+    pub fn scale(self) -> i32 {
+        match self {
+            Race::Track => 1,
+            Race::Ultra => 20,
+        }
+    }
+
+    /// "2,300 m" on the track, "46 km" on the ultra.
+    pub fn distance(self, m: u32) -> String {
+        match self {
+            Race::Track => metres(m),
+            Race::Ultra => km(m),
+        }
+    }
+}
 
 /// What moved the runner.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,6 +91,8 @@ pub struct Moved {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Course {
+    /// The race run: the track's by default.
+    pub race: Race,
     pub metres: u32,
     pub commits: u32,
     pub pushes: u32,
@@ -67,29 +112,36 @@ impl Course {
             Stride::Merge => self.merges += 1,
             Stride::Undo | Stride::Cramp { .. } => {}
         }
+        let (length, every) = (self.race.length(), self.race.split_every());
         let before = self.metres;
-        self.metres = (self.metres as i32 + s.metres()).clamp(0, LENGTH as i32) as u32;
+        self.metres = (self.metres as i32 + s.metres() * self.race.scale()).clamp(0, length as i32) as u32;
         let mut moved = Moved { metres: self.metres as i32 - before as i32, ..Moved::default() };
-        let mark = self.metres / SPLIT_EVERY * SPLIT_EVERY;
-        if mark > self.split_seen && mark < LENGTH {
+        let mark = self.metres / every * every;
+        if mark > self.split_seen && mark < length {
             self.split_seen = mark;
             moved.split = Some(mark);
         }
-        if self.metres == LENGTH && !self.finished {
+        if self.metres == length && !self.finished {
             self.finished = true;
             moved.finished = true;
         }
         moved
     }
 
-    /// "Run it again": back to the start, the counts to 0.
+    /// "Run it again": back to the start of the same race, the counts to 0.
     pub fn restart(&mut self) {
-        *self = Course::default();
+        *self = Course { race: self.race, ..Course::default() };
     }
 
     /// The next split, or the finish.
     pub fn next_split(&self) -> u32 {
-        ((self.metres / SPLIT_EVERY + 1) * SPLIT_EVERY).min(LENGTH)
+        let every = self.race.split_every();
+        ((self.metres / every + 1) * every).min(self.race.length())
+    }
+
+    /// The race's finish, in metres.
+    pub fn length(&self) -> u32 {
+        self.race.length()
     }
 
     /// The lap being run, from 1 to 20.
@@ -103,15 +155,17 @@ impl Course {
         format!("{} · {} · {}", n(self.commits, "commit", "commits"), n(self.pushes, "push", "pushes"), n(self.merges, "merge", "merges"))
     }
 
-    /// A race at `metres` with the counts that make it, for the screenshots.
-    pub fn sample(metres: u32) -> Course {
-        let (commits, pushes, merges) = match metres {
+    /// A race at `metres` with the counts that make it, for the screenshots: 2,300, 3,000 or
+    /// 8,000 m on the track, twenty times that on the ultra (46, 60 or 160 km).
+    pub fn sample(race: Race, metres: u32) -> Course {
+        let (commits, pushes, merges) = match metres / race.scale() as u32 {
             3000 => (11, 3, 2),
             8000 => (41, 8, 3),
             _ => (9, 3, 1),
         };
-        let metres = 100 * commits + 300 * pushes + 500 * merges;
-        Course { metres, commits, pushes, merges, split_seen: metres / SPLIT_EVERY * SPLIT_EVERY, finished: metres >= LENGTH }
+        let metres = (100 * commits + 300 * pushes + 500 * merges) * race.scale() as u32;
+        let every = race.split_every();
+        Course { race, metres, commits, pushes, merges, split_seen: metres / every * every, finished: metres >= race.length() }
     }
 }
 
@@ -131,6 +185,15 @@ pub fn thousands(n: u32) -> String {
 /// "2,300 m".
 pub fn metres(m: u32) -> String {
     format!("{} m", thousands(m))
+}
+
+/// "46 km", "12.5 km" (the ultra's distances, from metres).
+pub fn km(m: u32) -> String {
+    if m.is_multiple_of(1000) {
+        format!("{} km", thousands(m / 1000))
+    } else {
+        format!("{:.1} km", m as f32 / 1000.0)
+    }
 }
 
 /// Time at the keyboard: "42 min", "2 h", "9 h 12".
@@ -205,8 +268,37 @@ mod tests {
     #[test]
     fn the_samples_add_up() {
         for m in [2300, 3000, 8000] {
-            assert_eq!(Course::sample(m).metres, m);
+            assert_eq!(Course::sample(Race::Track, m).metres, m);
+            assert_eq!(Course::sample(Race::Ultra, m * 20).metres, m * 20);
         }
+        assert!(Course::sample(Race::Ultra, 160_000).finished);
+        assert_eq!(Course::sample(Race::Ultra, 60_000).split_seen, 60_000);
+    }
+
+    #[test]
+    fn the_ultra_goes_twenty_times_further() {
+        let mut c = Course { race: Race::Ultra, ..Course::default() };
+        assert_eq!(c.stride(&Stride::Commit).metres, 2000);
+        assert_eq!(c.stride(&Stride::Push).metres, 6000);
+        assert_eq!(c.stride(&Stride::Merge).metres, 10_000);
+        assert_eq!(c.stride(&Stride::Undo).metres, -2000);
+        assert_eq!(c.metres, 16_000);
+        assert_eq!(c.next_split(), 20_000);
+        assert_eq!(Race::Ultra.distance(c.metres), "16 km");
+        assert_eq!(Race::Track.distance(2300), "2,300 m");
+    }
+
+    #[test]
+    fn the_ultra_has_a_checkpoint_every_20_km_and_finishes_at_160() {
+        let mut c = Course { race: Race::Ultra, metres: 16_000, ..Course::default() };
+        assert_eq!(c.stride(&Stride::Push).split, Some(20_000));
+        assert_eq!(c.stride(&Stride::Commit).split, None);
+        c.metres = 155_000;
+        let m = c.stride(&Stride::Merge);
+        assert!(m.finished);
+        assert_eq!((c.metres, m.metres, m.split), (160_000, 5000, None), "the finish is no checkpoint");
+        c.restart();
+        assert_eq!(c, Course { race: Race::Ultra, ..Course::default() }, "run it again stays on the ultra");
     }
 
     #[test]
@@ -215,6 +307,8 @@ mod tests {
         assert_eq!(thousands(900), "900");
         assert_eq!(thousands(1234567), "1,234,567");
         assert_eq!(metres(2300), "2,300 m");
+        assert_eq!(km(46_000), "46 km");
+        assert_eq!(km(12_500), "12.5 km");
         assert_eq!(keyboard_time(42 * 60), "42 min");
         assert_eq!(keyboard_time(2 * 3600), "2 h");
         assert_eq!(keyboard_time(9 * 3600 + 12 * 60), "9 h 12");
