@@ -1,13 +1,13 @@
 ---
 name: topic
-description: Workflow obligatoire pour tout nouveau sujet sur Fourchette (fonctionnalité, amélioration ou bug) : analyse, issue GitHub dans le Project Fourchette, worktree, développement, tests, test visuel, test du dev au terminal, puis commit, push, PR, statut du Project et rangement. À utiliser dès que le dev demande d'ajouter, de changer ou de corriger quelque chose, ou tape /topic. Pas pour une simple question, ni pour continuer un sujet déjà en cours.
+description: Workflow obligatoire pour tout nouveau sujet sur Fourchette (fonctionnalité, amélioration ou bug) : analyse, issue GitHub dans le Project Fourchette (avec un design et un schéma Mermaid validés quand le sujet a un flux ou est complexe), worktree, développement, tests, test visuel, test du dev au terminal, puis commit, push, PR, statut du Project et rangement. À utiliser dès que le dev demande d'ajouter, de changer ou de corriger quelque chose, ou tape /topic. Pas pour une simple question, ni pour continuer un sujet déjà en cours.
 ---
 
 # Topic : un nouveau sujet
 
 Chaque sujet suit cet ordre, sans en sauter une étape. **Un sujet = une issue = un worktree = une PR.** Si le dev glisse un deuxième sujet en route, on le note et on le traite après, séparément.
 
-C'est le `topic` de Warhallow (rally-point), avec GitHub Issues et le Project **Fourchette** à la place de Linear, et les outils de Rust à la place de ceux de Godot. Les règles du dépôt (commandes, architecture, issues, version) sont dans `CLAUDE.md`.
+Le suivi se fait dans GitHub Issues et le Project **Fourchette**. Les règles du dépôt (commandes, architecture, issues, version) sont dans `CLAUDE.md`.
 
 Montre l'avancement avec les chapitres de la section suivante, et rien d'autre : ni barre de progression, ni liste du parcours dans tes messages. Si une étape est incomplète, on ne passe pas à la suivante.
 
@@ -54,7 +54,7 @@ Règles de délégation :
 
 ## 1. Analyser
 
-Lis le code et les docs concernés (`CLAUDE.md`, `app/MECHANICS.md` si le sujet touche une valeur mesurée sur l'app d'origine, les fichiers de `app/src/` touchés). Reformule le sujet en deux ou trois phrases. Aucun code. Classe le sujet selon « Niveau du sujet » et annonce le niveau.
+Lis le code et les docs concernés (`CLAUDE.md`, `app/MECHANICS.md` si le sujet touche une valeur mesurée sur l'app d'origine, les fichiers de `app/src/` touchés). Reformule le sujet en deux ou trois phrases. Aucun code. Classe le sujet selon « Niveau du sujet » et annonce le niveau, puis dis en une ligne s'il demande un design (voir « Design » à l'étape 2) : « Design : oui, sequenceDiagram des fils ».
 
 ## 2. Chercher dans GitHub
 
@@ -87,6 +87,26 @@ Un label `zone:` qui manque se crée (`gh label create zone:<zone> --repo C2-POL
 gh project item-edit --project-id PVT_kwDODd-WqM4BqKPF --id "$item" --field-id PVTSSF_lADODd-WqM4BqKPFzhoijpg --single-select-option-id <option>
 ```
 
+### Design, quand le sujet a un flux ou est complexe
+
+**Quand** : toujours pour un sujet Complexe ; pour un sujet Standard dès qu'il y a un flux (plusieurs étapes qui s'enchaînent, des fils ou des canaux, un échange avec Claude ou GitHub, un état qui change) ; et chaque fois que le dev le demande. Jamais pour un sujet Simple.
+
+**Quoi** : une section `## Design` dans le corps de l'issue, sous les critères, rédigée **avant tout code** :
+
+- **Fichiers** : ceux qu'on touche, et pourquoi, en une ligne chacun.
+- **Approche** : trois à cinq lignes.
+- **Schéma** : un bloc ` ```mermaid `, un seul sauf si le sujet a vraiment deux flux distincts, choisi selon ce qui risque de casser :
+  - `sequenceDiagram` pour les fils et canaux (`App::spawn`, `ai_poll`, `project_poll`) et les échanges avec Claude ou GitHub : qui envoie quoi, dans quel ordre, ce qui se passe si la réponse n'arrive pas ;
+  - `stateDiagram-v2` pour l'état du dépôt, Undo et les `Snapshot`, ou une vue qui a plusieurs états ;
+  - `flowchart` pour un flux de données : ce qui est lu, transformé, écrit (`library.rs`, `repos.json`) ou envoyé.
+  Le schéma décrit le code tel qu'il sera, avec les vrais noms de fonctions, de types et de messages, pas une intention.
+- **Risques** : ce qui peut être perdu ou écrit chez l'utilisateur, et comment on le reprend (`Snapshot`, Cmd+Z).
+- **Tests** : ce que l'étape 5 vérifiera, et ce que le dev essaiera à l'étape 7.
+
+**Validation** : montre la section dans ton message (le bloc `mermaid` s'affiche en schéma dans l'app) et attends l'accord du dev avant de créer l'issue. Si l'issue existe déjà, ajoute la section à son corps (`gh issue edit <n> --repo C2-POLY/fourchette --body-file <fichier>`) puis donne-lui le lien pour qu'il la relise affichée sur GitHub. Pas de worktree tant que le design n'est pas validé.
+
+**Tenir le design juste** : si le développement s'en écarte (une autre approche, un message de plus, un fichier imprévu), mets la section à jour dans l'issue et dis au dev en une ligne ce qui a changé. Un design faux est pire que pas de design.
+
 ## 3. Worktree
 
 Toujours un worktree, et tu ne demandes rien au dev, ni le choix ni le nom : plusieurs sessions Claude peuvent partager le dossier principal et changer la branche sous tes pieds. Choisis le nom toi-même, `feat/<n>-…` pour une Feature, `fix/<n>-…` pour un Bug, `chore/<n>-…` pour l'outillage et la doc (`<n>` le numéro de l'issue), et crée-le à côté du dossier principal, depuis `origin/main` et sans qu'il suive `main`, pour qu'un `git push` nu ne parte jamais vers `main` :
@@ -99,7 +119,7 @@ Un worktree neuf n'a pas de `app/target/` : copie celui du dossier principal pou
 
 ## 4. Travailler
 
-Respecte `CLAUDE.md` (architecture, `Cmd` et `Dialog`, fils et canaux, icônes dessinées, version). Toute action qui change le dépôt ouvert prend un `Snapshot` avant, pour que Cmd+Z la reprenne. Ajoute ou mets à jour les tests unitaires (`#[cfg(test)]` dans le fichier touché ; un test qui appelle Claude ou GitHub est `#[ignore]`). Quand le sujet change quelque chose de visible dans l'app, applique la règle de version du jour (« Versioning »). Si une valeur de `app/mechanics.json` change, mets `app/MECHANICS.md` à jour. Le développement se délègue au modèle et à l'effort du tableau de « Niveau du sujet ».
+Respecte `CLAUDE.md` (architecture, `Cmd` et `Dialog`, fils et canaux, icônes dessinées, version) et, s'il y en a un, le design validé de l'issue : le brief d'une session à part le cite en entier, schéma compris. Toute action qui change le dépôt ouvert prend un `Snapshot` avant, pour que Cmd+Z la reprenne. Ajoute ou mets à jour les tests unitaires (`#[cfg(test)]` dans le fichier touché ; un test qui appelle Claude ou GitHub est `#[ignore]`). Quand le sujet change quelque chose de visible dans l'app, applique la règle de version du jour (« Versioning »). Si une valeur de `app/mechanics.json` change, mets `app/MECHANICS.md` à jour. Le développement se délègue au modèle et à l'effort du tableau de « Niveau du sujet ».
 
 ## 5. Tester
 
@@ -149,7 +169,7 @@ Quand il a essayé et fermé l'app, lis son terminal (outil `read_terminal`, ong
 
 1. Commit sur la branche du sujet (message en anglais, Conventional Commits : `feat(switcher): …`, sans numéro de version). Jamais de relecture du diff par un agent avant le commit : ses tests et l'essai du dev sont le filet.
 2. Push de la branche, puis PR vers `main` (titre en anglais, Conventional Commits ; corps avec `Closes #<n>`). L'issue passe à **In review**.
-3. Issue : coche les critères que le dev a vérifiés à l'étape 7, ajoute la ligne `**Livré** : \`vX.Y.Z\`` et le label de version. Une fois la PR mergée, le Project passe l'issue à **Done**. Si un critère n'a pas pu être testé, l'issue va à **To test** avec sa case décochée, et tu dis lequel.
+3. Issue : vérifie que la section Design, s'il y en a une, décrit bien le code livré (sinon mets-la à jour), coche les critères que le dev a vérifiés à l'étape 7, ajoute la ligne `**Livré** : \`vX.Y.Z\`` et le label de version. Une fois la PR mergée, le Project passe l'issue à **Done**. Si un critère n'a pas pu être testé, l'issue va à **To test** avec sa case décochée, et tu dis lequel.
 4. Une fois la PR mergée dans `main`, déplace le tag de version (voir « Versioning » de `CLAUDE.md`).
 5. **Worktree du sujet, sans le redemander.** Dès que la PR est mergée, supprime le worktree du sujet et sa branche locale. Vérifie d'abord, depuis le dossier principal et non depuis le worktree à supprimer :
    - `git fetch --prune`, puis la branche est bien dans `origin/main` (`git branch -r --merged origin/main`, ou la PR « merged » si elle a été squashée) ;
