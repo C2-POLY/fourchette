@@ -1,5 +1,6 @@
 ---
 import Shot from './Shot.astro';
+import Phone from './Phone.astro';
 import Icon from './Icon.astro';
 import { type Lang, t, repo, releases, project } from '../i18n';
 
@@ -59,6 +60,20 @@ const steps = ['git clone https://github.com/C2-POLY/fourchette.git', 'cd fourch
     </section>
   ))
 }
+
+<section class:list={['section', 'showcase', { alt: s.showcase.length % 2 === 1 }]}>
+  <div class="wrap">
+    <div class="showcase-text">
+      <p class="kicker">{s.companion.kicker}</p>
+      <h2>{s.companion.title}</h2>
+      <p class="lead">{s.companion.text}</p>
+      <p class="dim">{s.companion.note}</p>
+    </div>
+    <div class="phones">
+      {s.companion.shots.map((p) => <Phone name={p.name} alt={p.alt} />)}
+    </div>
+  </div>
+</section>
 
 <section id="teams" class="section">
   <div class="wrap">
