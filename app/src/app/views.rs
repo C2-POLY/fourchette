@@ -1903,6 +1903,7 @@ impl App {
             Id::About | Id::NoRecent | Id::Redo | Id::Cut | Id::Copy | Id::Paste | Id::SelectAll => return None,
             Id::Settings => Cmd::Settings,
             Id::OpenRepository => Cmd::OpenDialog,
+            Id::CloneRepository => Cmd::CloneDialog,
             Id::Switcher => Cmd::Switcher,
             Id::Palette => Cmd::Palette,
             Id::Undo => Cmd::Undo,
@@ -2229,6 +2230,7 @@ impl eframe::App for App {
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
+        self.clone_window(ctx, &mut cmds);
         if !self.update.dialog {
             self.whats_new_dialog(ctx, &mut cmds);
         }

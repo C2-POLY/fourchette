@@ -7,6 +7,7 @@ mod issue;
 mod mess;
 mod changelog;
 mod checks;
+mod clone;
 mod cockpit;
 mod home;
 mod palette;
@@ -129,6 +130,12 @@ pub enum Cmd {
     CloseDiff,
     OpenDialog,
     Open(PathBuf),
+    /// The clone dialog (#204): home page, File › Clone Repository… and the palette.
+    CloneDialog,
+    /// The clone dialog's Change…: another folder for clones.
+    ClonePickFolder,
+    /// A repository just cloned, or already in the list: it joins the list and opens.
+    CloneOpen(PathBuf),
     Dialog(Dialog),
     Reload,
     Copy(String),
@@ -321,6 +328,8 @@ pub struct App {
     /// Folders whose repositories are opened without being kept in the list or the tabs
     /// (`library::temp_roots`); none in tests, whose repositories live there.
     temp_roots: Vec<PathBuf>,
+    /// The clone dialog (#204), open over any tab.
+    clone: Option<clone::CloneView>,
 }
 
 pub fn short(h: &str) -> &str {
@@ -358,6 +367,7 @@ impl App {
             full: Default::default(),
             removed: Vec::new(),
             temp_roots: crate::library::temp_roots(),
+            clone: None,
         }
     }
 
@@ -630,6 +640,11 @@ impl App {
                 }
             }
         }
+        // FOURCHETTE_CLONE=1 shows the clone dialog with sample repositories (`=cloning` with a
+        // clone under way, `=error` after a failed one, `=signed-out` without `gh`).
+        if let (Ok(v), Some(_)) = (std::env::var("FOURCHETTE_CLONE"), &app.screenshot) {
+            app.clone_sample(&v);
+        }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
             app.settings_open = true;
@@ -649,7 +664,7 @@ impl App {
 
     /// A dialog takes the window: the tab's, or the update dialog.
     fn modal(&self) -> bool {
-        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some()
+        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some()
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -703,6 +718,9 @@ impl App {
                     }
                 }
                 Cmd::Open(p) => self.open_path(p, false),
+                Cmd::CloneDialog => self.clone_open(ctx),
+                Cmd::ClonePickFolder => self.clone_pick_folder(),
+                Cmd::CloneOpen(p) => self.clone_done(p),
                 Cmd::OpenTab(p) => self.open_path(p, true),
                 Cmd::NewTab => {
                     self.switcher = None;

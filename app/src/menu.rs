@@ -15,6 +15,7 @@ pub enum Id {
     About,
     Settings,
     OpenRepository,
+    CloneRepository,
     Switcher,
     Palette,
     /// The greyed line of an empty Open Recent menu.
@@ -55,10 +56,11 @@ pub enum Id {
 }
 
 impl Id {
-    pub const ALL: [Id; 39] = [
+    pub const ALL: [Id; 40] = [
         Id::About,
         Id::Settings,
         Id::OpenRepository,
+        Id::CloneRepository,
         Id::Switcher,
         Id::Palette,
         Id::NoRecent,
@@ -251,6 +253,7 @@ pub fn bar() -> Vec<Menu> {
                 app("New Tab", Id::NewTab, Some(cmd('t'))),
                 app("Home", Id::Home, Some(cmd('o').shift())),
                 app("Open Repository…", Id::OpenRepository, None),
+                app("Clone Repository…", Id::CloneRepository, None),
                 Entry::OpenRecent,
                 app("Switch Repository…", Id::Switcher, Some(cmd('o'))),
                 app("Command Palette…", Id::Palette, Some(cmd('p'))),
@@ -382,7 +385,7 @@ pub fn enabled(id: Id, s: &State) -> bool {
         Id::PopStash => git && s.stashes,
         Id::CheckoutBranch | Id::NewBranch | Id::NewTag => git && !s.settings,
         Id::ShowInFinder | Id::OpenInTerminal => s.repo,
-        Id::NewTab | Id::Home => overlay,
+        Id::NewTab | Id::Home | Id::CloneRepository => overlay,
         // Never the last tab; and nothing to go to with one.
         Id::CloseTab | Id::NextTab | Id::PrevTab => overlay && s.tabs > 1,
     }
@@ -695,7 +698,7 @@ mod tests {
         let b = bar();
         assert_eq!(titles(&b[0]), ["About Fourchette", "Settings…", "Services", "Hide Fourchette", "Hide Others", "Show All", "Quit Fourchette"]);
         assert_eq!(titles(&b[2]), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
-        assert_eq!(titles(&b[1]), ["New Tab", "Home", "Open Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
+        assert_eq!(titles(&b[1]), ["New Tab", "Home", "Open Repository…", "Clone Repository…", "Open Recent", "Switch Repository…", "Command Palette…", "Close Tab"]);
         assert_eq!(titles(&b[5]), ["Minimize", "Zoom", "Show Previous Tab", "Show Next Tab", "Bring All to Front"]);
         assert_eq!(titles(&b[6]), ["Release Notes", "Fourchette on GitHub", "Report an Issue"]);
     }

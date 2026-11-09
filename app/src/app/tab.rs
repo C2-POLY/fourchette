@@ -748,6 +748,9 @@ impl Tab {
             | Cmd::CloseTab(_)
             | Cmd::ShowTab { .. }
             | Cmd::Home
+            | Cmd::CloneDialog
+            | Cmd::ClonePickFolder
+            | Cmd::CloneOpen(_)
             | Cmd::HomeKeep { .. }
             | Cmd::HomeDismiss(_)
             | Cmd::HomeSample

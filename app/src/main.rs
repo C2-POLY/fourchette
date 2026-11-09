@@ -3,6 +3,7 @@ mod app;
 mod changelog;
 mod cockpit;
 mod checkout;
+mod clone;
 mod city;
 mod delete;
 mod demo;

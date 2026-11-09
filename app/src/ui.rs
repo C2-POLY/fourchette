@@ -852,6 +852,12 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
                 k.p.rect_stroke(Rect::from_min_max(k.t(x, y), k.t(x + 7.5, y + 7.5)), CornerRadius::same(2), k.s, StrokeKind::Middle);
             }
         }
+        // an arrow coming down into an open tray: a repository brought onto the Mac
+        "clone" => {
+            k.line(&[(12.0, 3.5), (12.0, 14.0)]);
+            k.line(&[(7.5, 9.5), (12.0, 14.0), (16.5, 9.5)]);
+            k.line(&[(4.0, 13.0), (4.0, 20.0), (20.0, 20.0), (20.0, 13.0)]);
+        }
         // a triangle with an exclamation mark
         "warning" => {
             k.closed([(12.0, 3.5), (21.5, 20.0), (2.5, 20.0)].iter().map(|&(x, y)| k.t(x, y)).collect());
