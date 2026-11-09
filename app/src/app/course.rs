@@ -155,14 +155,15 @@ impl App {
         self.toast = Some(tab::Notice { msg: body, error: false, at: Instant::now(), undo: false, action: None, coach: Some(Coach { title: title.into(), gain, tone }) });
     }
 
-    /// The bar at the bottom of the window, over everything but the dialogs and toasts.
+    /// The bar floats centred at the bottom of the central view (between the sidebar and the details), just above
+    /// the status bar, over everything but the dialogs and toasts (#215). Without a recorded central view, the window.
     pub(super) fn course_bar(&self, ctx: &egui::Context) {
-        let screen = ctx.content_rect();
-        let w = (screen.width() - 32.0).min(1088.0);
+        let area = self.centre.unwrap_or_else(|| ctx.content_rect());
+        let w = (area.width() - 32.0).min(1088.0);
         if w < 420.0 {
             return;
         }
-        let rect = Rect::from_min_size(pos2(screen.right() - 16.0 - w, screen.bottom() - 12.0 - BAR_H), vec2(w, BAR_H));
+        let rect = Rect::from_min_size(pos2(area.center().x - w / 2.0, area.bottom() - 12.0 - BAR_H), vec2(w, BAR_H));
         let p = ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("course_bar")));
         let k = theme::c();
         let c = &self.race.course;

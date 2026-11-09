@@ -2038,6 +2038,8 @@ impl eframe::App for App {
 
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &root.ctx().clone();
+        // The central view of this frame, recorded by the CentralPanel below (the course bar centres on it).
+        self.centre = None;
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
         // Every tab's background work, not only the one on screen.
@@ -2078,7 +2080,8 @@ impl eframe::App for App {
 
         if full {
             let t = &mut self.tabs[self.active];
-            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| t.board_view(ui, true, &mut cmds)));
+            let centre = egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| t.board_view(ui, true, &mut cmds)));
+            self.centre = Some(centre.response.rect);
             t.board_drawer(ctx, bar_h, &mut cmds);
         }
 
@@ -2194,7 +2197,7 @@ impl eframe::App for App {
 
             let settings_open = self.settings_open;
             let t = &mut self.tabs[self.active];
-            egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| {
+            let centre = egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| ui.push_id(t.key, |ui| {
                 keep_panel_edges_free(ui);
                 t.view_tabs(ui, &mut cmds);
                 if board_open {
@@ -2222,6 +2225,7 @@ impl eframe::App for App {
                     t.commit_list(ui, &mut cmds);
                 }
             }));
+            self.centre = Some(centre.response.rect);
 
             let t = self.tab_mut();
             t.issue_offer_ui(ctx, &mut cmds);
