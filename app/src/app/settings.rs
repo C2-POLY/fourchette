@@ -179,15 +179,23 @@ fn card(ui: &mut Ui, add: impl FnOnce(&mut Card)) {
 
 /// A segmented control of `n` options in `rect`, the chosen one raised. `draw` paints option `i`
 /// in its rect with the given text colour and background. Returns the option clicked.
-fn segmented(ui: &mut Ui, rect: Rect, n: usize, chosen: usize, enabled: bool, id: &str, mut draw: impl FnMut(&Painter, Rect, usize, Color32, Color32)) -> Option<usize> {
+fn segmented(ui: &mut Ui, rect: Rect, n: usize, chosen: usize, enabled: bool, id: &str, draw: impl FnMut(&Painter, Rect, usize, Color32, Color32)) -> Option<usize> {
+    segmented_by(ui, rect, &vec![1.0; n], chosen, enabled, id, draw)
+}
+
+/// The same, each option as wide as its share of `weights`.
+fn segmented_by(ui: &mut Ui, rect: Rect, weights: &[f32], chosen: usize, enabled: bool, id: &str, mut draw: impl FnMut(&Painter, Rect, usize, Color32, Color32)) -> Option<usize> {
     let k = theme::c();
     let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.45) };
     let p = ui.painter().clone();
     p.rect(rect, CornerRadius::same(7), k.input, Stroke::new(1.0_f32, fade(k.border_strong)), StrokeKind::Inside);
-    let w = rect.width() / n as f32;
+    let unit = rect.width() / weights.iter().sum::<f32>().max(1.0);
     let mut clicked = None;
-    for i in 0..n {
-        let seg = Rect::from_min_size(pos2(rect.left() + w * i as f32, rect.top()), vec2(w, rect.height())).shrink(3.0);
+    let mut x = rect.left();
+    for (i, weight) in weights.iter().enumerate() {
+        let w = weight * unit;
+        let seg = Rect::from_min_size(pos2(x, rect.top()), vec2(w, rect.height())).shrink(3.0);
+        x += w;
         let resp = ui.interact(seg, ui.scope_id().with((id, i)), if enabled { Sense::click() } else { Sense::hover() });
         let on = i == chosen;
         let hovered = enabled && resp.hovered();
@@ -283,11 +291,13 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
     card(ui, |c| {
         let s = &mut *pane.settings;
-        let ctrl = c.row("Skin", s.skin.about(), vec2(SEG_W, SEG_H), true);
+        // Four skins with names of every length (#212): each as wide as its name.
         let skins = crate::settings::Skin::ALL;
+        let widths: Vec<f32> = skins.iter().map(|k| c.ui.painter().layout_no_wrap(k.label().into(), theme::secondary(), Color32::WHITE).size().x + 18.0).collect();
+        let ctrl = c.row("Skin", s.skin.about(), vec2(widths.iter().sum::<f32>(), SEG_H), true);
         let chosen = skins.iter().position(|k| *k == s.skin).unwrap_or(0);
-        let picked = segmented(c.ui, ctrl, skins.len(), chosen, true, "skin", |p, r, i, fg, _| {
-            p.text(r.center(), Align2::CENTER_CENTER, skins[i].label(), theme::body(), fg);
+        let picked = segmented_by(c.ui, ctrl, &widths, chosen, true, "skin", |p, r, i, fg, _| {
+            p.text(r.center(), Align2::CENTER_CENTER, skins[i].label(), theme::secondary(), fg);
         });
         if let Some(i) = picked {
             s.skin = skins[i];

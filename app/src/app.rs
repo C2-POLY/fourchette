@@ -1,7 +1,9 @@
 mod app_icon;
+mod art;
 mod assistant;
 mod board;
 mod city;
+mod court;
 mod board_full;
 mod issue;
 mod mess;
@@ -22,6 +24,7 @@ mod tab;
 mod tabs;
 mod track;
 mod course;
+mod meal;
 mod updater;
 mod view_tabs;
 mod views;
@@ -155,6 +158,8 @@ pub enum Cmd {
     SetSkin(crate::settings::Skin),
     /// The Runner skin's Finisher dialog: Run it again (`again`) or Recover (#206).
     Finisher { again: bool },
+    /// The Big eater skin's Golden Fork card: Second helping (`again`) or Nap time (#212).
+    GoldenFork { again: bool },
     /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
@@ -311,6 +316,8 @@ pub struct App {
     centre: Option<egui::Rect>,
     /// The Runner skin's race of the day (#206), in memory only.
     race: course::CourseState,
+    /// The Big eater skin's daily menu (#212), in memory only.
+    meal: meal::MealState,
     /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
     font_previews: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -363,6 +370,7 @@ impl App {
             mess: mess::Mess::default(),
             centre: None,
             race: course::CourseState::default(),
+            meal: meal::MealState::default(),
             font_previews: false,
             settings_section: 0,
             screenshot,
@@ -626,12 +634,18 @@ impl App {
             Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
         });
         // FOURCHETTE_SKIN=gamer: the messy gamer skin with litter all over (#202), `=carried`
-        // with the vacuum in hand, sucking (not saved). FOURCHETTE_SKIN=runner: the Runner skin
-        // at 2,300 m (#206), `=runner,split` at the 3,000 m split, `=runner,finish` finished.
+        // with the vacuum in hand, sucking. FOURCHETTE_SKIN=eater: the Big eater skin (#212) with
+        // its daily menu at 1,240 kcal, a combo ×3 and the announcer, `=eater,golden` its Golden
+        // Fork card (not saved). FOURCHETTE_SKIN=runner: the Runner skin at 2,300 m (#206),
+        // `=runner,split` at the 3,000 m split, `=runner,finish` finished.
         if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("runner")) {
             app.library.settings.skin = crate::settings::Skin::Runner;
             app.race.sample(&v);
             app.coach_sample();
+        } else if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("eater")) {
+            app.library.settings.skin = crate::settings::Skin::Eater;
+            app.meal.sample(&v);
+            app.meal_sample_toast();
         } else if let Ok(v) = std::env::var("FOURCHETTE_SKIN") {
             app.library.settings.skin = crate::settings::Skin::Gamer;
             app.mess.sample = true;
@@ -680,7 +694,8 @@ impl App {
 
     /// A dialog takes the window: the tab's, or the update dialog.
     fn modal(&self) -> bool {
-        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher
+        let golden = self.meal.golden && self.library.settings.skin == crate::settings::Skin::Eater;
+        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher || golden
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -716,7 +731,21 @@ impl App {
                 self.toast = Some(n);
             }
         }
-        self.course_strides();
+        self.take_strides();
+    }
+
+    /// Takes what the tabs did since the last frame, once, and gives it to the skin that counts
+    /// it: the Runner's race (#206) or the Big eater's menu (#212). Other skins drop it.
+    fn take_strides(&mut self) {
+        let strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
+        if strides.is_empty() {
+            return;
+        }
+        match self.library.settings.skin {
+            crate::settings::Skin::Runner => self.course_strides(strides),
+            crate::settings::Skin::Eater => self.meal_bites(strides),
+            _ => {}
+        }
     }
 
     // ---------------------------------------------------------------- actions
@@ -778,6 +807,7 @@ impl App {
                     self.library.save();
                 }
                 Cmd::Finisher { again } => self.finisher_done(again),
+                Cmd::GoldenFork { again } => self.golden_fork_done(again),
                 Cmd::Settings => {
                     self.settings_open = !self.settings_open;
                     if self.settings_open {

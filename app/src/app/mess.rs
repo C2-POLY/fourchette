@@ -244,9 +244,9 @@ fn turned(c: Pos2, v: Vec2, turn: f32, s: f32) -> Pos2 {
 const LITTER_SCALE: f32 = 0.42;
 const ROBOT_SCALE: f32 = 0.6;
 
-const INK: Color32 = Color32::from_rgb(0x3b, 0x2f, 0x4a);
-const EYE: Color32 = Color32::from_rgb(0x2a, 0x24, 0x33);
-const BLUSH: Color32 = Color32::from_rgb(0xff, 0x8f, 0xb1);
+pub(super) const INK: Color32 = Color32::from_rgb(0x3b, 0x2f, 0x4a);
+pub(super) const EYE: Color32 = Color32::from_rgb(0x2a, 0x24, 0x33);
+pub(super) const BLUSH: Color32 = Color32::from_rgb(0xff, 0x8f, 0xb1);
 const TEAR: Color32 = Color32::from_rgb(0x9f, 0xd8, 0xff);
 const SPARK: Color32 = Color32::from_rgb(0xff, 0xf6, 0xc2);
 /// A can's body and its shadow: sky, pink, mint, lilac.
@@ -264,9 +264,10 @@ const SPILLS: [(Color32, Color32); 4] = [
     (Color32::from_rgb(0xd9, 0xc8, 0xff), Color32::from_rgb(0xb3, 0x9c, 0xf0)),
 ];
 
-/// The parts of an SVG path's `d` this skin uses: absolute M, L, H, V, Q, C and Z, curves
-/// flattened. One list of points per subpath.
-fn path(d: &str) -> Vec<Vec<Vec2>> {
+/// An SVG path's `d` as lists of points, one per subpath, its curves and arcs flattened: M, L,
+/// H, V, Q, C, A and Z, absolute or relative (lower case). The litter and the Big eater's
+/// drawings (`art`) both use it.
+pub(super) fn path(d: &str) -> Vec<Vec<Vec2>> {
     enum Tok {
         Cmd(char),
         Num(f32),
@@ -288,7 +289,7 @@ fn path(d: &str) -> Vec<Vec<Vec2>> {
             }
             c if c.is_ascii_alphabetic() => {
                 flush(&mut num, &mut toks);
-                toks.push(Tok::Cmd(c.to_ascii_uppercase()));
+                toks.push(Tok::Cmd(c));
             }
             _ => flush(&mut num, &mut toks),
         }
@@ -303,18 +304,21 @@ fn path(d: &str) -> Vec<Vec<Vec2>> {
         if let Tok::Cmd(c) = toks[i] {
             cmd = c;
             i += 1;
-            if c == 'Z' {
+            if c.eq_ignore_ascii_case(&'Z') {
                 if let Some(first) = out.last().and_then(|s| s.first()) {
                     at = *first;
                 }
             }
             continue;
         }
-        let arity = match cmd {
+        let rel = cmd.is_ascii_lowercase();
+        let up = cmd.to_ascii_uppercase();
+        let arity = match up {
             'H' | 'V' => 1,
             'M' | 'L' => 2,
             'Q' => 4,
             'C' => 6,
+            'A' => 7,
             _ => {
                 i += 1;
                 continue;
@@ -325,21 +329,22 @@ fn path(d: &str) -> Vec<Vec<Vec2>> {
             break;
         }
         i += arity;
-        let p = |k: usize| vec2(v[k], v[k + 1]);
-        if cmd == 'M' {
+        let base = if rel { at } else { Vec2::ZERO };
+        let p = |k: usize| base + vec2(v[k], v[k + 1]);
+        if up == 'M' {
             at = p(0);
             out.push(vec![at]);
-            cmd = 'L';
+            cmd = if rel { 'l' } else { 'L' };
             continue;
         }
         if out.is_empty() {
             out.push(vec![at]);
         }
         let seg = out.last_mut().expect("a subpath");
-        match cmd {
+        match up {
             'L' => at = p(0),
-            'H' => at = vec2(v[0], at.y),
-            'V' => at = vec2(at.x, v[0]),
+            'H' => at = vec2(v[0] + if rel { at.x } else { 0.0 }, at.y),
+            'V' => at = vec2(at.x, v[0] + if rel { at.y } else { 0.0 }),
             'Q' => {
                 for k in 1..8 {
                     let t = k as f32 / 8.0;
@@ -348,7 +353,7 @@ fn path(d: &str) -> Vec<Vec<Vec2>> {
                 }
                 at = p(2);
             }
-            _ => {
+            'C' => {
                 for k in 1..10 {
                     let t = k as f32 / 10.0;
                     let u = 1.0 - t;
@@ -356,14 +361,61 @@ fn path(d: &str) -> Vec<Vec<Vec2>> {
                 }
                 at = p(4);
             }
+            _ => {
+                let to = base + vec2(v[5], v[6]);
+                seg.extend(arc(at, to, v[0], v[1], v[2], v[3] != 0.0, v[4] != 0.0));
+                at = to;
+            }
         }
         seg.push(at);
     }
     out
 }
 
+/// The points between `from` and `to` (both left out) on an SVG elliptical arc of radii `rx`,
+/// `ry` turned `deg` degrees, with its large-arc and sweep flags (SVG 1.1, appendix F.6).
+fn arc(from: Vec2, to: Vec2, rx: f32, ry: f32, deg: f32, large: bool, sweep: bool) -> Vec<Vec2> {
+    let (mut rx, mut ry) = (rx.abs(), ry.abs());
+    if rx < 1e-4 || ry < 1e-4 || from == to {
+        return Vec::new();
+    }
+    let (sin, cos) = deg.to_radians().sin_cos();
+    let h = (from - to) / 2.0;
+    let x1 = cos * h.x + sin * h.y;
+    let y1 = -sin * h.x + cos * h.y;
+    let grow = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+    if grow > 1.0 {
+        rx *= grow.sqrt();
+        ry *= grow.sqrt();
+    }
+    let num = (rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1).max(0.0);
+    let den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+    let mut co = (num / den).sqrt();
+    if large == sweep {
+        co = -co;
+    }
+    let (cx1, cy1) = (co * rx * y1 / ry, -co * ry * x1 / rx);
+    let mid = (from + to) / 2.0;
+    let c = vec2(cos * cx1 - sin * cy1, sin * cx1 + cos * cy1) + mid;
+    let angle = |ux: f32, uy: f32| uy.atan2(ux);
+    let a0 = angle((x1 - cx1) / rx, (y1 - cy1) / ry);
+    let mut da = angle((-x1 - cx1) / rx, (-y1 - cy1) / ry) - a0;
+    let tau = std::f32::consts::TAU;
+    if sweep && da < 0.0 {
+        da += tau;
+    } else if !sweep && da > 0.0 {
+        da -= tau;
+    }
+    let n = ((da.abs() / tau * 32.0).ceil() as usize).max(4);
+    (1..n).map(|k| {
+        let a = a0 + da * k as f32 / n as f32;
+        let (x, y) = (rx * a.cos(), ry * a.sin());
+        c + vec2(cos * x - sin * y, sin * x + cos * y)
+    }).collect()
+}
+
 /// The triangles that fill a simple polygon, convex or not (ear clipping).
-fn triangulate(pts: &[Pos2]) -> Vec<[usize; 3]> {
+pub(super) fn triangulate(pts: &[Pos2]) -> Vec<[usize; 3]> {
     let cross = |a: Pos2, b: Pos2, c: Pos2| (b - a).x * (c - b).y - (b - a).y * (c - b).x;
     let area: f32 = (0..pts.len()).map(|k| {
         let (a, b) = (pts[k], pts[(k + 1) % pts.len()]);
@@ -393,11 +445,11 @@ fn triangulate(pts: &[Pos2]) -> Vec<[usize; 3]> {
 
 /// Draws the canvas's paths round a centre: its point (60, 48) lands on `c`.
 #[derive(Clone, Copy)]
-struct Pen<'a> {
-    p: &'a Painter,
-    c: Pos2,
-    turn: f32,
-    s: f32,
+pub(super) struct Pen<'a> {
+    pub p: &'a Painter,
+    pub c: Pos2,
+    pub turn: f32,
+    pub s: f32,
 }
 
 impl Pen<'_> {
@@ -410,7 +462,7 @@ impl Pen<'_> {
         Pen { turn: self.turn + by, ..self }
     }
 
-    fn subpaths(&self, d: &str) -> Vec<Vec<Pos2>> {
+    pub fn subpaths(&self, d: &str) -> Vec<Vec<Pos2>> {
         path(d).into_iter().map(|s| {
             let mut pts: Vec<Pos2> = s.into_iter().map(|v| self.at(v.x, v.y)).collect();
             pts.dedup_by(|a, b| a.distance(*b) < 0.01);
@@ -725,6 +777,18 @@ mod tests {
         assert_eq!(*subs[0].last().unwrap(), vec2(15.0, 10.0));
         assert_eq!(subs[0].len(), 4 + 8);
         assert_eq!(subs[1], [vec2(1.0, -2.0), vec2(3.0, 4.0)]);
+    }
+
+    #[test]
+    fn relative_commands_and_arcs_parse() {
+        let subs = path("M10 10 l5 0 h5 v5 Z");
+        assert_eq!(subs[0], [vec2(10.0, 10.0), vec2(15.0, 10.0), vec2(20.0, 10.0), vec2(20.0, 15.0)]);
+        // A circle of radius 2 round (12, 5), drawn as two half arcs.
+        let c = path("M10 5 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z");
+        assert_eq!(c.len(), 1);
+        assert!(c[0].len() > 16);
+        assert!(c[0].iter().all(|p| ((*p - vec2(12.0, 5.0)).length() - 2.0).abs() < 0.01));
+        assert!(c[0].iter().any(|p| p.y > 6.9) && c[0].iter().any(|p| p.y < 3.1), "both halves");
     }
 
     #[test]

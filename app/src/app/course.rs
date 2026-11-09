@@ -15,7 +15,8 @@ const SPLIT_SECS: f32 = 30.0;
 const ORANGE: Color32 = Color32::from_rgb(0xff, 0x7a, 0x1a);
 const PEACH: Color32 = Color32::from_rgb(0xff, 0xb2, 0x7a);
 
-/// What the coach says and in which colour.
+/// What the coach says and in which colour. The Big eater skin's announcer (#212) has its
+/// own: a bite, a combo, an Undo spat out, an indigestion and a stop on the menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
     Push,
@@ -23,17 +24,32 @@ pub enum Tone {
     Undo,
     Cramp,
     Split,
+    Bite,
+    Combo,
+    Spit,
+    Sick,
+    Stop,
 }
 
 impl Tone {
+    /// The announcer's tones, which show the cutlery rather than the runner.
+    fn eater(self) -> bool {
+        matches!(self, Tone::Bite | Tone::Combo | Tone::Spit | Tone::Sick | Tone::Stop)
+    }
+
     /// The icon tile's fill and the ink of its icon and metres.
-    fn colours(self) -> (Color32, Color32) {
+    pub(super) fn colours(self) -> (Color32, Color32) {
         let light = theme::is_light();
         let (dark_ink, light_ink) = match self {
             Tone::Push | Tone::Split => (0xff8a33, 0xd35d0a),
             Tone::Merge => (0xc6f432, 0x4f8a00),
             Tone::Undo => (0x7fb8f0, 0x2f78c4),
             Tone::Cramp => (0xff7b72, 0xcf3d33),
+            Tone::Bite => (0xffc93c, 0xa8770a),
+            Tone::Combo => (0xff8a80, 0xd0352b),
+            Tone::Spit => (0x7fb8f0, 0x2f78c4),
+            Tone::Sick => (0x7ee787, 0x2f8a3f),
+            Tone::Stop => (0xc3a6ff, 0x7c4dff),
         };
         let hex = |h: u32| Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8);
         let ink = hex(if light { light_ink } else { dark_ink });
@@ -103,14 +119,10 @@ fn medium(size: f32) -> FontId {
 }
 
 impl App {
-    /// Counts what the tabs did since the last frame, under the Runner skin, and lets the coach
+    /// Counts what the tabs did since the last frame (`App::take_strides`), under the Runner skin, and lets the coach
     /// speak: a push, a merge, an Undo and a cramp have their toast, which replaces Git's; an
     /// split has its own; the finish opens the Finisher dialog.
-    pub(super) fn course_strides(&mut self) {
-        let strides: Vec<(Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
-        if self.library.settings.skin != crate::settings::Skin::Runner {
-            return;
-        }
+    pub(super) fn course_strides(&mut self, strides: Vec<(Stride, String)>) {
         for (stride, msg) in strides {
             let moved = self.race.course.stride(&stride);
             let coach = match &stride {
@@ -151,7 +163,7 @@ impl App {
         }
     }
 
-    fn coach(&mut self, title: &str, body: String, gain: String, tone: Tone) {
+    pub(super) fn coach(&mut self, title: &str, body: String, gain: String, tone: Tone) {
         self.toast = Some(tab::Notice { msg: body, error: false, at: Instant::now(), undo: false, action: None, coach: Some(Coach { title: title.into(), gain, tone }) });
     }
 
@@ -437,6 +449,8 @@ pub(super) fn coach_toast(ctx: &egui::Context, coach: &Coach, msg: &str, age: f6
                 ui.painter().rect_filled(r, CornerRadius::same(8), bg);
                 if coach.tone == Tone::Split {
                     stopwatch(ui.painter(), r.center(), ink);
+                } else if coach.tone.eater() {
+                    super::meal::tone_icon(ui.painter(), r.center(), coach.tone);
                 } else {
                     runner_icon(ui.painter(), r.center(), 16.0, ink);
                 }
