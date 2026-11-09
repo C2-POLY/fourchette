@@ -23,6 +23,7 @@ mod settings;
 mod tab;
 mod tabs;
 mod track;
+mod trail;
 mod course;
 mod meal;
 mod updater;
@@ -314,7 +315,7 @@ pub struct App {
     /// The central view of the frame being drawn (between the sidebar and the details), set by each CentralPanel;
     /// the Runner skin's course bar centres on it (#215).
     centre: Option<egui::Rect>,
-    /// The Runner skin's race of the day (#206), in memory only.
+    /// The Runner skin's race of the day (#206), or the Ultra-trail's (#207), in memory only.
     race: course::CourseState,
     /// The Big eater skin's daily menu (#212), in memory only.
     meal: meal::MealState,
@@ -637,9 +638,11 @@ impl App {
         // with the vacuum in hand, sucking. FOURCHETTE_SKIN=eater: the Big eater skin (#212) with
         // its daily menu at 1,240 kcal, a combo ×3 and the announcer, `=eater,golden` its Golden
         // Fork card (not saved). FOURCHETTE_SKIN=runner: the Runner skin at 2,300 m (#206),
-        // `=runner,split` at the 3,000 m split, `=runner,finish` finished.
-        if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("runner")) {
-            app.library.settings.skin = crate::settings::Skin::Runner;
+        // `=runner,split` at the 3,000 m split, `=runner,finish` finished. FOURCHETTE_SKIN=trail:
+        // the Ultra-trail skin at 46 km (#207), `=trail,split` at the km 60 checkpoint,
+        // `=trail,finish` at the summit.
+        if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("runner") || v.starts_with("trail")) {
+            app.library.settings.skin = if v.starts_with("trail") { crate::settings::Skin::Trail } else { crate::settings::Skin::Runner };
             app.race.sample(&v);
             app.coach_sample();
         } else if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("eater")) {
@@ -735,14 +738,15 @@ impl App {
     }
 
     /// Takes what the tabs did since the last frame, once, and gives it to the skin that counts
-    /// it: the Runner's race (#206) or the Big eater's menu (#212). Other skins drop it.
+    /// it: the Runner's race (#206) and the Ultra-trail's (#207), or the Big eater's menu (#212).
+    /// Other skins drop it.
     fn take_strides(&mut self) {
         let strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
         if strides.is_empty() {
             return;
         }
         match self.library.settings.skin {
-            crate::settings::Skin::Runner => self.course_strides(strides),
+            crate::settings::Skin::Runner | crate::settings::Skin::Trail => self.course_strides(strides),
             crate::settings::Skin::Eater => self.meal_bites(strides),
             _ => {}
         }

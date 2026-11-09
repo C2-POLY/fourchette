@@ -291,10 +291,16 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
     card(ui, |c| {
         let s = &mut *pane.settings;
-        // Four skins with names of every length (#212): each as wide as its name.
+        // Five skins with names of every length (#212, #207): each as wide as its name.
         let skins = crate::settings::Skin::ALL;
         let widths: Vec<f32> = skins.iter().map(|k| c.ui.painter().layout_no_wrap(k.label().into(), theme::secondary(), Color32::WHITE).size().x + 18.0).collect();
-        let ctrl = c.row("Skin", s.skin.about(), vec2(widths.iter().sum::<f32>(), SEG_H), true);
+        // Five segments leave no room for the help beside them: the picker goes on a line of its own.
+        let r = c.strip(48.0 + SEG_H + 14.0, true);
+        let k = theme::c();
+        let p = c.ui.painter();
+        p.text(pos2(r.left(), r.top() + 17.0), Align2::LEFT_CENTER, "Skin", theme::body(), k.text);
+        p.text(pos2(r.left(), r.top() + 35.0), Align2::LEFT_CENTER, s.skin.about(), theme::secondary(), k.dim);
+        let ctrl = Rect::from_min_size(pos2(r.left(), r.top() + 48.0), vec2(widths.iter().sum::<f32>(), SEG_H));
         let chosen = skins.iter().position(|k| *k == s.skin).unwrap_or(0);
         let picked = segmented_by(c.ui, ctrl, &widths, chosen, true, "skin", |p, r, i, fg, _| {
             p.text(r.center(), Align2::CENTER_CENTER, skins[i].label(), theme::secondary(), fg);

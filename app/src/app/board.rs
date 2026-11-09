@@ -1160,9 +1160,11 @@ impl Tab {
         if st.city_on {
             // Every ticket the filters keep, sub-issues included: each is a plot of its own.
             let shown: Vec<&Item> = board.items.iter().filter(visible).collect();
-            // The Runner skin shows the stadium in its place (#206), the Big eater the food court (#212).
+            // The Runner skin shows the stadium in its place (#206), the Ultra-trail the mountain
+            // (#207), the Big eater the food court (#212).
             clicked = match self.skin {
                 crate::settings::Skin::Runner => self.stadium_view(ui, &shown, detail.as_deref()),
+                crate::settings::Skin::Trail => self.mountain_view(ui, &shown, detail.as_deref()),
                 crate::settings::Skin::Eater => self.court_view(ui, &shown, detail.as_deref()),
                 _ => self.city_view(ui, &shown, detail.as_deref()),
             };
@@ -1498,10 +1500,12 @@ impl Tab {
         }
     }
 
-    /// The third view's name: the city, the Runner skin's stadium or the Big eater's food court.
+    /// The third view's name: the city, the Runner skin's stadium, the Ultra-trail's mountain or
+    /// the Big eater's food court.
     fn city_label(&self) -> &'static str {
         match self.skin {
             crate::settings::Skin::Runner => "Stadium",
+            crate::settings::Skin::Trail => "Mountain",
             crate::settings::Skin::Eater => "Food court",
             _ => "City",
         }

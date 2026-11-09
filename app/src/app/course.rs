@@ -3,10 +3,13 @@
 //! split, the finish and the runner), the toolbar's "N / 8,000 m" pill, the coach's toasts and
 //! the Finisher dialog. The bar is painted on a layer of its own and never takes a click. The
 //! race is `crate::course`; the tabs record what moved the runner (`Tab::strides`) and
-//! `course_strides` counts it.
+//! `course_strides` counts it. Under the Ultra-trail skin (#207) the same race is 160 km: the bar
+//! draws the mountain's profile, aligned under the Mountain view when it shows, the pill reads
+//! km, the coach talks of climbs and checkpoints and the medal says 160 KM.
 
 use super::*;
-use crate::course::{self, Course, Stride, LAP, LENGTH, SPLIT_EVERY};
+use crate::course::{self, Course, Race, Stride, LAP, LENGTH, SPLIT_EVERY};
+use crate::trail;
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontFamily, FontId, Id, LayerId, Order, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui};
 
 /// How long the bar shows a split once reached, in seconds.
@@ -64,6 +67,8 @@ pub struct Coach {
     /// "+300 m", "−100 m", "paused".
     pub gain: String,
     pub tone: Tone,
+    /// The Ultra-trail's coach: a mountain rather than the runner on its tile.
+    pub mountain: bool,
 }
 
 /// The race of this launch, and what the bar and the dialog show of it.
@@ -96,8 +101,10 @@ impl CourseState {
     }
 
     /// FOURCHETTE_SKIN=runner[,split|,finish]: the race at 2,300 m, at the 3,000 m split, or
-    /// finished with the Finisher dialog.
+    /// finished with the Finisher dialog. FOURCHETTE_SKIN=trail[,split|,finish]: the ultra at
+    /// 46 km, at the km 60 checkpoint, or finished at 160 km.
     pub fn sample(&mut self, v: &str) {
+        let race = if v.starts_with("trail") { Race::Ultra } else { Race::Track };
         let (m, secs) = if v.contains("finish") {
             (8000, 9 * 3600 + 12 * 60)
         } else if v.contains("split") {
@@ -105,11 +112,18 @@ impl CourseState {
         } else {
             (2300, 3600 + 25 * 60)
         };
-        self.course = Course::sample(m);
+        self.course = Course::sample(race, m * race.scale() as u32);
         self.sample_secs = Some(secs);
         self.finisher = self.course.finished;
         if m == 3000 {
-            self.split = Some((3000, Instant::now()));
+            self.split = Some((self.course.metres, Instant::now()));
+        }
+    }
+
+    /// Runs `race` from now on: a different race starts again at 0 (Runner ↔ Ultra-trail).
+    pub fn set_race(&mut self, race: Race) {
+        if self.course.race != race {
+            *self = CourseState { course: Course { race, ..Course::default() }, ..CourseState::default() };
         }
     }
 }
@@ -123,19 +137,25 @@ impl App {
     /// speak: a push, a merge, an Undo and a cramp have their toast, which replaces Git's; an
     /// split has its own; the finish opens the Finisher dialog.
     pub(super) fn course_strides(&mut self, strides: Vec<(Stride, String)>) {
+        let race = self.race.course.race;
+        let ultra = race == Race::Ultra;
         for (stride, msg) in strides {
             let moved = self.race.course.stride(&stride);
-            let coach = match &stride {
-                Stride::Commit => None,
-                Stride::Push => Some(("Pace held.", Tone::Push)),
-                Stride::Merge => Some(("Strong finish down the straight.", Tone::Merge)),
-                Stride::Undo => Some(("Turned back.", Tone::Undo)),
-                Stride::Cramp { .. } => Some(("Cramp?", Tone::Cramp)),
+            let coach = match (&stride, ultra) {
+                (Stride::Commit, _) => None,
+                (Stride::Push, false) => Some(("Pace held.", Tone::Push)),
+                (Stride::Push, true) => Some(("Pace held on the climb.", Tone::Push)),
+                (Stride::Merge, false) => Some(("Strong finish down the straight.", Tone::Merge)),
+                (Stride::Merge, true) => Some(("A big climb done.", Tone::Merge)),
+                (Stride::Undo, false) => Some(("Turned back.", Tone::Undo)),
+                (Stride::Undo, true) => Some(("Back down the trail.", Tone::Undo)),
+                (Stride::Cramp { .. }, false) => Some(("Cramp?", Tone::Cramp)),
+                (Stride::Cramp { .. }, true) => Some(("Cramp on the climb?", Tone::Cramp)),
             };
             let gain = match (&stride, moved.metres) {
                 (Stride::Cramp { .. }, _) => "paused".to_string(),
-                (_, m) if m < 0 => format!("−{} m", -m),
-                (_, m) => format!("+{m} m"),
+                (_, m) if m < 0 => format!("−{}", race.distance(-m as u32)),
+                (_, m) => format!("+{}", race.distance(m as u32)),
             };
             let body = match &stride {
                 Stride::Undo => format!("Undo: {msg}"),
@@ -144,7 +164,11 @@ impl App {
             if let Some(mark) = moved.split {
                 self.race.split = Some((mark, Instant::now()));
                 let time = course::keyboard_time(self.race.secs());
-                self.coach(&format!("Split · {}", course::metres(mark)), format!("{time} at the keyboard. Drink some water."), gain, Tone::Split);
+                if ultra {
+                    self.coach(&format!("Checkpoint · km {}", mark / 1000), format!("{time} at the keyboard. Refill your flasks."), gain, Tone::Split);
+                } else {
+                    self.coach(&format!("Split · {}", course::metres(mark)), format!("{time} at the keyboard. Drink some water."), gain, Tone::Split);
+                }
             } else if let Some((title, tone)) = coach {
                 self.coach(title, body, gain, tone);
             }
@@ -156,7 +180,13 @@ impl App {
 
     /// The coach's toast of a screenshot: the split at 3,000 m, else a push.
     pub(super) fn coach_sample(&mut self) {
-        if self.race.split.is_some() {
+        if self.race.course.race == Race::Ultra {
+            if self.race.split.is_some() {
+                self.coach("Checkpoint · km 60", "2 h at the keyboard. Refill your flasks.".into(), "+6 km".into(), Tone::Split);
+            } else if !self.race.course.finished {
+                self.coach("Pace held on the climb.", "Pushed feat/52-linked-issue to origin.".into(), "+6 km".into(), Tone::Push);
+            }
+        } else if self.race.split.is_some() {
             self.coach("Split · 3,000 m", "2 h at the keyboard. Drink some water.".into(), "+300 m".into(), Tone::Split);
         } else if !self.race.course.finished {
             self.coach("Pace held.", "Pushed feat/52-linked-issue to origin.".into(), "+300 m".into(), Tone::Push);
@@ -164,13 +194,18 @@ impl App {
     }
 
     pub(super) fn coach(&mut self, title: &str, body: String, gain: String, tone: Tone) {
-        self.toast = Some(tab::Notice { msg: body, error: false, at: Instant::now(), undo: false, action: None, coach: Some(Coach { title: title.into(), gain, tone }) });
+        let mountain = self.library.settings.skin == crate::settings::Skin::Trail;
+        self.toast = Some(tab::Notice { msg: body, error: false, at: Instant::now(), undo: false, action: None, coach: Some(Coach { title: title.into(), gain, tone, mountain }) });
     }
 
     /// The bar floats centred at the bottom of the central view (between the sidebar and the details), just above
     /// the status bar, over everything but the dialogs and toasts (#215). Without a recorded central view, the window.
     pub(super) fn course_bar(&self, ctx: &egui::Context) {
         let area = self.centre.unwrap_or_else(|| ctx.content_rect());
+        if self.race.course.race == Race::Ultra {
+            self.ultra_bar(ctx, area);
+            return;
+        }
         let w = (area.width() - 32.0).min(1088.0);
         if w < 420.0 {
             return;
@@ -230,7 +265,124 @@ impl App {
         // At a split, a pill over the bar says so.
         if let (Some(mark), false) = (self.race.split_now(), c.finished) {
             let sx = lane.left() + mark as f32 / LENGTH as f32 * (lane.width() - 14.0);
-            split_pill(&p, pos2(sx, rect.top() - 8.0), mark, &course::keyboard_time(self.race.secs()));
+            split_pill(&p, pos2(sx, rect.top() - 8.0), &format!("Split · {} in {}", course::metres(mark), course::keyboard_time(self.race.secs())));
+        }
+    }
+
+    /// The ultra's bar (#207): the 160 km as the mountain's profile, run in orange, the aid
+    /// station, the ridge and the summit marked, the runner at its km. When the Mountain view is
+    /// on screen its km 0 and km 160 (`Tab::mountain_x`) set the profile's ends, so the bar's km
+    /// stand right under the mountain's; otherwise it takes its own width.
+    fn ultra_bar(&self, ctx: &egui::Context, area: Rect) {
+        let own = {
+            let w = (area.width() - 32.0).min(1088.0);
+            if w < 420.0 {
+                return;
+            }
+            let r = Rect::from_min_size(pos2(area.center().x - w / 2.0, area.bottom() - 12.0 - ULTRA_H), vec2(w, ULTRA_H));
+            (r, r.left() + ULTRA_LEFT, r.right() - 24.0)
+        };
+        // Aligned, the left block shows only when there is room left of km 0; its km then go on
+        // the top line.
+        let aligned = self.tab().mountain_x.and_then(|(x0, x1)| {
+            let left = if x0 - ULTRA_LEFT >= area.left() + 4.0 { x0 - ULTRA_LEFT } else { x0 - 14.0 };
+            let r = Rect::from_min_max(pos2(left, area.bottom() - 12.0 - ULTRA_H), pos2(x1 + 24.0, area.bottom() - 12.0));
+            (r.left() >= area.left() + 4.0 && r.right() <= area.right() - 4.0 && x1 - x0 > 240.0).then_some((r, x0, x1))
+        });
+        let (rect, x0, x1) = aligned.unwrap_or(own);
+        let block = x0 - rect.left() >= ULTRA_LEFT - 1.0;
+        let p = ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("course_bar")));
+        let k = theme::c();
+        let light = theme::is_light();
+        let c = &self.race.course;
+        let km = c.metres as f32 / 1000.0;
+        p.add(crate::modal::card_back(rect, CornerRadius::same(12)));
+        p.rect_stroke(rect, CornerRadius::same(12), Stroke::new(1.0, k.border), StrokeKind::Inside);
+
+        // Left: the ultra, the km and the climbing so far.
+        let x = rect.left() + 14.0;
+        let dplus = course::thousands(trail::climb(km).round() as u32);
+        if block {
+            p.text(pos2(x, rect.top() + 14.0), Align2::LEFT_TOP, "ULTRA OF THE DAY", medium(9.0), k.faint);
+            p.text(pos2(x, rect.top() + 28.0), Align2::LEFT_TOP, course::km(c.metres), medium(22.0), k.strong);
+            p.text(pos2(x, rect.top() + 58.0), Align2::LEFT_TOP, format!("of 160 · D+ {dplus} m"), FontId::proportional(11.0), k.dim);
+        }
+
+        // The profile: grey ahead, orange behind, its ridge line over both.
+        let (top, base) = (rect.top() + 26.0, rect.bottom() - 18.0);
+        let bx = |k: f32| x0 + k / trail::LENGTH_KM * (x1 - x0);
+        let by = |k: f32| base - trail::profile(k) * (base - top);
+        let rest = if light { Color32::from_rgb(0xe3, 0xe4, 0xe8) } else { Color32::from_rgb(0x2a, 0x2c, 0x34) };
+        let line = if light { Color32::from_rgb(0xa2, 0xa5, 0xae) } else { Color32::from_rgb(0x5c, 0x5f, 0x69) };
+        let passed = if light { Tone::Split.colours().1 } else { PEACH };
+        let steps = ((x1 - x0) / 3.0).clamp(80.0, 400.0) as usize;
+        let mut ridge = Vec::with_capacity(steps + 1);
+        for i in 0..=steps {
+            let k = trail::LENGTH_KM * i as f32 / steps as f32;
+            ridge.push(pos2(bx(k), by(k)));
+        }
+        // One mesh of thin vertical slices, so the concave ridge fills right without seams.
+        let mut mesh = egui::epaint::Mesh::default();
+        for w in ridge.windows(2) {
+            let mid = trail::LENGTH_KM * ((w[0].x + w[1].x) / 2.0 - x0) / (x1 - x0);
+            let fill = if mid <= km { ORANGE.gamma_multiply(0.85) } else { rest };
+            let i = mesh.vertices.len() as u32;
+            for q in [w[0], w[1], pos2(w[1].x, base), pos2(w[0].x, base)] {
+                mesh.colored_vertex(q, fill);
+            }
+            mesh.add_triangle(i, i + 1, i + 2);
+            mesh.add_triangle(i, i + 2, i + 3);
+        }
+        p.add(Shape::mesh(mesh));
+        p.add(Shape::line(ridge, Stroke::new(1.2, line)));
+        p.hline(x0..=x1, base, Stroke::new(1.0, line));
+        // A tick at each checkpoint.
+        for mark in (1..8).map(|i| i as f32 * 20.0) {
+            p.vline(bx(mark), (base - 3.0)..=base, Stroke::new(1.0, if mark <= km { passed } else { line }));
+        }
+        // The places: start, aid station, ridge, summit.
+        for (mk, label, align) in [(0.0, "Start", Align2::LEFT_TOP), (trail::AID_KM, "Aid · 92", Align2::CENTER_TOP), (130.0, "Ridge", Align2::CENTER_TOP), (trail::LENGTH_KM, "Summit", Align2::RIGHT_TOP)] {
+            let col = if mk <= km { passed } else { line };
+            let at = pos2(bx(mk), by(mk));
+            p.extend(Shape::dashed_line(&[at, pos2(at.x, base)], Stroke::new(1.0, col), 2.0, 2.0));
+            p.circle_filled(at, 3.5, col);
+            let tx = match align {
+                Align2::LEFT_TOP => at.x - 2.0,
+                Align2::RIGHT_TOP => at.x + 2.0,
+                _ => at.x,
+            };
+            p.text(pos2(tx, base + 3.0), align, label, medium(9.0), k.dim);
+        }
+        // The runner.
+        let (rx, ry) = (bx(km), by(km));
+        p.vline(rx, (rect.top() + 24.0)..=base, Stroke::new(1.5, PEACH));
+        p.circle(pos2(rx, ry), 6.0, ORANGE, Stroke::new(2.0, k.elevated));
+
+        // Over the profile's low start: what comes next.
+        let time = course::keyboard_time(self.race.secs());
+        let (head, rest_text) = if c.finished {
+            ("Finisher".to_string(), format!(" · 160 km in {time} at the keyboard"))
+        } else if let Some(mark) = self.race.split_now() {
+            (format!("Checkpoint · km {}", mark / 1000), format!(" · {time} at the keyboard. Refill your flasks."))
+        } else {
+            let (at, name) = [(trail::AID_KM, "aid station"), (130.0, "the ridge"), (trail::LENGTH_KM, "summit")].into_iter().find(|(m, _)| *m > km).unwrap_or((trail::LENGTH_KM, "summit"));
+            (format!("{name}, km {}", at as u32), format!(" · {} km to go", (at - km).ceil() as u32))
+        };
+        let mut job = egui::text::LayoutJob::default();
+        let fmt = |font: FontId, color: Color32| egui::TextFormat { font_id: font, color, ..Default::default() };
+        if !block {
+            job.append(&format!("{} · D+ {dplus} m · ", course::km(c.metres)), 0.0, fmt(medium(11.0), Tone::Push.colours().1));
+        }
+        if !c.finished && self.race.split_now().is_none() {
+            job.append("Next: ", 0.0, fmt(FontId::proportional(11.0), k.dim));
+        }
+        job.append(&head, 0.0, fmt(medium(11.0), k.strong));
+        job.append(&rest_text, 0.0, fmt(FontId::proportional(11.0), k.dim));
+        p.galley(pos2(x0 + 8.0, rect.top() + 8.0), p.fonts_mut(|f| f.layout_job(job)), k.dim);
+
+        // At a checkpoint, a pill over the bar says so.
+        if let (Some(mark), false) = (self.race.split_now(), c.finished) {
+            split_pill(&p, pos2(bx(mark as f32 / 1000.0), rect.top() - 8.0), &format!("Checkpoint · km {} in {time}", mark / 1000));
         }
     }
 
@@ -243,8 +395,10 @@ impl App {
         let k = theme::c();
         let c = self.race.course.clone();
         let time = course::keyboard_time(self.race.secs());
+        let ultra = c.race == Race::Ultra;
+        let status = if ultra { format!("Ultra of the day · {}", course::km(c.length())) } else { format!("Race of the day · {}", course::metres(LENGTH)) };
         let out = Modal::new("finisher", Width::Medium, "medal", vec![text("Finisher")])
-            .status(vec![text(format!("Race of the day · {}", course::metres(LENGTH)))])
+            .status(vec![text(status)])
             .cancel(None)
             .extra("Run it again")
             .primary("Recover", false, true)
@@ -252,9 +406,14 @@ impl App {
                 ui.vertical_centered(|ui| {
                     ui.add_space(6.0);
                     let (r, _) = ui.allocate_exact_size(vec2(120.0, 156.0), Sense::hover());
-                    medal(ui.painter(), r);
+                    medal(ui.painter(), r, c.race);
                     ui.add_space(10.0);
-                    let line = format!("{} today, {} laps: {}, {time} at the keyboard.", course::metres(LENGTH), LENGTH / LAP, c.tally().replace(" ·", ","));
+                    let line = if ultra {
+                        let dplus = course::thousands(trail::climb(trail::LENGTH_KM).round() as u32);
+                        format!("{} today, D+ {dplus} m: {}, {time} at the keyboard.", course::km(c.length()), c.tally().replace(" ·", ","))
+                    } else {
+                        format!("{} today, {} laps: {}, {time} at the keyboard.", course::metres(LENGTH), LENGTH / LAP, c.tally().replace(" ·", ","))
+                    };
                     ui.add(egui::Label::new(egui::RichText::new(line).color(k.dim)).wrap());
                     ui.add_space(12.0);
                 });
@@ -288,6 +447,9 @@ impl App {
 
 /// The bar's height.
 const BAR_H: f32 = 88.0;
+/// The ultra's bar: taller, for the profile, and the width of its left block.
+const ULTRA_H: f32 = 92.0;
+const ULTRA_LEFT: f32 = 124.0;
 
 /// One of the Finisher dialog's counts.
 fn tile(ui: &mut Ui, w: f32, n: u32, what: &str) {
@@ -353,15 +515,15 @@ fn hurdle_icon(p: &Painter, at: Pos2, col: Color32) {
     p.rect_filled(Rect::from_min_max(pos2(at.x - 6.0, at.y - 9.0), pos2(at.x + 6.0, at.y - 6.5)), 0.0, col);
 }
 
-/// "Split · 3,000 m in 2 h", centred above `at`.
-fn split_pill(p: &Painter, at: Pos2, mark: u32, time: &str) {
+/// "Split · 3,000 m in 2 h" (or the ultra's checkpoint), centred above `at`.
+fn split_pill(p: &Painter, at: Pos2, text: &str) {
     let light = theme::is_light();
     let (fill, edge, ink) = if light {
         (Color32::from_rgb(0xff, 0xee, 0xe0), Color32::from_rgb(0xf3, 0xb0, 0x80), Tone::Split.colours().1)
     } else {
         (Color32::from_rgb(0x3a, 0x21, 0x0c), Color32::from_rgb(0x7a, 0x41, 0x16), PEACH)
     };
-    let g = p.layout_no_wrap(format!("Split · {} in {time}", course::metres(mark)), medium(11.0), ink);
+    let g = p.layout_no_wrap(text.to_string(), medium(11.0), ink);
     let size = vec2(g.size().x + 34.0, 24.0);
     let r = Rect::from_center_size(at - vec2(0.0, size.y / 2.0), size);
     p.rect(r, CornerRadius::same(12), fill, Stroke::new(1.0, edge), StrokeKind::Inside);
@@ -377,6 +539,17 @@ fn stopwatch(p: &Painter, c: Pos2, col: Color32) {
     p.line_segment([o, o + vec2(2.2, -2.8)], st);
     p.line_segment([o + vec2(-1.8, -8.2), o + vec2(1.8, -8.2)], st);
     p.line_segment([o + vec2(0.0, -8.2), o + vec2(0.0, -5.5)], st);
+}
+
+/// A mountain with a flag on its summit, `size` points wide, centred on `c`: the mockup's
+/// 16-by-14-unit icon.
+pub(super) fn mountain_icon(p: &Painter, c: Pos2, size: f32, col: Color32) {
+    let s = size / 16.0;
+    let q = |x: f32, y: f32| c + vec2((x - 8.0) * s, (y - 7.0) * s);
+    let st = Stroke::new(1.5 * s.max(0.8), col);
+    p.add(Shape::closed_line(vec![q(1.0, 13.0), q(6.0, 4.0), q(8.5, 8.0), q(10.5, 5.0), q(15.0, 13.0)], st));
+    p.vline(q(6.0, 0.0).x, q(6.0, 1.0).y..=q(6.0, 4.0).y, Stroke::new(1.2 * s.max(0.8), col));
+    p.add(Shape::convex_polygon(vec![q(6.0, 1.0), q(8.8, 2.0), q(6.0, 3.0)], col, Stroke::NONE));
 }
 
 /// A runner mid-stride, `size` points tall, centred on `c`: the mockup's 14-unit icon.
@@ -396,8 +569,9 @@ pub(super) fn runner_icon(p: &Painter, c: Pos2, size: f32, col: Color32) {
     }
 }
 
-/// The finisher medal in `r` (64 by 84 units scaled to fit): two ribbons and a gold disc.
-fn medal(p: &Painter, r: Rect) {
+/// The finisher medal in `r` (64 by 84 units scaled to fit): two ribbons and a gold disc, with
+/// the race's distance.
+fn medal(p: &Painter, r: Rect, race: Race) {
     let s = (r.width() / 64.0).min(r.height() / 84.0);
     let o = r.center() - vec2(32.0, 42.0) * s;
     let q = |x: f32, y: f32| o + vec2(x, y) * s;
@@ -406,15 +580,25 @@ fn medal(p: &Painter, r: Rect) {
     p.circle_filled(q(32.0, 56.0), 24.0 * s, Color32::from_rgb(0xe8, 0xb9, 0x3a));
     p.circle_stroke(q(32.0, 56.0), 18.0 * s, Stroke::new(2.0 * s, Color32::from_rgb(0xb9, 0x8a, 0x14)));
     let ink = Color32::from_rgb(0x5a, 0x3f, 0x00);
-    p.text(q(32.0, 51.0), Align2::CENTER_CENTER, LENGTH.to_string(), medium(11.0 * s), ink);
-    p.text(q(32.0, 64.5), Align2::CENTER_CENTER, "METRES", medium(5.5 * s), ink);
+    let (n, unit) = match race {
+        Race::Track => (LENGTH.to_string(), "METRES"),
+        Race::Ultra => ((race.length() / 1000).to_string(), "KM"),
+    };
+    p.text(q(32.0, 51.0), Align2::CENTER_CENTER, n, medium(11.0 * s), ink);
+    p.text(q(32.0, 64.5), Align2::CENTER_CENTER, unit, medium(5.5 * s), ink);
 }
 
-/// The toolbar's "2,300 / 8,000 m" pill: the runner and the metres, in orange. It only shows.
-pub(super) fn metres_pill(ui: &mut Ui, metres: u32) {
+/// The toolbar's "2,300 / 8,000 m" pill: the runner and the metres, in orange; on the ultra,
+/// "46 / 160 km" by a mountain. It only shows.
+pub(super) fn metres_pill(ui: &mut Ui, metres: u32, race: Race) {
     let light = theme::is_light();
     let k = theme::c();
-    let text = format!("{} / {}", course::thousands(metres), course::metres(LENGTH));
+    let ultra = race == Race::Ultra;
+    let text = if ultra {
+        format!("{} / {}", metres / 1000, course::km(race.length()))
+    } else {
+        format!("{} / {}", course::thousands(metres), course::metres(LENGTH))
+    };
     let ink = if light { Tone::Push.colours().1 } else { PEACH };
     let g = ui.painter().layout_no_wrap(text, medium(12.0), ink);
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 42.0, 28.0), Sense::hover());
@@ -425,9 +609,17 @@ pub(super) fn metres_pill(ui: &mut Ui, metres: u32) {
         (Color32::from_rgb(0x2a, 0x1a, 0x0c), Color32::from_rgb(0x5c, 0x34, 0x12))
     };
     p.rect(rect, CornerRadius::same(14), fill, Stroke::new(1.0, edge), StrokeKind::Inside);
-    runner_icon(p, pos2(rect.left() + 18.0, rect.center().y), 14.0, Tone::Push.colours().1);
+    if ultra {
+        mountain_icon(p, pos2(rect.left() + 18.0, rect.center().y), 16.0, Tone::Push.colours().1);
+    } else {
+        runner_icon(p, pos2(rect.left() + 18.0, rect.center().y), 14.0, Tone::Push.colours().1);
+    }
     p.galley(pos2(rect.left() + 30.0, rect.center().y - g.size().y / 2.0), g, ink);
-    resp.on_hover_text("Race of the day, 20 laps: a commit +100 m, a push +300, a merge +500, Undo −100");
+    resp.on_hover_text(if ultra {
+        "Ultra of the day, 160 km up the mountain: a commit +2 km, a push +6, a merge +10, Undo −2"
+    } else {
+        "Race of the day, 20 laps: a commit +100 m, a push +300, a merge +500, Undo −100"
+    });
 }
 
 /// The coach's toast, under the toolbar on the right: the icon tile, the title, Git's message
@@ -451,6 +643,8 @@ pub(super) fn coach_toast(ctx: &egui::Context, coach: &Coach, msg: &str, age: f6
                     stopwatch(ui.painter(), r.center(), ink);
                 } else if coach.tone.eater() {
                     super::meal::tone_icon(ui.painter(), r.center(), coach.tone);
+                } else if coach.mountain {
+                    mountain_icon(ui.painter(), r.center(), 18.0, ink);
                 } else {
                     runner_icon(ui.painter(), r.center(), 16.0, ink);
                 }

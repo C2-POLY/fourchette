@@ -251,12 +251,14 @@ pub enum Skin {
     Gamer,
     /// The city becomes a stadium, and each Git action moves you along an 8,000 m race (#206).
     Runner,
+    /// The city becomes a mountain, and each Git action moves you up a 160 km ultra (#207).
+    Trail,
     /// The city becomes a food court, and each Git action is a bite of a daily menu (#212).
     Eater,
 }
 
 impl Skin {
-    pub const ALL: [Skin; 4] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Eater];
+    pub const ALL: [Skin; 5] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater];
 
     /// Its name in repos.json.
     pub fn key(self) -> &'static str {
@@ -264,6 +266,7 @@ impl Skin {
             Skin::Normal => "normal",
             Skin::Gamer => "gamer",
             Skin::Runner => "runner",
+            Skin::Trail => "trail",
             Skin::Eater => "eater",
         }
     }
@@ -273,6 +276,7 @@ impl Skin {
             Skin::Normal => "Normal",
             Skin::Gamer => "Messy gamer",
             Skin::Runner => "Runner",
+            Skin::Trail => "Ultra-trail",
             Skin::Eater => "Big eater",
         }
     }
@@ -283,12 +287,22 @@ impl Skin {
             Skin::Normal => "The plain interface",
             Skin::Gamer => "Litter, and a vacuum to clean it",
             Skin::Runner => "A stadium and a race of the day",
+            Skin::Trail => "A mountain and a 160 km ultra",
             Skin::Eater => "A food court and a daily menu",
         }
     }
 
     pub fn from_key(key: &str) -> Option<Skin> {
         Self::ALL.into_iter().find(|k| k.key() == key)
+    }
+
+    /// The race this skin's runner runs: the Runner's track, the Ultra-trail's mountain.
+    pub fn race(self) -> Option<crate::course::Race> {
+        match self {
+            Skin::Runner => Some(crate::course::Race::Track),
+            Skin::Trail => Some(crate::course::Race::Ultra),
+            _ => None,
+        }
     }
 }
 
@@ -475,7 +489,12 @@ mod tests {
         assert_eq!((Skin::Eater.key(), Skin::Eater.label()), ("eater", "Big eater"));
         // The messy gamer stays as it was, the Big eater beside it.
         assert_eq!(Skin::Gamer.about(), "Litter, and a vacuum to clean it");
-        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Eater]);
+        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater]);
+        assert_eq!(Settings::from_json(&json!({"skin": "trail"})).skin, Skin::Trail);
+        assert_eq!((Skin::Trail.label(), Skin::Trail.about()), ("Ultra-trail", "A mountain and a 160 km ultra"));
+        assert_eq!(Skin::Trail.race(), Some(crate::course::Race::Ultra));
+        assert_eq!(Skin::Runner.race(), Some(crate::course::Race::Track));
+        assert_eq!(Skin::Eater.race(), None);
     }
 
     #[test]

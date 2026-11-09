@@ -32,6 +32,7 @@ mod sidebar;
 mod theme;
 mod titlebar;
 mod track;
+mod trail;
 mod course;
 mod meal;
 mod ui;

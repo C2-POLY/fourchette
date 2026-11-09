@@ -89,6 +89,11 @@ pub struct Tab {
     /// What moved the Runner skin's runner, or fed the Big eater, since the app last looked,
     /// with the toast's message (`App::take_strides` takes them).
     pub(super) strides: Vec<(crate::course::Stride, String)>,
+    /// The Ultra-trail's km, copied here each frame for the Mountain view's "You" (#207).
+    pub(super) trail_km: f32,
+    /// The screen x of the Mountain view's km 0 and km 160 this frame, if it is drawn: the
+    /// course bar aligns its profile on them.
+    pub(super) mountain_x: Option<(f32, f32)>,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -200,6 +205,8 @@ impl Tab {
             pulls: Default::default(),
             checks: Default::default(),
             skin: Default::default(),
+            trail_km: 0.0,
+            mountain_x: None,
             strides: Vec::new(),
         }
     }

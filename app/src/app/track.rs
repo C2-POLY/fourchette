@@ -17,7 +17,7 @@ const fn rgb(hex: u32) -> Color32 {
     Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
 }
 
-mod paint {
+pub(super) mod paint {
     use super::*;
     pub const GRASS_OUT: Color32 = rgb(0x2e4a2a);
     pub const TRACK: Color32 = rgb(0xc4543b);
@@ -77,12 +77,12 @@ impl View {
     }
 }
 
-fn zone_colour(lane: usize) -> Color32 {
+pub(super) fn zone_colour(lane: usize) -> Color32 {
     paint::ZONES[lane.min(paint::ZONES.len() - 1)]
 }
 
 /// The bib: the checks of the ticket's open pull request, white without one.
-fn bib(it: &Item, pulls: Option<&crate::pulls::Pulls>) -> Color32 {
+pub(super) fn bib(it: &Item, pulls: Option<&crate::pulls::Pulls>) -> Color32 {
     let open = it.pull_requests.iter().find(|l| l.state == "OPEN");
     match open.and_then(|pr| pulls.and_then(|ps| ps.list.iter().find(|q| q.number == pr.number)).and_then(|q| q.ci)) {
         Some(Ci::Success) => paint::PASSED,
@@ -109,11 +109,15 @@ fn turn((x, y): (f32, f32), (cx, cy): (f32, f32), a: f32) -> (f32, f32) {
 /// One athlete, its feet at `at`: the mockup's runner, its legs and arms swinging by `swing`
 /// (-1 to 1), facing `facing`.
 fn athlete(p: &Painter, v: &View, a: &Athlete, zone: Color32, bib: Color32, swing: f32) {
-    let skin = paint::TONES[(a.seed as usize) % paint::TONES.len()];
-    let foot = v.at(a.pos);
-    let f = v.fig();
+    figure(p, v.at(a.pos), v.fig(), a.facing, a.seed, zone, bib, swing);
+}
+
+/// The runner's figure, its feet at `foot`, `f` points per unit: also the Ultra-trail's (#207).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn figure(p: &Painter, foot: Pos2, f: f32, facing: f32, seed: u32, zone: Color32, bib: Color32, swing: f32) {
+    let skin = paint::TONES[(seed as usize) % paint::TONES.len()];
     let px = |x: f32| x * f;
-    let q = |pt: (f32, f32)| foot + vec2(pt.0 * a.facing, pt.1) * f;
+    let q = |pt: (f32, f32)| foot + vec2(pt.0 * facing, pt.1) * f;
     let path = |pts: &[(f32, f32)]| pts.iter().map(|&pt| q(pt)).collect::<Vec<_>>();
     p.add(Shape::ellipse_filled(foot, vec2(px(7.0), px(2.0)), Color32::from_black_alpha(64)));
     let (hip, shoulder) = ((0.0, -11.0), (1.2, -18.0));

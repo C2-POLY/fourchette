@@ -46,8 +46,8 @@ fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
 /// What a skin shows as a pill in the toolbar.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum SkinPill {
-    /// The Runner's race of the day, in metres (#206).
-    Metres(u32),
+    /// The Runner's race of the day (#206) or the Ultra-trail's (#207), in metres.
+    Metres(u32, crate::course::Race),
     /// The Big eater's daily menu: the kcal and the combo running (#212).
     Kcal(u32, u32),
 }
@@ -157,9 +157,9 @@ impl Tab {
                 ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(240.0).margin(Margin::symmetric(10, 6)));
                 // The Runner skin's race of the day (#206), the Big eater's menu (#212).
                 match pill {
-                    Some(SkinPill::Metres(m)) => {
+                    Some(SkinPill::Metres(m, race)) => {
                         ui.add_space(10.0);
-                        super::course::metres_pill(ui, m);
+                        super::course::metres_pill(ui, m, race);
                     }
                     Some(SkinPill::Kcal(kcal, combo)) => {
                         ui.add_space(10.0);
@@ -2056,6 +2056,16 @@ impl eframe::App for App {
         let ctx = &root.ctx().clone();
         // The central view of this frame, recorded by the CentralPanel below (the course bar centres on it).
         self.centre = None;
+        // The Runner's track or the Ultra-trail's mountain (#207): a new race starts at 0. The
+        // mountain records where it is drawn again this frame, if it is.
+        if let Some(race) = self.library.settings.skin.race() {
+            self.race.set_race(race);
+        }
+        let km = self.race.course.metres as f32 / 1000.0;
+        for t in &mut self.tabs {
+            t.trail_km = km;
+            t.mountain_x = None;
+        }
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
         // Every tab's background work, not only the one on screen.
@@ -2085,7 +2095,7 @@ impl eframe::App for App {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
                 let pill = match self.library.settings.skin {
-                    crate::settings::Skin::Runner => Some(SkinPill::Metres(self.race.course.metres)),
+                    crate::settings::Skin::Runner | crate::settings::Skin::Trail => Some(SkinPill::Metres(self.race.course.metres, self.race.course.race)),
                     crate::settings::Skin::Eater => Some(SkinPill::Kcal(self.meal.meal.kcal, self.meal.meal.combo(self.meal.secs()))),
                     _ => None,
                 };
@@ -2286,8 +2296,9 @@ impl eframe::App for App {
         } else if !self.mess.litter.is_empty() || self.mess.carried {
             self.mess.clear();
         }
-        // The Runner skin's course bar, which takes no click, and its Finisher dialog (#206).
-        let runner = self.library.settings.skin == crate::settings::Skin::Runner;
+        // The Runner skin's course bar, which takes no click, and its Finisher dialog (#206); the
+        // Ultra-trail's (#207).
+        let runner = self.library.settings.skin.race().is_some();
         if runner {
             self.course_bar(ctx);
             self.finisher_dialog(ctx, &mut cmds);
