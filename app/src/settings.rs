@@ -249,16 +249,19 @@ pub enum Skin {
     Normal,
     /// Chips, cans and spills pile up where the pointer goes; a vacuum cleaner takes them away.
     Gamer,
+    /// The city becomes a stadium, and each Git action moves you along an 8,000 m race (#206).
+    Runner,
 }
 
 impl Skin {
-    pub const ALL: [Skin; 2] = [Skin::Normal, Skin::Gamer];
+    pub const ALL: [Skin; 3] = [Skin::Normal, Skin::Gamer, Skin::Runner];
 
     /// Its name in repos.json.
     pub fn key(self) -> &'static str {
         match self {
             Skin::Normal => "normal",
             Skin::Gamer => "gamer",
+            Skin::Runner => "runner",
         }
     }
 
@@ -266,6 +269,16 @@ impl Skin {
         match self {
             Skin::Normal => "Normal",
             Skin::Gamer => "Messy gamer",
+            Skin::Runner => "Runner",
+        }
+    }
+
+    /// What it does, under its name in Settings › Appearance.
+    pub fn about(self) -> &'static str {
+        match self {
+            Skin::Normal => "The plain interface",
+            Skin::Gamer => "Litter, and a vacuum to clean it",
+            Skin::Runner => "A stadium and a race of the day",
         }
     }
 
@@ -448,8 +461,11 @@ mod tests {
     fn the_skin_survives_a_round_trip_and_defaults_to_normal() {
         assert_eq!(Settings::default().skin, Skin::Normal);
         assert_eq!(Settings::from_json(&json!({"skin": "disco"})).skin, Skin::Normal);
-        let s = Settings { skin: Skin::Gamer, ..Settings::default() };
-        assert_eq!(Settings::from_json(&s.to_json()), s);
+        for skin in Skin::ALL {
+            let s = Settings { skin, ..Settings::default() };
+            assert_eq!(Settings::from_json(&s.to_json()), s);
+        }
+        assert_eq!(Settings::from_json(&json!({"skin": "runner"})).skin, Skin::Runner);
     }
 
     #[test]

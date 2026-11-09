@@ -13,7 +13,16 @@ impl Tab {
     /// project keeps the one `FOURCHETTE_OPERATION` gave it.
     pub(super) fn read_operation(&mut self) {
         if let Some(r) = &self.repo {
+            let was = self.operation.is_some();
             self.operation = r.in_progress();
+            // Newly stopped on conflicts: the Runner skin's coach asks about a cramp.
+            if let (false, Some(op)) = (was, &self.operation) {
+                if !op.conflicts.is_empty() {
+                    let n = op.conflicts.len();
+                    let msg = format!("The {} stopped on {n} conflict{}. Walk it off.", op.op, if n == 1 { "" } else { "s" });
+                    self.strides.push((crate::course::Stride::Cramp { op: op.op.clone(), conflicts: n }, msg));
+                }
+            }
         }
     }
 

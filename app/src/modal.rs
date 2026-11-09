@@ -307,14 +307,15 @@ pub fn card<R>(ui: &mut Ui, radius: u8, margin: Margin, add: impl FnOnce(&mut Ui
 /// a second line says Cmd+Z takes it back, and a bar along its foot shrinks as the time runs out.
 /// With `action`, a button after the message instead of that line (the bar stays); returns true
 /// when it is clicked.
-pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option<f32>, action: Option<&str>) -> bool {
+/// `lift`: how much higher than usual it stands (above the Runner skin's course bar).
+pub fn toast(ctx: &egui::Context, msg: &str, error: bool, age: f64, undo: Option<f32>, action: Option<&str>, lift: f32) -> bool {
     let mut clicked = false;
     let k = theme::c();
     let t = eased(age * 1.4);
     if t < 1.0 {
         ctx.request_repaint();
     }
-    egui::Area::new(Id::unique("toast")).order(egui::Order::Tooltip).interactable(action.is_some()).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 + 16.0 * (1.0 - t))).show(ctx, |ui| {
+    egui::Area::new(Id::unique("toast")).order(egui::Order::Tooltip).interactable(action.is_some()).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0 - lift + 16.0 * (1.0 - t))).show(ctx, |ui| {
         ui.multiply_opacity(t);
         let bottom = if undo.is_some() { 12 } else { 9 };
         let r = card(ui, 10, Margin { left: 12, right: 16, top: 9, bottom }, |ui| {

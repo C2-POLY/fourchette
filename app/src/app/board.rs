@@ -1160,7 +1160,8 @@ impl Tab {
         if st.city_on {
             // Every ticket the filters keep, sub-issues included: each is a plot of its own.
             let shown: Vec<&Item> = board.items.iter().filter(visible).collect();
-            clicked = self.city_view(ui, &shown, detail.as_deref());
+            // The Runner skin shows the stadium in its place (#206).
+            clicked = if self.skin == crate::settings::Skin::Runner { self.stadium_view(ui, &shown, detail.as_deref()) } else { self.city_view(ui, &shown, detail.as_deref()) };
         } else if st.list {
             let (id, fold) = list_view(ui, &board, &cols, &kids, &self.board.folded, show_repo, detail.as_deref(), cmds);
             if let Some(id) = id {
@@ -1479,7 +1480,7 @@ impl Tab {
             self.board.all = i == 1;
         }
         let view = if self.board.city_on { 2 } else { self.board.list as usize };
-        if let Some(i) = segmented(ui, &["Board", "List", "City"], view) {
+        if let Some(i) = segmented(ui, &["Board", "List", self.city_label()], view) {
             self.board.list = i == 1;
             self.board.city_on = i == 2;
         }
@@ -1493,9 +1494,14 @@ impl Tab {
         }
     }
 
+    /// The third view's name: the city, or the Runner skin's stadium.
+    fn city_label(&self) -> &'static str {
+        if self.skin == crate::settings::Skin::Runner { "Stadium" } else { "City" }
+    }
+
     /// The width `bar_pickers` takes.
     fn bar_pickers_width(&self, ui: &Ui, board: Option<&Board>) -> f32 {
-        let sets: [&[&str]; 3] = [&["This repo", "All"], &["Board", "List", "City"], &Tree::ALL.map(Tree::label)];
+        let sets: [&[&str]; 3] = [&["This repo", "All"], &["Board", "List", self.city_label()], &Tree::ALL.map(Tree::label)];
         let mine = board.is_some_and(|b| !b.me.is_empty());
         12.0 + sets.iter().map(|o| segmented_width(ui, o)).sum::<f32>() + if mine { segmented_width(ui, &["Mine"]) + 8.0 } else { 0.0 } + 4.0 * ui.spacing().item_spacing.x
     }

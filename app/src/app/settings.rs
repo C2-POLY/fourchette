@@ -283,7 +283,7 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
     });
     card(ui, |c| {
         let s = &mut *pane.settings;
-        let ctrl = c.row("Skin", "Messy gamer: litter piles up, a vacuum takes it away", vec2(SEG_W, SEG_H), true);
+        let ctrl = c.row("Skin", s.skin.about(), vec2(SEG_W, SEG_H), true);
         let skins = crate::settings::Skin::ALL;
         let chosen = skins.iter().position(|k| *k == s.skin).unwrap_or(0);
         let picked = segmented(c.ui, ctrl, skins.len(), chosen, true, "skin", |p, r, i, fg, _| {
