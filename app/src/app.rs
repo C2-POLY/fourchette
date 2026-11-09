@@ -20,6 +20,8 @@ mod review;
 mod settings;
 mod tab;
 mod tabs;
+mod track;
+mod course;
 mod updater;
 mod view_tabs;
 mod views;
@@ -151,6 +153,8 @@ pub enum Cmd {
     SetAppearance(theme::Appearance),
     /// The skin over the interface (#202).
     SetSkin(crate::settings::Skin),
+    /// The Runner skin's Finisher dialog: Run it again (`again`) or Recover (#206).
+    Finisher { again: bool },
     /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
@@ -302,6 +306,8 @@ pub struct App {
     settings_open: bool,
     /// The messy gamer skin's litter and vacuum (#202).
     mess: mess::Mess,
+    /// The Runner skin's race of the day (#206), in memory only.
+    race: course::CourseState,
     /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
     font_previews: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -352,6 +358,7 @@ impl App {
             states: Default::default(),
             settings_open: false,
             mess: mess::Mess::default(),
+            race: course::CourseState::default(),
             font_previews: false,
             settings_section: 0,
             screenshot,
@@ -615,8 +622,13 @@ impl App {
             Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
         });
         // FOURCHETTE_SKIN=gamer: the messy gamer skin with litter all over (#202), `=carried`
-        // with the vacuum in hand, sucking (not saved).
-        if let Ok(v) = std::env::var("FOURCHETTE_SKIN") {
+        // with the vacuum in hand, sucking (not saved). FOURCHETTE_SKIN=runner: the Runner skin
+        // at 2,300 m (#206), `=runner,split` at the 3,000 m split, `=runner,finish` finished.
+        if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("runner")) {
+            app.library.settings.skin = crate::settings::Skin::Runner;
+            app.race.sample(&v);
+            app.coach_sample();
+        } else if let Ok(v) = std::env::var("FOURCHETTE_SKIN") {
             app.library.settings.skin = crate::settings::Skin::Gamer;
             app.mess.sample = true;
             if v == "carried" {
@@ -664,7 +676,7 @@ impl App {
 
     /// A dialog takes the window: the tab's, or the update dialog.
     fn modal(&self) -> bool {
-        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some()
+        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -685,7 +697,7 @@ impl App {
     }
 
     fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.toast = Some(tab::Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None });
+        self.toast = Some(tab::Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None, coach: None });
     }
 
     /// Moves the tabs' latest messages to the window's toast. A message from a tab in the
@@ -700,6 +712,7 @@ impl App {
                 self.toast = Some(n);
             }
         }
+        self.course_strides();
     }
 
     // ---------------------------------------------------------------- actions
@@ -760,6 +773,7 @@ impl App {
                     self.library.settings.skin = skin;
                     self.library.save();
                 }
+                Cmd::Finisher { again } => self.finisher_done(again),
                 Cmd::Settings => {
                     self.settings_open = !self.settings_open;
                     if self.settings_open {

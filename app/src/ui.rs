@@ -783,6 +783,13 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
             curve.push((6.0, 15.6));
             k.line(&curve);
         }
+        // a medal on its ribbon: the Runner skin's finish (#206)
+        "medal" => {
+            k.line(&[(7.0, 3.0), (10.5, 10.5)]);
+            k.line(&[(17.0, 3.0), (13.5, 10.5)]);
+            k.ring(12.0, 15.5, 5.5);
+            k.ring(12.0, 15.5, 2.0);
+        }
         // a frame holding three columns of different heights
         "board" => {
             let frame = Rect::from_min_max(k.t(3.0, 3.0), k.t(21.0, 21.0));

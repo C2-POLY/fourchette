@@ -31,6 +31,8 @@ mod settings;
 mod sidebar;
 mod theme;
 mod titlebar;
+mod track;
+mod course;
 mod ui;
 mod undo;
 mod update;

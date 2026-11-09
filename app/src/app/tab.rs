@@ -83,6 +83,11 @@ pub struct Tab {
     pub(super) pulls: project::PullsState,
     /// The card of a pull request's checks, opened from its badge.
     pub(super) checks: super::checks::ChecksCard,
+    /// The skin of the settings, copied here each frame: Runner shows the board's city as a stadium.
+    pub(super) skin: crate::settings::Skin,
+    /// What moved the Runner skin's runner since the app last looked, with the toast's message
+    /// (`App::course_strides` takes them).
+    pub(super) strides: Vec<(crate::course::Stride, String)>,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -96,6 +101,8 @@ pub struct Notice {
     /// A button on the toast and the command it runs, such as the Undo of "Remove N missing",
     /// which is the repository list's and not Git's (Cmd+Z). The toast then stays `UNDO_SECS`.
     pub action: Option<ToastAction>,
+    /// The Runner skin's coach says it instead (#206): a title, the km and its colour.
+    pub coach: Option<super::course::Coach>,
 }
 
 /// A toast's button: its label, and the command it runs.
@@ -190,6 +197,8 @@ impl Tab {
             issue: Default::default(),
             pulls: Default::default(),
             checks: Default::default(),
+            skin: Default::default(),
+            strides: Vec::new(),
         }
     }
 
@@ -259,6 +268,8 @@ impl Tab {
         self.details = None;
         self.details_for.clear();
         self.reload();
+        // A repository opened while an operation is stopped: no cramp, it was there before.
+        self.strides.retain(|(s, _)| !matches!(s, crate::course::Stride::Cramp { .. }));
         self.sel = if !self.status.is_empty() {
             Sel::Wip
         } else if self.commits.is_empty() {
@@ -271,6 +282,7 @@ impl Tab {
     /// Takes the settings that shape a tab: a new diff context draws the open diff again, a new
     /// commit limit reads the history again.
     fn apply_settings(&mut self, s: crate::settings::Settings) {
+        self.skin = s.skin;
         self.subject_limits = (s.subject_low, s.subject_high);
         self.files_tree = s.files_tree;
         self.claude_model = s.claude_model;
@@ -575,7 +587,7 @@ impl Tab {
     }
 
     pub(super) fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.notice = Some(Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None });
+        self.notice = Some(Notice { msg: msg.into(), error, at: Instant::now(), undo: false, action: None, coach: None });
     }
 
     pub(super) fn ensure_details(&mut self) {
@@ -715,6 +727,7 @@ impl Tab {
             | Cmd::PaletteCheckout
             | Cmd::SetAppearance(_)
             | Cmd::SetSkin(_)
+            | Cmd::Finisher { .. }
             | Cmd::SetDetails(_)
             | Cmd::ToggleDetails
             | Cmd::Settings
@@ -873,7 +886,13 @@ impl Tab {
         }
         self.reload();
         match res {
-            Ok(msg) => self.notify(msg, false),
+            Ok(msg) => {
+                // Merged for good, not stopped on conflicts.
+                if self.operation.is_none() && !squash_stopped {
+                    self.strides.push((crate::course::Stride::Merge, msg.clone()));
+                }
+                self.notify(msg, false)
+            }
             Err(e) => self.notify(e, true),
         }
         if let Some(n) = &mut self.notice {
@@ -917,6 +936,7 @@ impl Tab {
         match res {
             Ok(msg) => {
                 self.undo.pop();
+                self.strides.push((crate::course::Stride::Undo, msg.clone()));
                 self.notify(msg, false);
             }
             Err(e) => self.notify(format!("Couldn't undo “{}”: {e}", s.label), true),
@@ -931,6 +951,13 @@ impl Tab {
         if let Some((res, quiet)) = done {
             // A fetch or a pull may bring news of the pull requests too.
             let fetched = self.busy.as_ref().is_some_and(|(label, _, _)| label.starts_with("Fetch") || label.starts_with("Pull") || label.starts_with("Delete "));
+            let pushed = self.busy.as_ref().is_some_and(|(label, _, _)| label.starts_with("Push") || label.starts_with("Force push"));
+            // A push that sent something moves the Runner skin's runner on.
+            if let (true, Ok(msg)) = (pushed, &res) {
+                if !msg.contains("up-to-date") {
+                    self.strides.push((crate::course::Stride::Push, msg.clone()));
+                }
+            }
             self.busy = None;
             if fetched && res.is_ok() {
                 self.pulls_load();
@@ -971,6 +998,7 @@ impl Tab {
                 self.amend = false;
                 self.reload();
                 self.sel = if self.status.is_empty() { Sel::Commit(0) } else { Sel::Wip };
+                self.strides.push((crate::course::Stride::Commit, done.clone()));
                 self.notify(done, false);
             }
             Err(e) => self.notify(e, true),

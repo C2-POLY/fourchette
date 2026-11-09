@@ -46,7 +46,8 @@ fn two_columns(ui: &mut Ui, id: &str) -> (Ui, Ui) {
 impl Tab {
     // ---------------------------------------------------------------- toolbar
 
-    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool) {
+    /// `metres`: the Runner skin's race, shown as a pill.
+    fn toolbar(&mut self, ui: &mut Ui, cmds: &mut Vec<Cmd>, update: bool, metres: Option<u32>) {
         // The toolbar is the window's top edge (no title bar).
         crate::titlebar::drag_area(ui);
         let fullscreen = ui.input(|i| i.viewport().fullscreen.unwrap_or(false));
@@ -145,6 +146,11 @@ impl Tab {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(10.0);
                 ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(faint_hint("Search commits")).desired_width(240.0).margin(Margin::symmetric(10, 6)));
+                // The Runner skin's race of the day (#206).
+                if let Some(m) = metres {
+                    ui.add_space(10.0);
+                    super::course::metres_pill(ui, m);
+                }
                 // A newer release on GitHub (issue #80).
                 if update {
                     ui.add_space(10.0);
@@ -2060,12 +2066,13 @@ impl eframe::App for App {
             .show(root, |ui| {
                 let key = self.tab().key;
                 let update = self.update.available.is_some();
+                let metres = (self.library.settings.skin == crate::settings::Skin::Runner).then_some(self.race.course.metres);
                 if full {
                     ui.push_id(key, |ui| self.board_full_bar(ui, &mut cmds));
                 } else if self.tab().home {
                     self.home_toolbar(ui, &mut cmds);
                 } else {
-                    ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update));
+                    ui.push_id(key, |ui| self.tab_mut().toolbar(ui, &mut cmds, update, metres));
                 }
             });
 
@@ -2249,6 +2256,12 @@ impl eframe::App for App {
         } else if !self.mess.litter.is_empty() || self.mess.carried {
             self.mess.clear();
         }
+        // The Runner skin's course bar, which takes no click, and its Finisher dialog (#206).
+        let runner = self.library.settings.skin == crate::settings::Skin::Runner;
+        if runner {
+            self.course_bar(ctx);
+            self.finisher_dialog(ctx, &mut cmds);
+        }
 
         if let Some(t) = &self.toast {
             let timed = t.undo || t.action.is_some();
@@ -2256,7 +2269,10 @@ impl eframe::App for App {
             if age < life {
                 // A toast that offers Cmd+Z or a button shows the time left as a bar that shrinks.
                 let left = timed.then(|| 1.0 - age / life);
-                if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label)) {
+                // Under the Runner skin the coach speaks, and the other toasts sit above the course bar.
+                if let (Some(coach), true) = (&t.coach, runner) {
+                    super::course::coach_toast(ctx, coach, &t.msg, age as f64);
+                } else if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label), if runner { 100.0 } else { 0.0 }) {
                     if let Some((_, cmd)) = t.action {
                         cmds.push(cmd());
                     }
