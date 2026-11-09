@@ -714,6 +714,7 @@ impl Tab {
             | Cmd::Palette
             | Cmd::PaletteCheckout
             | Cmd::SetAppearance(_)
+            | Cmd::SetSkin(_)
             | Cmd::SetDetails(_)
             | Cmd::ToggleDetails
             | Cmd::Settings

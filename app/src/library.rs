@@ -733,6 +733,7 @@ mod tests {
                 "commit_language": "auto",
                 "update_channel": "prerelease",
                 "app_icon": "teal",
+                "skin": "normal",
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");

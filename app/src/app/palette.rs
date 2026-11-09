@@ -115,6 +115,11 @@ impl App {
                 };
                 v.push(item("Appearance", format!("Appearance: {}", a.label()), hint, Cmd::SetAppearance(a)));
             }
+            let skin = self.library.settings.skin;
+            for k in crate::settings::Skin::ALL {
+                let hint = if k == skin { "theme · current" } else { "theme · fun" };
+                v.push(item("Appearance", format!("Skin: {}", k.label()), hint, Cmd::SetSkin(k)));
+            }
             let d = t.details_layout;
             for place in crate::library::DetailsPlace::ALL {
                 let hint = if !d.hidden && d.place == place { "current" } else { "" };
