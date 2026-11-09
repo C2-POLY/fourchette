@@ -822,7 +822,7 @@ impl Tab {
         }
         things.sort_by(|a, b| a.0.total_cmp(&b.0));
 
-        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered());
+        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered() && !self.board.shooting);
         let hovered: Option<&Plot> = city.plots.iter().rev().find(|pl| hover.is_some_and(|h| plot_hit(&iso, pl).contains(h)));
 
         for (_, thing) in &things {

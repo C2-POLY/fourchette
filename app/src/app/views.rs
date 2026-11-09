@@ -1851,6 +1851,10 @@ impl App {
         if t.board.open {
             // Esc closes the ticket's detail; the history's keys wait.
             // In the full board, Esc with nothing left to close leaves it.
+            // The photo's thumbnail closes first.
+            if escape && t.snap.close() {
+                return;
+            }
             if escape && !t.board_escape(ctx.input(|i| i.time)) {
                 self.board_full_escape();
             }
@@ -2281,7 +2285,9 @@ impl eframe::App for App {
         }
 
         let eater = self.library.settings.skin == crate::settings::Skin::Eater;
-        if eater {
+        // Nothing floats over the board's view while it is photographed (#222).
+        let framing = !self.tab().home && self.tab().snap.framing();
+        if eater && !framing {
             // The daily menu's bar, which takes no click, and its card (#212).
             self.meal_bar(ctx);
             self.golden_fork_dialog(ctx, &mut cmds);
@@ -2291,7 +2297,9 @@ impl eframe::App for App {
             let pointer = self.mess.pin.or(pointer);
             let screen = ctx.content_rect();
             self.mess.step(dt, now, pointer, screen);
-            self.mess.paint(ctx, now, pointer, screen);
+            if !framing {
+                self.mess.paint(ctx, now, pointer, screen);
+            }
             ctx.request_repaint_after(std::time::Duration::from_millis(if self.mess.carried { 16 } else { 200 }));
         } else if !self.mess.litter.is_empty() || self.mess.carried {
             self.mess.clear();
@@ -2299,7 +2307,7 @@ impl eframe::App for App {
         // The Runner skin's course bar, which takes no click, and its Finisher dialog (#206); the
         // Ultra-trail's (#207).
         let runner = self.library.settings.skin.race().is_some();
-        if runner {
+        if runner && !framing {
             self.course_bar(ctx);
             self.finisher_dialog(ctx, &mut cmds);
         }
@@ -2324,6 +2332,12 @@ impl eframe::App for App {
             } else {
                 self.toast = None;
             }
+        }
+        // The photo of the board's third view: its flash, its thumbnail, Claude's wait (#222, #223).
+        if !self.tab().home {
+            // Above a skin's bar, or the gamer skin's parked vacuum.
+            let gamer = self.library.settings.skin == crate::settings::Skin::Gamer;
+            self.tab_mut().snapshot_ui(ctx, if runner || eater { 100.0 } else if gamer { 90.0 } else { 0.0 });
         }
         if self.tabs.iter().any(|t| t.busy.is_some() || t.ai.busy() || t.project.loading.is_some()) {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));

@@ -28,6 +28,8 @@ mod repo_state;
 mod resolve;
 mod review;
 mod settings;
+mod share;
+mod snapshot;
 mod sidebar;
 mod theme;
 mod titlebar;

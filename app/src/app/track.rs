@@ -381,7 +381,7 @@ impl Tab {
         // Hurdles, athletes and "+k" pills, back to front.
         let by_id: std::collections::HashMap<&str, &Item> = items.iter().map(|it| (it.id.as_str(), *it)).collect();
         let pulls = self.pulls.pulls.as_deref();
-        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered());
+        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered() && !self.board.shooting);
         // What each athlete covers, for the hover: its body and its label.
         let hit = |a: &Athlete| {
             let (f, z) = (v.at(a.pos), v.fig());

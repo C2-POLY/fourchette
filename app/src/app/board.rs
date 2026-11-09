@@ -103,6 +103,8 @@ pub struct BoardState {
     pub city_on: bool,
     /// Where the city view stands once moved; None keeps it fitted.
     pub city: Option<super::city::CityView>,
+    /// The third view is drawn for its photo (#222): no hover bubble.
+    pub shooting: bool,
     /// How sub-issues show (kept in memory, per repository's tab).
     pub tree: Tree,
     /// Parents whose sub-issues are folded away in the nested view.
@@ -466,7 +468,7 @@ fn checkbox_icon(p: &egui::Painter, c: Pos2, done: bool) {
     }
 }
 
-fn markdown(ui: &mut Ui, body: &str) {
+pub(super) fn markdown(ui: &mut Ui, body: &str) {
     let w = ui.available_width();
     for b in md_blocks(body) {
         match b {
@@ -1160,14 +1162,7 @@ impl Tab {
         if st.city_on {
             // Every ticket the filters keep, sub-issues included: each is a plot of its own.
             let shown: Vec<&Item> = board.items.iter().filter(visible).collect();
-            // The Runner skin shows the stadium in its place (#206), the Ultra-trail the mountain
-            // (#207), the Big eater the food court (#212).
-            clicked = match self.skin {
-                crate::settings::Skin::Runner => self.stadium_view(ui, &shown, detail.as_deref()),
-                crate::settings::Skin::Trail => self.mountain_view(ui, &shown, detail.as_deref()),
-                crate::settings::Skin::Eater => self.court_view(ui, &shown, detail.as_deref()),
-                _ => self.city_view(ui, &shown, detail.as_deref()),
-            };
+            clicked = if self.snap.framing.is_some() { self.snapshot_framed(ui, &shown, detail.as_deref()) } else { self.third_view(ui, &shown, detail.as_deref()) };
         } else if st.list {
             let (id, fold) = list_view(ui, &board, &cols, &kids, &self.board.folded, show_repo, detail.as_deref(), cmds);
             if let Some(id) = id {
@@ -1451,7 +1446,7 @@ impl Tab {
                 }
             }
             // The pickers go on a second line when the bar is too narrow for them and the search.
-            two_rows = ui.available_width() < self.bar_pickers_width(ui, board) + BAR_RIGHT_W;
+            two_rows = ui.available_width() < self.bar_pickers_width(ui, board) + BAR_RIGHT_W + if self.board.city_on { 2.0 * 32.0 } else { 0.0 };
             if !two_rows {
                 ui.add_space(12.0);
                 self.bar_pickers(ui, board);
@@ -1462,6 +1457,24 @@ impl Tab {
                 }
                 if refresh_button(ui, loading).clicked() && !loading {
                     cmds.push(Cmd::ProjectReload);
+                }
+                // The photo of the third view and its postcard with a changelog (#222, #223).
+                if self.board.city_on && board.is_some() {
+                    let what = self.city_label().to_lowercase();
+                    let card = super::snapshot::icon_button(ui, super::snapshot::postcard_icon, &format!("Postcard: the {what} with the changelog of an audience"));
+                    egui::Popup::menu(&card).show(|ui| {
+                        crate::ui::menu_rows(ui);
+                        ui.set_min_width(230.0);
+                        ui.label(RichText::new("Postcard with the changelog for…").size(theme::FS_SMALL).color(theme::c().faint));
+                        for a in crate::changelog::Audience::ALL {
+                            if ui.button(a.label()).on_hover_text(a.line()).clicked() {
+                                self.snapshot_postcard(ui.ctx(), a);
+                            }
+                        }
+                    });
+                    if super::snapshot::icon_button(ui, super::snapshot::camera_icon, &format!("Take a photo of the {what} to share it")).clicked() {
+                        self.snapshot_take();
+                    }
                 }
                 if loading {
                     ui.ctx().request_repaint();
@@ -1497,6 +1510,17 @@ impl Tab {
         let me = board.map(|b| b.me.clone()).unwrap_or_default();
         if !me.is_empty() && toggle_chip(ui, "Mine", self.board.mine).on_hover_text(format!("Only tickets assigned to {me}")).clicked() {
             self.board.mine = !self.board.mine;
+        }
+    }
+
+    /// The third view: the city, or in its place the Runner skin's stadium (#206), the
+    /// Ultra-trail's mountain (#207) or the Big eater's food court (#212). Returns the ticket clicked.
+    pub(super) fn third_view(&mut self, ui: &mut Ui, shown: &[&Item], detail: Option<&str>) -> Option<String> {
+        match self.skin {
+            crate::settings::Skin::Runner => self.stadium_view(ui, shown, detail),
+            crate::settings::Skin::Trail => self.mountain_view(ui, shown, detail),
+            crate::settings::Skin::Eater => self.court_view(ui, shown, detail),
+            _ => self.city_view(ui, shown, detail),
         }
     }
 
