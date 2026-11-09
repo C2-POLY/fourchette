@@ -28,8 +28,8 @@ tiny-skia = { version = "0.11", default-features = false, features = ["std", "si
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 objc2 = "0.6"
 block2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl", "NSImage", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSData", "block2"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSCell", "NSEvent", "NSPasteboard", "NSUserInterfaceValidation", "NSWindow", "NSView", "NSButton", "NSControl", "NSImage", "NSWorkspace", "NSSharingService", "NSSound", "NSImageRep", "NSBitmapImageRep"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSString", "NSDictionary", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSData", "NSURL", "block2"] }
 
 [profile.release]
 opt-level = 3

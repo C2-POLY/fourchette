@@ -20,6 +20,7 @@ mod repos;
 mod resolve;
 mod review;
 mod settings;
+mod snapshot;
 mod tab;
 mod tabs;
 mod track;
@@ -537,6 +538,13 @@ impl App {
                     std::sync::Arc::make_mut(b).items = crate::city::sample();
                 }
             }
+        }
+        // FOURCHETTE_CITY_SHOT=1|postcard: the city's photo, or its postcard with the sample
+        // changelog, as a thumbnail (#222, #223).
+        if let Ok(v) = std::env::var("FOURCHETTE_CITY_SHOT") {
+            t.board.open = true;
+            t.board.city_on = true;
+            t.snapshot_sample(v == "postcard");
         }
         // FOURCHETTE_BOARD_TREE=parents|all|nested: how the board shows sub-issues.
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD_TREE") {

@@ -378,7 +378,7 @@ impl Tab {
         // Rocks, runners and "+k" pills, back to front.
         let by_id: std::collections::HashMap<&str, &Item> = items.iter().map(|it| (it.id.as_str(), *it)).collect();
         let pulls = self.pulls.pulls.as_deref();
-        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered());
+        let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered() && !self.board.shooting);
         let f = v.fig() * 1.5;
         let hit = |r: &Runner| {
             let foot = at(r.pos);

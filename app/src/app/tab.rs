@@ -94,6 +94,8 @@ pub struct Tab {
     /// The screen x of the Mountain view's km 0 and km 160 this frame, if it is drawn: the
     /// course bar aligns its profile on them.
     pub(super) mountain_x: Option<(f32, f32)>,
+    /// The photo of the board's third view and its postcard (#222, #223).
+    pub(super) snap: super::snapshot::SnapState,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -127,6 +129,7 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         t.poll_busy();
         t.ai_poll();
         t.changelog_poll();
+        t.snapshot_poll(ctx);
         t.pr_draft_poll();
         t.cockpit_poll();
         t.resolve_poll();
@@ -207,6 +210,7 @@ impl Tab {
             skin: Default::default(),
             trail_km: 0.0,
             mountain_x: None,
+            snap: Default::default(),
             strides: Vec::new(),
         }
     }
