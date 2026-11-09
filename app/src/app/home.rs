@@ -131,7 +131,7 @@ impl App {
         let overlay = self.palette.is_some() || self.switcher.is_some() || self.settings_open || self.modal();
         let total = self.library.entries.len();
         let home = &mut self.home;
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| {
+        let centre = egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::c().bg)).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 let full = ui.available_width();
                 let w = (full - 48.0).min(PAGE_W);
@@ -164,6 +164,7 @@ impl App {
                 ui.add_space(40.0);
             });
         });
+        self.centre = Some(centre.response.rect);
     }
 }
 

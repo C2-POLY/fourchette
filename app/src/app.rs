@@ -306,6 +306,9 @@ pub struct App {
     settings_open: bool,
     /// The messy gamer skin's litter and vacuum (#202).
     mess: mess::Mess,
+    /// The central view of the frame being drawn (between the sidebar and the details), set by each CentralPanel;
+    /// the Runner skin's course bar centres on it (#215).
+    centre: Option<egui::Rect>,
     /// The Runner skin's race of the day (#206), in memory only.
     race: course::CourseState,
     /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
@@ -358,6 +361,7 @@ impl App {
             states: Default::default(),
             settings_open: false,
             mess: mess::Mess::default(),
+            centre: None,
             race: course::CourseState::default(),
             font_previews: false,
             settings_section: 0,

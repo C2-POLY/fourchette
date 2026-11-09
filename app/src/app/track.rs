@@ -2,7 +2,7 @@
 //! above in flat colours. Red lanes round a green infield, one lane per zone; one athlete per
 //! ticket in a singlet and headband of its zone's colour, its bib the colour of its pull
 //! request's checks; the warm-up area, the scoreboard and the podium on the infield; START and
-//! FINISH across the track and the crowd in the stands. Drag to pan, pinch or ⌘-scroll to zoom,
+//! FINISH across the track. Drag to pan, pinch or ⌘-scroll to zoom,
 //! double-click to fit; a hover shows the ticket, a click opens its detail. Read only. The
 //! layout is `crate::track`.
 
@@ -36,19 +36,16 @@ mod paint {
     pub const STEP_INK: Color32 = rgb(0x6d5f4a);
     pub const SHOE: Color32 = rgb(0xc6f432);
     pub const HURDLE_LEG: Color32 = rgb(0x3a3d45);
-    pub const STANDS: Color32 = rgb(0x1a1b20);
     /// The lanes' colours, inside out.
     pub const ZONES: [Color32; 8] = [rgb(0x5e9cf0), rgb(0xb07ff0), rgb(0xff7a1a), rgb(0x3fb950), rgb(0xe8478b), rgb(0xe3c53a), rgb(0x3fc5c5), rgb(0x9aa0a6)];
     pub const TONES: [Color32; 4] = [rgb(0xf1c9a5), rgb(0xd9a47a), rgb(0xa8714a), rgb(0x6e4a32)];
-    pub const CROWD: [Color32; 6] = [rgb(0x5e9cf0), rgb(0xff7a1a), rgb(0xe3e4e8), rgb(0xe8478b), rgb(0xc6f432), rgb(0xb07ff0)];
     pub const PASSED: Color32 = rgb(0x3fb950);
     pub const RUNNING: Color32 = rgb(0xe3a008);
     pub const FAILING: Color32 = rgb(0xf85149);
 }
 
-/// How far the outer grass reaches past the last lane, and the stands' depth below it.
+/// How far the outer grass reaches past the last lane.
 const GRASS: Vec2 = vec2(55.0, 30.0);
-const STANDS_H: f32 = 44.0;
 /// Room left at the bottom of the board for the course bar, which covers it.
 const BAR_ROOM: f32 = 100.0;
 
@@ -259,10 +256,10 @@ impl Tab {
         let k = theme::c();
         let time = ui.input(|i| i.time) as f32;
 
-        // Fitted: the stadium and its stands above the course bar, centred; then the person's pan and zoom.
+        // Fitted: the stadium above the course bar, centred; then the person's pan and zoom.
         let outer = st.outer();
         let half = vec2(outer.0 + GRASS.x, outer.1 + GRASS.y);
-        let world = vec2(2.0 * half.x, 2.0 * half.y + STANDS_H + 8.0);
+        let world = vec2(2.0 * half.x, 2.0 * half.y);
         // The legend's card beside the stadium when the stadium, fitted to the height, leaves
         // room for it; else a strip of rows above it.
         let room = Rect::from_min_max(area.min + vec2(0.0, 40.0), area.max - vec2(0.0, BAR_ROOM));
@@ -298,8 +295,8 @@ impl Tab {
             self.board.city = None;
             view = CityView { pan: Vec2::ZERO, zoom: fit };
         }
-        // The world's centre is the infield's; the stands hang below, so lift it by half of them.
-        let v = View { origin: room.center() + view.pan - vec2(0.0, (STANDS_H + 8.0) / 2.0 * view.zoom), zoom: view.zoom };
+        // The world's centre is the infield's.
+        let v = View { origin: room.center() + view.pan, zoom: view.zoom };
         let c = v.at((0.0, 0.0));
         let ell = |rx: f32, ry: f32| vec2(v.px(rx), v.px(ry));
 
@@ -376,17 +373,6 @@ impl Tab {
         let steps_bottom = v.at((0.0, track::STEPS[1].1 .1)).y;
         let podium_x = (v.at(track::STEPS[0].0).x + v.at(track::STEPS[2].1).x) / 2.0;
         p.text(pos2(podium_x, steps_bottom + v.px(14.0)), Align2::CENTER_CENTER, "PODIUM · DONE", v.font(11.0, true), paint::PALE);
-
-        // The stands under the track, with their crowd waving a little.
-        let top = half.y + 8.0;
-        let stands = Rect::from_two_pos(v.at((-half.x, top)), v.at((half.x, top + STANDS_H)));
-        p.rect_filled(stands, CornerRadius::same(v.px(6.0) as u8), paint::STANDS);
-        let n = (2.0 * half.x / 8.0) as usize;
-        for i in 0..n {
-            let bob = (time * 2.5 + i as f32 * 1.7).sin() * 1.2;
-            let at = (-half.x + 6.0 + i as f32 * 8.0, top + 12.0 + ((i * 7) % 3) as f32 * 9.0 + bob);
-            p.circle_filled(v.at(at), v.px(4.0), paint::CROWD[(i * 5) % paint::CROWD.len()]);
-        }
 
         // Hurdles, athletes and "+k" pills, back to front.
         let by_id: std::collections::HashMap<&str, &Item> = items.iter().map(|it| (it.id.as_str(), *it)).collect();
