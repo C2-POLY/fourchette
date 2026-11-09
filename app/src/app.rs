@@ -490,11 +490,17 @@ impl App {
             t.board.open = true;
             t.board.list = true;
         }
-        // FOURCHETTE_BOARD_CITY=1: the board as a city (#190), `=all` with the whole project.
+        // FOURCHETTE_BOARD_CITY=1: the board as a city (#190), `=all` with the whole project, `=town`
+        // a bigger sample city with every district style (#200).
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD_CITY") {
             t.board.open = true;
             t.board.city_on = true;
-            t.board.all = v == "all";
+            t.board.all = v == "all" || v == "town";
+            if v == "town" {
+                if let Some(b) = t.project.board.as_mut() {
+                    std::sync::Arc::make_mut(b).items = crate::city::sample();
+                }
+            }
         }
         // FOURCHETTE_BOARD_TREE=parents|all|nested: how the board shows sub-issues.
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD_TREE") {
