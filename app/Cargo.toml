@@ -10,8 +10,8 @@ homepage = "https://c2-poly.github.io/fourchette/"
 
 [dependencies]
 # wgpu (Metal) instead of the default glow (OpenGL): glow shows stale or stretched frames during a live resize on macOS.
-# Of the other default features, only accesskit, default_fonts and links are kept (links lets ctx.open_url open the browser).
-eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "links", "wgpu"] }
+# Of the other default features, only accesskit, clipboard, default_fonts and links are kept (clipboard lets ctx.copy_text reach the pasteboard, links lets ctx.open_url open the browser).
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "links", "wgpu"] }
 # The symbols some labels still use (a check mark, a sparkle) come from egui's emoji fonts,
 # which egui 0.37 no longer loads by default.
 egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
