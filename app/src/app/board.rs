@@ -441,14 +441,14 @@ pub fn md_spans(text: &str) -> Vec<Span> {
     out
 }
 
-fn md_job(text: &str, size: f32, color: Color32, width: f32) -> LayoutJob {
+fn md_job(text: &str, size: f32, color: Color32, ink: &Ink, width: f32) -> LayoutJob {
     let mut job = LayoutJob::default();
     let fmt = |c: Color32| TextFormat { font_id: FontId::proportional(size), color: c, ..Default::default() };
     for s in md_spans(text) {
         match s {
             Span::Plain(t) => job.append(&t, 0.0, fmt(color)),
-            Span::Bold(t) => job.append(&t, 0.0, fmt(theme::c().strong)),
-            Span::Link(t) => job.append(&t, 0.0, fmt(theme::c().accent_text)),
+            Span::Bold(t) => job.append(&t, 0.0, fmt(ink.strong)),
+            Span::Link(t) => job.append(&t, 0.0, fmt(ink.link)),
             Span::Code(t) => job.append(&t, 0.0, TextFormat { font_id: FontId::monospace(size - 1.0), color: theme::c().modified, background: chip_fill(), ..Default::default() }),
         }
     }
@@ -468,7 +468,28 @@ fn checkbox_icon(p: &egui::Painter, c: Pos2, done: bool) {
     }
 }
 
+/// The colours Markdown is written in: the theme's, or a postcard's ink on paper (#232).
+pub(super) struct Ink {
+    pub strong: Color32,
+    pub text: Color32,
+    pub dim: Color32,
+    pub rule: Color32,
+    pub link: Color32,
+}
+
+impl Ink {
+    pub fn theme() -> Ink {
+        let k = theme::c();
+        Ink { strong: k.strong, text: k.text, dim: k.dim, rule: k.border, link: k.accent_text }
+    }
+}
+
 pub(super) fn markdown(ui: &mut Ui, body: &str) {
+    markdown_ink(ui, body, &Ink::theme());
+}
+
+/// Markdown in `ink`'s colours.
+pub(super) fn markdown_ink(ui: &mut Ui, body: &str, ink: &Ink) {
     let w = ui.available_width();
     for b in md_blocks(body) {
         match b {
@@ -479,36 +500,36 @@ pub(super) fn markdown(ui: &mut Ui, body: &str) {
                     2 => 15.0,
                     _ => 13.5,
                 };
-                let g = ui.painter().layout_job(md_job(&t, size, theme::c().strong, w));
+                let g = ui.painter().layout_job(md_job(&t, size, ink.strong, ink, w));
                 ui.add(egui::Label::new(g).selectable(false));
                 if level <= 2 {
                     let y = ui.cursor().top();
-                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, theme::c().border));
+                    ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, ink.rule));
                     ui.add_space(4.0);
                 }
             }
             Block::Para(t) => {
-                let g = ui.painter().layout_job(md_job(&t, 13.0, theme::c().text, w));
+                let g = ui.painter().layout_job(md_job(&t, 13.0, ink.text, ink, w));
                 ui.add(egui::Label::new(g).selectable(false));
                 ui.add_space(4.0);
             }
             Block::Item { indent, bullet, text } => {
                 let left = 4.0 + indent as f32 * 16.0;
                 let done = bullet == Bullet::Check(true);
-                let g = ui.painter().layout_job(md_job(&text, 13.0, if done { theme::c().dim } else { theme::c().text }, w - left - 20.0));
+                let g = ui.painter().layout_job(md_job(&text, 13.0, if done { ink.dim } else { ink.text }, ink, w - left - 20.0));
                 let (rect, _) = ui.allocate_exact_size(vec2(w, g.size().y.max(18.0)), Sense::hover());
                 let p = ui.painter();
                 let c = pos2(rect.left() + left + 6.0, rect.top() + 9.0);
                 match &bullet {
                     Bullet::Dot => {
-                        p.circle_filled(c, 2.3, theme::c().dim);
+                        p.circle_filled(c, 2.3, ink.dim);
                     }
                     Bullet::Number(n) => {
-                        p.text(c + vec2(4.0, 0.0), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(theme::FS_SECONDARY), theme::c().dim);
+                        p.text(c + vec2(4.0, 0.0), Align2::RIGHT_CENTER, format!("{n}."), FontId::proportional(theme::FS_SECONDARY), ink.dim);
                     }
                     Bullet::Check(d) => checkbox_icon(p, c, *d),
                 }
-                p.galley(pos2(rect.left() + left + 18.0, rect.top() + 1.0), g, theme::c().text);
+                p.galley(pos2(rect.left() + left + 18.0, rect.top() + 1.0), g, ink.text);
             }
             Block::Code(t) => {
                 egui::Frame::new().fill(theme::c().input).corner_radius(6).inner_margin(Margin::same(8)).show(ui, |ui| {
@@ -520,7 +541,7 @@ pub(super) fn markdown(ui: &mut Ui, body: &str) {
             Block::Rule => {
                 ui.add_space(4.0);
                 let y = ui.cursor().top();
-                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, theme::c().border));
+                ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0_f32, ink.rule));
                 ui.add_space(6.0);
             }
         }
@@ -1471,6 +1492,16 @@ impl Tab {
                                 self.snapshot_postcard(ui.ctx(), a);
                             }
                         }
+                        // The card alone or on a table, kept for the next one (#232).
+                        ui.separator();
+                        ui.label(RichText::new("Background").size(theme::FS_SMALL).color(theme::c().faint));
+                        ui.horizontal(|ui| {
+                            for (table, label, hint) in [(false, "Card alone", "Just the postcard, with clean edges"), (true, "On a table", "The postcard lying askew on a wooden table")] {
+                                if ui.selectable_label(self.postcard_table == table, label).on_hover_text(hint).clicked() && self.postcard_table != table {
+                                    cmds.push(Cmd::SetPostcardTable(table));
+                                }
+                            }
+                        });
                     });
                     if super::snapshot::icon_button(ui, super::snapshot::camera_icon, &format!("Take a photo of the {what} to share it")).clicked() {
                         self.snapshot_take();

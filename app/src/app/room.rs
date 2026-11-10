@@ -833,7 +833,10 @@ impl Tab {
         let done = count(|s| s.built());
         let playing = count(|s| s.crane());
         p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{done} finished · {playing} playing · {} on the wishlist", items.len() - done - playing), theme::secondary(), k.dim);
-        p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        // Not in a photo (#232).
+        if !self.board.shooting {
+            p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        }
 
         // The LEDs, the keyboard and the gamer move while the room is on screen.
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));

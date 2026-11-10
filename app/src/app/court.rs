@@ -570,7 +570,10 @@ impl Tab {
         // The tally, top left; the hints just above the menu bar.
         let (served, cooking, todo) = crate::city::counts(&city);
         p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{served} served · {cooking} cooking · {todo} on order"), theme::secondary(), k.dim);
-        p.text(pos2(area.left() + 4.0, room.bottom() - 2.0), Align2::LEFT_BOTTOM, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        // Not in a photo (#232).
+        if !self.board.shooting {
+            p.text(pos2(area.left() + 4.0, room.bottom() - 2.0), Align2::LEFT_BOTTOM, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        }
 
         // The flames, the scooters and the big eater move while the court is on screen.
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));

@@ -180,6 +180,8 @@ pub enum Cmd {
     PreviewIcon(crate::icon::IconColour),
     /// The List / Tree switch of the local changes (a setting, shared by every repository).
     SetFilesTree(bool),
+    /// The postcard alone, or on a table (#232).
+    SetPostcardTable(bool),
     /// The diff's Unified / Side by side and Whole file choices, kept in the settings.
     SetDiffView { split: bool, whole: bool },
     /// Folds or unfolds a folder of the Tree view (`true` for the staged list).
@@ -553,12 +555,12 @@ impl App {
                 }
             }
         }
-        // FOURCHETTE_CITY_SHOT=1|postcard: the city's photo, or its postcard with the sample
-        // changelog, as a thumbnail (#222, #223).
+        // FOURCHETTE_CITY_SHOT=1|postcard[,table]: the city's photo, or its postcard with the
+        // sample changelog (on a table), as a thumbnail (#222, #223, #232).
         if let Ok(v) = std::env::var("FOURCHETTE_CITY_SHOT") {
             t.board.open = true;
             t.board.city_on = true;
-            t.snapshot_sample(v == "postcard");
+            t.snapshot_sample(v.starts_with("postcard"), v.ends_with(",table"));
         }
         // FOURCHETTE_BOARD_TREE=parents|all|nested: how the board shows sub-issues.
         if let Ok(v) = std::env::var("FOURCHETTE_BOARD_TREE") {
@@ -870,6 +872,10 @@ impl App {
                     self.library.save();
                 }
                 Cmd::PreviewIcon(c) => self.icon_preview(c),
+                Cmd::SetPostcardTable(on) => {
+                    self.library.settings.postcard_table = on;
+                    self.library.save();
+                }
                 Cmd::SetFilesTree(on) => {
                     self.library.settings.files_tree = on;
                     self.library.save();

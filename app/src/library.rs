@@ -753,6 +753,7 @@ mod tests {
                 "update_channel": "prerelease",
                 "app_icon": "teal",
                 "skin": "normal",
+                "postcard_table": false,
             })
         );
         assert!(v.get("appearance").is_none() && v.get("variant").is_none(), "no top-level copies: {v}");
