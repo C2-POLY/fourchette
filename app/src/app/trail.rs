@@ -466,7 +466,10 @@ impl Tab {
         let bg = Rect::from_min_size(area.min, vec2(area.width(), 56.0));
         p.rect_filled(bg, 0.0, k.bg);
         p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} of {} at the summit · {on_trail} on the trail · {} at the start · {} registered", m.count(Spot::Summit), m.total(), m.count(Spot::Start), m.count(Spot::Tent)), theme::secondary(), k.dim);
-        p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        // Not in a photo (#232).
+        if !self.board.shooting {
+            p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        }
         legend(&p, area.left_top() + vec2(4.0, 45.0), area.right() - 8.0, &m);
 
         // The runners' legs move while the mountain is on screen.

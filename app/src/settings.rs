@@ -370,6 +370,8 @@ pub struct Settings {
     /// The colour of the app icon in the Dock and the Finder (#159).
     pub app_icon: IconColour,
     pub skin: Skin,
+    /// The board's postcard lies askew on a wooden table instead of standing alone (#232).
+    pub postcard_table: bool,
 }
 
 impl Default for Settings {
@@ -395,6 +397,7 @@ impl Default for Settings {
             update_channel: UpdateChannel::default(),
             app_icon: IconColour::default(),
             skin: Skin::default(),
+            postcard_table: false,
         }
     }
 }
@@ -430,6 +433,7 @@ impl Settings {
             update_channel: v["update_channel"].as_str().and_then(UpdateChannel::from_key).unwrap_or(d.update_channel),
             app_icon: v["app_icon"].as_str().and_then(IconColour::parse).unwrap_or(d.app_icon),
             skin: v["skin"].as_str().and_then(Skin::from_key).unwrap_or(d.skin),
+            postcard_table: v["postcard_table"].as_bool().unwrap_or(d.postcard_table),
         }
     }
 
@@ -455,6 +459,7 @@ impl Settings {
             "update_channel": self.update_channel.key(),
             "app_icon": self.app_icon.key(),
             "skin": self.skin.key(),
+            "postcard_table": self.postcard_table,
         })
     }
 
@@ -706,6 +711,15 @@ mod tests {
         assert!(!Settings::default().files_tree);
         assert!(!Settings::from_json(&json!({"files_tree": "tree"})).files_tree);
         let s = Settings { files_tree: true, ..Settings::default() };
+        assert_eq!(Settings::from_json(&s.to_json()), s);
+    }
+
+    #[test]
+    fn the_postcard_stands_alone_until_put_on_the_table_and_is_kept() {
+        assert!(!Settings::default().postcard_table);
+        assert!(!Settings::from_json(&json!({"postcard_table": "yes"})).postcard_table);
+        let s = Settings { postcard_table: true, ..Settings::default() };
+        assert!(s.to_json()["postcard_table"].as_bool().unwrap());
         assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 

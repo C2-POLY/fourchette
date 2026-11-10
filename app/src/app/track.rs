@@ -431,7 +431,10 @@ impl Tab {
         }
         let running = st.count(Spot::Bend) + st.count(Spot::Back) + st.count(Spot::LastBend);
         p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{done} finished · {running} on the track · {} in the blocks · {} warming up", st.count(Spot::Blocks), st.count(Spot::Warmup)), theme::secondary(), k.dim);
-        p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        // Not in a photo (#232).
+        if !self.board.shooting {
+            p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
+        }
 
         // The runners' legs move while the stadium is on screen.
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));

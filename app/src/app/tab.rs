@@ -59,6 +59,8 @@ pub struct Tab {
     pub(super) subject_limits: (usize, usize),
     /// The Claude model and the commit-message language of the settings, copied the same way.
     pub(super) claude_model: crate::settings::ClaudeModel,
+    /// The postcard lies on a table (the settings' `postcard_table`, copied each frame).
+    pub(super) postcard_table: bool,
     pub(super) commit_language: crate::settings::CommitLanguage,
     /// What the open diff shows, to draw it again when the context changes.
     pub(super) diff_req: Option<DiffReq>,
@@ -193,6 +195,7 @@ impl Tab {
             diff_whole: false,
             subject_limits: (SUBJECT_LIMIT_LOW, SUBJECT_LIMIT_HIGH),
             claude_model: Default::default(),
+        postcard_table: false,
             commit_language: Default::default(),
             diff_req: None,
             ai: assistant::AiState::default(),
@@ -302,6 +305,7 @@ impl Tab {
         self.subject_limits = (s.subject_low, s.subject_high);
         self.files_tree = s.files_tree;
         self.claude_model = s.claude_model;
+        self.postcard_table = s.postcard_table;
         self.commit_language = s.commit_language;
         self.diff_split = s.diff_split;
         if self.diff_context != s.diff_context || self.diff_whole != s.diff_whole {
@@ -752,6 +756,7 @@ impl Tab {
             | Cmd::SetSettings(_)
             | Cmd::PreviewIcon(_)
             | Cmd::SetFilesTree(_)
+            | Cmd::SetPostcardTable(_)
             | Cmd::SetDiffView { .. }
             | Cmd::Pull
             | Cmd::PullDialog
