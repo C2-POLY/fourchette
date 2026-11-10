@@ -13,7 +13,7 @@ use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter
 
 // Everything sits on an 8-point grid.
 const WIN_W: f32 = 832.0;
-const WIN_H: f32 = 480.0;
+const WIN_H: f32 = 600.0;
 const SIDEBAR_W: f32 = 176.0;
 /// The title row at the top of both panes.
 const HEADER_H: f32 = 56.0;
