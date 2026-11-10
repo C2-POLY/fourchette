@@ -255,10 +255,12 @@ pub enum Skin {
     Trail,
     /// The city becomes a food court, and each Git action is a bite of a daily menu (#212).
     Eater,
+    /// The city becomes the gamer's room, and each Git action earns XP (#218).
+    Player,
 }
 
 impl Skin {
-    pub const ALL: [Skin; 5] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater];
+    pub const ALL: [Skin; 6] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player];
 
     /// Its name in repos.json.
     pub fn key(self) -> &'static str {
@@ -268,6 +270,7 @@ impl Skin {
             Skin::Runner => "runner",
             Skin::Trail => "trail",
             Skin::Eater => "eater",
+            Skin::Player => "player",
         }
     }
 
@@ -278,6 +281,7 @@ impl Skin {
             Skin::Runner => "Runner",
             Skin::Trail => "Ultra-trail",
             Skin::Eater => "Big eater",
+            Skin::Player => "Gamer",
         }
     }
 
@@ -289,6 +293,7 @@ impl Skin {
             Skin::Runner => "A stadium and a race of the day",
             Skin::Trail => "A mountain and a 160 km ultra",
             Skin::Eater => "A food court and a daily menu",
+            Skin::Player => "A gaming room and an XP bar",
         }
     }
 
@@ -489,7 +494,11 @@ mod tests {
         assert_eq!((Skin::Eater.key(), Skin::Eater.label()), ("eater", "Big eater"));
         // The messy gamer stays as it was, the Big eater beside it.
         assert_eq!(Skin::Gamer.about(), "Litter, and a vacuum to clean it");
-        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater]);
+        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player]);
+        // The Gamer (#218) after the Big eater, apart from the messy gamer.
+        assert_eq!(Settings::from_json(&json!({"skin": "player"})).skin, Skin::Player);
+        assert_eq!((Skin::Player.key(), Skin::Player.label(), Skin::Player.about()), ("player", "Gamer", "A gaming room and an XP bar"));
+        assert_eq!(Skin::Player.race(), None);
         assert_eq!(Settings::from_json(&json!({"skin": "trail"})).skin, Skin::Trail);
         assert_eq!((Skin::Trail.label(), Skin::Trail.about()), ("Ultra-trail", "A mountain and a 160 km ultra"));
         assert_eq!(Skin::Trail.race(), Some(crate::course::Race::Ultra));

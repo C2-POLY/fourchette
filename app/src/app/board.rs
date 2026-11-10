@@ -1514,23 +1514,26 @@ impl Tab {
     }
 
     /// The third view: the city, or in its place the Runner skin's stadium (#206), the
-    /// Ultra-trail's mountain (#207) or the Big eater's food court (#212). Returns the ticket clicked.
+    /// Ultra-trail's mountain (#207), the Big eater's food court (#212) or the Gamer's room (#218).
+    /// Returns the ticket clicked.
     pub(super) fn third_view(&mut self, ui: &mut Ui, shown: &[&Item], detail: Option<&str>) -> Option<String> {
         match self.skin {
             crate::settings::Skin::Runner => self.stadium_view(ui, shown, detail),
             crate::settings::Skin::Trail => self.mountain_view(ui, shown, detail),
             crate::settings::Skin::Eater => self.court_view(ui, shown, detail),
+            crate::settings::Skin::Player => self.room_view(ui, shown, detail),
             _ => self.city_view(ui, shown, detail),
         }
     }
 
-    /// The third view's name: the city, the Runner skin's stadium, the Ultra-trail's mountain or
-    /// the Big eater's food court.
+    /// The third view's name: the city, the Runner skin's stadium, the Ultra-trail's mountain,
+    /// the Big eater's food court or the Gamer's room.
     fn city_label(&self) -> &'static str {
         match self.skin {
             crate::settings::Skin::Runner => "Stadium",
             crate::settings::Skin::Trail => "Mountain",
             crate::settings::Skin::Eater => "Food court",
+            crate::settings::Skin::Player => "Room",
             _ => "City",
         }
     }

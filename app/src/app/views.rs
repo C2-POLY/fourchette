@@ -50,6 +50,8 @@ pub(super) enum SkinPill {
     Metres(u32, crate::course::Race),
     /// The Big eater's daily menu: the kcal and the combo running (#212).
     Kcal(u32, u32),
+    /// The Gamer's session: the level, the XP, the streak running and a boss fight (#218).
+    Xp(usize, u32, u32, bool),
 }
 
 impl Tab {
@@ -164,6 +166,10 @@ impl Tab {
                     Some(SkinPill::Kcal(kcal, combo)) => {
                         ui.add_space(10.0);
                         super::meal::kcal_pill(ui, kcal, combo);
+                    }
+                    Some(SkinPill::Xp(level, xp, streak, boss)) => {
+                        ui.add_space(10.0);
+                        super::xp::xp_pill(ui, level, xp, streak, boss);
                     }
                     None => {}
                 }
@@ -2070,6 +2076,13 @@ impl eframe::App for App {
             t.trail_km = km;
             t.mountain_x = None;
         }
+        // The Gamer's session as the room shows it (#218).
+        if self.library.settings.skin == crate::settings::Skin::Player {
+            let look = self.xp.look();
+            for t in &mut self.tabs {
+                t.room_look = look.clone();
+            }
+        }
         // The mode on screen can change with macOS (System), so the colours follow it each frame.
         theme::sync(ctx);
         // Every tab's background work, not only the one on screen.
@@ -2101,6 +2114,10 @@ impl eframe::App for App {
                 let pill = match self.library.settings.skin {
                     crate::settings::Skin::Runner | crate::settings::Skin::Trail => Some(SkinPill::Metres(self.race.course.metres, self.race.course.race)),
                     crate::settings::Skin::Eater => Some(SkinPill::Kcal(self.meal.meal.kcal, self.meal.meal.combo(self.meal.secs()))),
+                    crate::settings::Skin::Player => {
+                        let s = &self.xp.session;
+                        Some(SkinPill::Xp(s.level(), s.xp, s.streak(self.xp.secs()), s.boss.is_some()))
+                    }
                     _ => None,
                 };
                 if full {
@@ -2292,6 +2309,12 @@ impl eframe::App for App {
             self.meal_bar(ctx);
             self.golden_fork_dialog(ctx, &mut cmds);
         }
+        let player = self.library.settings.skin == crate::settings::Skin::Player;
+        if player && !framing {
+            // The XP bar, which takes no click, and the GG card (#218).
+            self.xp_bar(ctx);
+            self.gg_dialog(ctx, &mut cmds);
+        }
         if self.library.settings.skin == crate::settings::Skin::Gamer {
             let (now, dt, pointer) = ctx.input(|i| (i.time as f32, i.stable_dt.min(0.1), i.pointer.hover_pos()));
             let pointer = self.mess.pin.or(pointer);
@@ -2320,9 +2343,9 @@ impl eframe::App for App {
                 let left = timed.then(|| 1.0 - age / life);
                 // Under the Runner skin the coach speaks, under the Big eater the announcer, and
                 // the other toasts sit above their bar.
-                if let (Some(coach), true) = (&t.coach, runner || eater) {
+                if let (Some(coach), true) = (&t.coach, runner || eater || player) {
                     super::course::coach_toast(ctx, coach, &t.msg, age as f64);
-                } else if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label), if runner || eater { 100.0 } else { 0.0 }) {
+                } else if crate::modal::toast(ctx, &t.msg, t.error, age as f64, left, t.action.map(|(label, _)| label), if runner || eater || player { 100.0 } else { 0.0 }) {
                     if let Some((_, cmd)) = t.action {
                         cmds.push(cmd());
                     }

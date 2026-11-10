@@ -27,6 +27,8 @@ mod track;
 mod trail;
 mod course;
 mod meal;
+mod room;
+mod xp;
 mod updater;
 mod view_tabs;
 mod views;
@@ -162,6 +164,8 @@ pub enum Cmd {
     Finisher { again: bool },
     /// The Big eater skin's Golden Fork card: Second helping (`again`) or Nap time (#212).
     GoldenFork { again: bool },
+    /// The Gamer skin's GG card: New game+ (`new_game`) or Touch grass (#218).
+    GgDone { new_game: bool },
     /// Details panel on the right, at the bottom or hidden, kept per repository in repos.json.
     SetDetails(DetailsLayout),
     /// ⌘J: hide the details panel, or show it again where it was.
@@ -320,6 +324,8 @@ pub struct App {
     race: course::CourseState,
     /// The Big eater skin's daily menu (#212), in memory only.
     meal: meal::MealState,
+    /// The Gamer skin's session (#218), in memory only.
+    xp: xp::XpState,
     /// The fonts of the Settings menus are loaded, each in its own family (`theme::preview_family`).
     font_previews: bool,
     /// The section shown in the Settings window, an index of `settings::SECTIONS`.
@@ -373,6 +379,7 @@ impl App {
             centre: None,
             race: course::CourseState::default(),
             meal: meal::MealState::default(),
+            xp: xp::XpState::default(),
             font_previews: false,
             settings_section: 0,
             screenshot,
@@ -648,7 +655,9 @@ impl App {
         // Fork card (not saved). FOURCHETTE_SKIN=runner: the Runner skin at 2,300 m (#206),
         // `=runner,split` at the 3,000 m split, `=runner,finish` finished. FOURCHETTE_SKIN=trail:
         // the Ultra-trail skin at 46 km (#207), `=trail,split` at the km 60 checkpoint,
-        // `=trail,finish` at the summit.
+        // `=trail,finish` at the summit. FOURCHETTE_SKIN=player: the Gamer skin (#218) at 2,840
+        // XP with a streak ×3 and a push just made, `=player,boss` in a boss fight, `=player,gg`
+        // at Legend with the GG card, `=player,mess` with a crowded room.
         if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("runner") || v.starts_with("trail")) {
             app.library.settings.skin = if v.starts_with("trail") { crate::settings::Skin::Trail } else { crate::settings::Skin::Runner };
             app.race.sample(&v);
@@ -657,6 +666,10 @@ impl App {
             app.library.settings.skin = crate::settings::Skin::Eater;
             app.meal.sample(&v);
             app.meal_sample_toast();
+        } else if let Some(v) = std::env::var("FOURCHETTE_SKIN").ok().filter(|v| v.starts_with("player")) {
+            app.library.settings.skin = crate::settings::Skin::Player;
+            app.xp.sample(&v);
+            app.xp_sample_toast(&v);
         } else if let Ok(v) = std::env::var("FOURCHETTE_SKIN") {
             app.library.settings.skin = crate::settings::Skin::Gamer;
             app.mess.sample = true;
@@ -706,7 +719,8 @@ impl App {
     /// A dialog takes the window: the tab's, or the update dialog.
     fn modal(&self) -> bool {
         let golden = self.meal.golden && self.library.settings.skin == crate::settings::Skin::Eater;
-        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher || golden
+        let gg = self.xp.gg && self.library.settings.skin == crate::settings::Skin::Player;
+        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher || golden || gg
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -746,7 +760,8 @@ impl App {
     }
 
     /// Takes what the tabs did since the last frame, once, and gives it to the skin that counts
-    /// it: the Runner's race (#206) and the Ultra-trail's (#207), or the Big eater's menu (#212).
+    /// it: the Runner's race (#206) and the Ultra-trail's (#207), the Big eater's menu (#212) or
+    /// the Gamer's session (#218).
     /// Other skins drop it.
     fn take_strides(&mut self) {
         let strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
@@ -756,6 +771,7 @@ impl App {
         match self.library.settings.skin {
             crate::settings::Skin::Runner | crate::settings::Skin::Trail => self.course_strides(strides),
             crate::settings::Skin::Eater => self.meal_bites(strides),
+            crate::settings::Skin::Player => self.xp_plays(strides),
             _ => {}
         }
     }
@@ -820,6 +836,7 @@ impl App {
                 }
                 Cmd::Finisher { again } => self.finisher_done(again),
                 Cmd::GoldenFork { again } => self.golden_fork_done(again),
+                Cmd::GgDone { new_game } => self.gg_done(new_game),
                 Cmd::Settings => {
                     self.settings_open = !self.settings_open;
                     if self.settings_open {

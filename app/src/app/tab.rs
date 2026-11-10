@@ -96,6 +96,8 @@ pub struct Tab {
     pub(super) mountain_x: Option<(f32, f32)>,
     /// The photo of the board's third view and its postcard (#222, #223).
     pub(super) snap: super::snapshot::SnapState,
+    /// What the Gamer skin's session shows in the room, copied here each frame (#218).
+    pub(super) room_look: super::room::Look,
 }
 
 /// A message for the person, shown as the window's toast.
@@ -211,6 +213,7 @@ impl Tab {
             trail_km: 0.0,
             mountain_x: None,
             snap: Default::default(),
+            room_look: super::room::Look::default(),
             strides: Vec::new(),
         }
     }
@@ -742,6 +745,7 @@ impl Tab {
             | Cmd::SetSkin(_)
             | Cmd::Finisher { .. }
             | Cmd::GoldenFork { .. }
+            | Cmd::GgDone { .. }
             | Cmd::SetDetails(_)
             | Cmd::ToggleDetails
             | Cmd::Settings

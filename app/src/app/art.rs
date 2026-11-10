@@ -4,6 +4,8 @@
 //! version below 32 points, the Golden Fork trophy, the burger, the chips, the pizza, the
 //! cutlery of the announcer's toasts and the big eater himself.
 
+pub(super) mod gamer;
+
 use super::mess::{Pen, BLUSH, EYE, INK};
 use egui::epaint::Mesh;
 use egui::{pos2, vec2, Color32, Painter, Pos2, Rect, Shape, Stroke, Vec2};
@@ -43,6 +45,36 @@ pub(super) fn draw(p: &Painter, parts: &[Part], o: Pos2, k: f32, deg: f32, w: f3
         }
         if let Some(col) = stroke {
             let st = Stroke::new((width * w * k).max(0.6), *col);
+            let closed = d.contains(['Z', 'z']);
+            for pts in subs.into_iter().filter(|s| s.len() >= 2) {
+                p.add(if closed { Shape::closed_line(pts, st) } else { Shape::line(pts, st) });
+            }
+        }
+    }
+}
+
+/// Draws `parts` through `map`, from their box's units to the screen (a face of the Gamer's room
+/// seen at an angle, which the pen can't skew), their strokes `w` points per unit.
+pub(super) fn draw_mapped(p: &Painter, parts: &[Part], map: &dyn Fn(Vec2) -> Pos2, w: f32) {
+    for Part(d, fill, stroke, width) in parts {
+        let subs: Vec<Vec<Pos2>> = super::mess::path(d)
+            .into_iter()
+            .map(|s| {
+                let mut pts: Vec<Pos2> = s.into_iter().map(map).collect();
+                pts.dedup_by(|a, b| a.distance(*b) < 0.01);
+                if pts.len() > 2 && pts[0].distance(pts[pts.len() - 1]) < 0.01 {
+                    pts.pop();
+                }
+                pts
+            })
+            .collect();
+        if let Some(fill) = fill {
+            for pts in subs.iter().filter(|s| s.len() >= 3) {
+                fill_shape(p, pts, *fill);
+            }
+        }
+        if let Some(col) = stroke {
+            let st = Stroke::new((width * w).max(0.5), *col);
             let closed = d.contains(['Z', 'z']);
             for pts in subs.into_iter().filter(|s| s.len() >= 2) {
                 p.add(if closed { Shape::closed_line(pts, st) } else { Shape::line(pts, st) });

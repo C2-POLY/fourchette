@@ -19,7 +19,9 @@ const ORANGE: Color32 = Color32::from_rgb(0xff, 0x7a, 0x1a);
 const PEACH: Color32 = Color32::from_rgb(0xff, 0xb2, 0x7a);
 
 /// What the coach says and in which colour. The Big eater skin's announcer (#212) has its
-/// own: a bite, a combo, an Undo spat out, an indigestion and a stop on the menu.
+/// own: a bite, a combo, an Undo spat out, an indigestion and a stop on the menu; so do the
+/// Gamer skin's achievements (#218): a commit, a push, a merge, a streak, a rewind, a boss
+/// fight and a level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
     Push,
@@ -32,12 +34,24 @@ pub enum Tone {
     Spit,
     Sick,
     Stop,
+    Achieve,
+    Pushed,
+    Joined,
+    Streak,
+    Rewind,
+    Boss,
+    LevelUp,
 }
 
 impl Tone {
     /// The announcer's tones, which show the cutlery rather than the runner.
     fn eater(self) -> bool {
         matches!(self, Tone::Bite | Tone::Combo | Tone::Spit | Tone::Sick | Tone::Stop)
+    }
+
+    /// The Gamer's tones, which show the game pad (or the boss).
+    fn player(self) -> bool {
+        matches!(self, Tone::Achieve | Tone::Pushed | Tone::Joined | Tone::Streak | Tone::Rewind | Tone::Boss | Tone::LevelUp)
     }
 
     /// The icon tile's fill and the ink of its icon and metres.
@@ -53,6 +67,13 @@ impl Tone {
             Tone::Spit => (0x7fb8f0, 0x2f78c4),
             Tone::Sick => (0x7ee787, 0x2f8a3f),
             Tone::Stop => (0xc3a6ff, 0x7c4dff),
+            Tone::Achieve => (0xc6f432, 0x4f8a00),
+            Tone::Pushed => (0x38bdf8, 0x0b7ab8),
+            Tone::Joined => (0xffd66b, 0xa8770a),
+            Tone::Streak => (0xff8a80, 0xd0352b),
+            Tone::Rewind => (0xc9ccd4, 0x6b6f78),
+            Tone::Boss => (0xff8a80, 0xcf3d33),
+            Tone::LevelUp => (0xc3a6ff, 0x7c4dff),
         };
         let hex = |h: u32| Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8);
         let ink = hex(if light { light_ink } else { dark_ink });
@@ -643,6 +664,8 @@ pub(super) fn coach_toast(ctx: &egui::Context, coach: &Coach, msg: &str, age: f6
                     stopwatch(ui.painter(), r.center(), ink);
                 } else if coach.tone.eater() {
                     super::meal::tone_icon(ui.painter(), r.center(), coach.tone);
+                } else if coach.tone.player() {
+                    super::xp::tone_icon(ui.painter(), r.center(), coach.tone);
                 } else if coach.mountain {
                     mountain_icon(ui.painter(), r.center(), 18.0, ink);
                 } else {

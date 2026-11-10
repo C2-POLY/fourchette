@@ -37,6 +37,8 @@ mod track;
 mod trail;
 mod course;
 mod meal;
+mod room;
+mod xp;
 mod ui;
 mod undo;
 mod update;
