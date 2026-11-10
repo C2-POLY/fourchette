@@ -1,0 +1,24 @@
+---
+// A section's first line, written like a row of the history: a short hash
+// (stable, made from `seed`) and a label in the lane's colour.
+interface Props {
+  seed: string;
+  label: string;
+  kind?: 'branch' | 'tag' | 'head';
+}
+
+const { seed, label, kind = 'branch' } = Astro.props;
+
+// FNV-1a: the same seed always gives the same seven hex digits.
+let h = 0x811c9dc5;
+for (const c of seed) {
+  h ^= c.codePointAt(0)!;
+  h = Math.imul(h, 0x01000193) >>> 0;
+}
+const sha = h.toString(16).padStart(8, '0').slice(0, 7);
+---
+
+<p class="commit-line" data-in>
+  <code class="sha">{sha}</code>
+  <span class:list={['ref', `ref-${kind}`]}>{label}</span>
+</p>

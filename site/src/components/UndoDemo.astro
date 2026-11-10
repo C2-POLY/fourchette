@@ -1,0 +1,78 @@
+---
+// A small history to try Undo on: Commit, Delete branch and Stash change it,
+// Undo (or the visitor's own ⌘Z while it is on screen) takes the last one
+// back. The behaviour is in scripts/undo-demo.ts; the commit subjects stay in
+// English, like real ones.
+import { type Lang, t } from '../i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const s = t(Astro.props.lang).undo;
+const rows = [
+  { msg: "Merge branch 'feature/search'", refs: [{ name: 'main', head: true }], lane: 0 },
+  { msg: 'Give every branch its own lane colour', refs: [{ name: 'feature/graph-colours' }], lane: 1 },
+  { msg: 'Search commits by author', refs: [{ name: 'feature/search' }], lane: 2 },
+  { msg: 'Add the command palette', refs: [{ name: 'v0.3.0', tag: true }], lane: 0 },
+];
+---
+
+<div
+  class="demo"
+  role="group"
+  aria-label={s.label}
+  data-undo-demo
+  data-took={s.took}
+  data-steps={s.steps}
+  data-none={s.none}
+>
+  <div class="demo-bar">
+    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="demo-title">fourchette — main</span>
+  </div>
+  <div class="demo-tools">
+    <button type="button" class="tool" data-act="commit">{s.commit}</button>
+    <button type="button" class="tool" data-act="delete">{s.delete}</button>
+    <button type="button" class="tool" data-act="stash">{s.stash}</button>
+    <button type="button" class="tool tool-undo" data-act="undo" aria-keyshortcuts="Meta+Z Control+Z">
+      <kbd>⌘Z</kbd>
+      {s.undo}
+    </button>
+  </div>
+  <ol class="demo-log" data-log>
+    <li class="row row-wip" data-wip>
+      <span class="g"><i class="dot hollow"></i></span>
+      <span class="msg">{s.changes}</span>
+      <span class="files">+2 −1</span>
+    </li>
+    {
+      rows.map((r) => (
+        <li class="row" style={`--lane: var(--lane-${r.lane + 1})`}>
+          <span class="g">
+            <i class="dot" />
+          </span>
+          <span class="msg">{r.msg}</span>
+          {r.refs.map((ref) => (
+            <span
+              class:list={['pill', { head: ref.head, tag: ref.tag }]}
+              data-branch={!ref.head && !ref.tag ? ref.name : undefined}
+              data-head={ref.head ? '' : undefined}
+            >
+              {ref.name}
+            </span>
+          ))}
+        </li>
+      ))
+    }
+  </ol>
+  <div class="demo-foot">
+    <span><b data-count>0</b> {s.steps}</span>
+    <span class="toast" role="status" aria-live="polite" data-toast></span>
+  </div>
+</div>
+
+<script>
+  import { mountUndoDemo } from '../scripts/undo-demo';
+  document.querySelectorAll<HTMLElement>('[data-undo-demo]').forEach(mountUndoDemo);
+</script>

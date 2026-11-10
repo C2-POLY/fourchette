@@ -50,12 +50,21 @@ const og = await getImage({ src: heroShot, width: 1600, format: 'png' });
     <meta property="og:locale" content={lang === 'fr' ? 'fr_FR' : 'en_US'} />
     <meta name="twitter:card" content="summary_large_image" />
     <script is:inline>
-      // Before the first paint: the theme the toggle chose.
+      // Before the first paint: the theme the toggle chose, and .motion,
+      // which hides what scripts/motion.ts brings in. Without motion, or if
+      // that script has not started after a few seconds, nothing is hidden.
       (function () {
+        var root = document.documentElement;
         try {
           var t = localStorage.getItem('fourchette-theme');
-          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+          if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t);
         } catch (e) {}
+        if (matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+          root.classList.add('motion');
+          setTimeout(function () {
+            if (!root.classList.contains('motion-ready')) root.classList.remove('motion');
+          }, 3000);
+        }
       })();
     </script>
   </head>
@@ -66,5 +75,8 @@ const og = await getImage({ src: heroShot, width: 1600, format: 'png' });
       <slot />
     </main>
     <Footer lang={lang} />
+    <script>
+      import '../scripts/motion';
+    </script>
   </body>
 </html>

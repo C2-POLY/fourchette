@@ -7,17 +7,20 @@ interface Props {
   name: string;
   alt: string;
   eager?: boolean;
+  /** Opened by a clip on scroll (scripts/motion.ts); off for a shot another animation moves. */
+  reveal?: boolean;
+  class?: string;
 }
 
 const shots = import.meta.glob<{ default: ImageMetadata }>('../assets/shots/*.png', { eager: true });
-const { name, alt, eager = false } = Astro.props;
+const { name, alt, eager = false, reveal = true, class: extra } = Astro.props;
 const src = (mode: string) => shots[`../assets/shots/${name}-${mode}.png`].default;
-const sizes = '(min-width: 1240px) 1180px, calc(100vw - 32px)';
+const sizes = '(min-width: 1240px) 1100px, calc(100vw - 64px)';
 const widths = [700, 1200, 1800];
 const loading = eager ? 'eager' : 'lazy';
 ---
 
-<div class="shot">
+<div class:list={['shot', extra]} data-shot={reveal ? '' : undefined}>
   <Image class="shot-dark" src={src('dark')} alt={alt} widths={widths} sizes={sizes} loading={loading} fetchpriority={eager ? 'high' : 'auto'} />
   <Image class="shot-light" src={src('light')} alt={alt} widths={widths} sizes={sizes} loading="lazy" />
 </div>
