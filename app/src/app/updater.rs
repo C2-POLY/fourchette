@@ -1,6 +1,8 @@
 //! Updates (issues #80 and #97): the check in the background, on the channel chosen in Settings,
 //! the toolbar's pill and the update dialog. The work itself is in `crate::update`; this side only
-//! polls its channels each frame and keeps the last check's outcome for the Settings section.
+//! polls its channels each frame and keeps the last check's outcome for the Settings section and
+//! the About window (#228), whose "Check for Updates" asks for a check (`asked`) and gets the
+//! update dialog when it finds a release.
 //! Also "What's new" (#137): the items the release brings in the update dialog, and once after an
 //! update the "What's new in Fourchette" dialog.
 use super::*;
@@ -12,7 +14,7 @@ use std::sync::mpsc::TryRecvError;
 
 type CheckResult = Result<Option<Release>, String>;
 
-/// Where the checks stand, as the Settings section shows it.
+/// Where the checks stand, as the Settings section and the About window show it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CheckStatus {
     /// Under `cargo run` and in screenshots: the app never checks.
@@ -46,6 +48,11 @@ pub struct UpdateState {
     progress: Option<Progress>,
     /// What the update just installed brought, shown once at launch until OK.
     pub whats_new: Option<Shown>,
+    /// The check running (or next to run) was asked for in the About window: finding a release
+    /// then opens the update dialog (#228).
+    asked: bool,
+    /// A status faked for screenshots (`FOURCHETTE_ABOUT`).
+    fake: Option<CheckStatus>,
 }
 
 impl UpdateState {
@@ -61,6 +68,16 @@ impl UpdateState {
     /// dialog, `=checking`, `=downloading`, `=installing` and `=error` show the dialog at that step.
     /// `FOURCHETTE_WHATS_NEW=1` shows the "What's new in Fourchette" dialog with sample items.
     pub fn apply_env(&mut self) {
+        // `FOURCHETTE_ABOUT=checking|uptodate|error` fakes the status the About window shows.
+        if let Ok(v) = std::env::var("FOURCHETTE_ABOUT") {
+            self.checked_at = Some(now_secs() - 120);
+            self.fake = match v.as_str() {
+                "checking" => Some(CheckStatus::Checking),
+                "uptodate" => Some(CheckStatus::UpToDate),
+                "error" => Some(CheckStatus::Failed("Couldn't reach api.github.com: the network connection was lost.".into())),
+                _ => None,
+            };
+        }
         if std::env::var("FOURCHETTE_WHATS_NEW").is_ok_and(|v| v == "1") {
             self.whats_new = Some(update::sample_shown());
         }
@@ -86,6 +103,9 @@ impl UpdateState {
     }
 
     pub fn status(&self) -> CheckStatus {
+        if let Some(f) = &self.fake {
+            return f.clone();
+        }
         if self.checking.is_some() {
             return CheckStatus::Checking;
         }
@@ -100,15 +120,30 @@ impl UpdateState {
         }
     }
 
-    /// Settings' "Check now", or a new channel: the next frame starts a check on `channel`,
-    /// unless one is already running on it. One running on another channel is dropped when it
-    /// answers, and this one starts then.
-    pub fn check_now(&mut self, channel: UpdateChannel) {
+    /// The About window's "Check for Updates" (`asked`), or a new channel: the next frame starts
+    /// a check on `channel`, unless one is already running on it. One running on another channel
+    /// is dropped when it answers, and this one starts then. A check asked for opens the update
+    /// dialog when it finds a release.
+    pub fn check_now(&mut self, channel: UpdateChannel, asked: bool) {
+        if !self.can_check() {
+            return;
+        }
+        self.asked |= asked;
         let running = self.checking.as_ref().is_some_and(|(on, _)| *on == channel);
-        if self.can_check() && !running {
+        if !running {
             self.next_check = Some(Instant::now());
         }
     }
+
+    /// An answer for a check came in: whether it was asked for in About, and the flag is spent.
+    fn take_asked(&mut self) -> bool {
+        std::mem::take(&mut self.asked)
+    }
+}
+
+/// A check asked for in About that found a release, with About still open, gives the update dialog.
+fn opens_update_dialog(asked: bool, found: bool, about_open: bool) -> bool {
+    asked && found && about_open
 }
 
 pub(super) fn now_secs() -> i64 {
@@ -128,6 +163,7 @@ impl App {
                 Ok(res) => {
                     u.checking = None;
                     u.checked_at = Some(now_secs());
+                    let asked = u.take_asked();
                     match res {
                         // The pill keeps what it offered; the next check will tell.
                         Err(e) => u.last = Some(Err(e)),
@@ -135,12 +171,23 @@ impl App {
                             u.last = Some(Ok(()));
                             if !u.busy() {
                                 u.dialog &= found.is_some();
+                                let open = opens_update_dialog(asked, found.is_some(), self.about_open);
                                 u.available = found;
+                                if open {
+                                    self.about_open = false;
+                                    self.palette = None;
+                                    self.switcher = None;
+                                    self.settings_open = false;
+                                    u.dialog = true;
+                                }
                             }
                         }
                     }
                 }
-                Err(TryRecvError::Disconnected) => u.checking = None,
+                Err(TryRecvError::Disconnected) => {
+                    u.checking = None;
+                    u.take_asked();
+                }
                 Err(TryRecvError::Empty) => {}
             }
         }
@@ -426,5 +473,30 @@ fn progress_row(ui: &mut egui::Ui, text: &str, part: Option<f32>) {
         let mut done = rect;
         done.set_width(rect.width() * f.clamp(0.0, 1.0));
         p.rect_filled(done, CornerRadius::same(3), c.accent);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_check_asked_in_about_and_still_open_opens_the_dialog() {
+        assert!(opens_update_dialog(true, true, true));
+        assert!(!opens_update_dialog(false, true, true), "a background check only lights the pill");
+        assert!(!opens_update_dialog(true, false, true), "nothing found");
+        assert!(!opens_update_dialog(true, true, false), "About was closed meanwhile");
+    }
+
+    #[test]
+    fn asking_is_remembered_until_an_answer_and_only_where_checks_run() {
+        let mut u = UpdateState::default();
+        u.check_now(UpdateChannel::Stable, true);
+        assert!(!u.take_asked(), "under cargo run nothing is checked");
+        u.bundle = Some(PathBuf::from("/Applications/Fourchette.app"));
+        u.check_now(UpdateChannel::Stable, true);
+        u.check_now(UpdateChannel::Stable, false);
+        assert!(u.take_asked(), "a later channel change doesn't forget the ask");
+        assert!(!u.take_asked(), "spent once answered");
     }
 }

@@ -1931,8 +1931,9 @@ impl App {
         use menu::Id;
         let root = || self.tab().repo.as_ref().map(|r| r.root.clone());
         Some(match id {
-            // About opens AppKit's panel itself; the other edit items only act in a text field.
-            Id::About | Id::NoRecent | Id::Redo | Id::Cut | Id::Copy | Id::Paste | Id::SelectAll => return None,
+            // The edit items only act in a text field.
+            Id::NoRecent | Id::Redo | Id::Cut | Id::Copy | Id::Paste | Id::SelectAll => return None,
+            Id::About => Cmd::About(true),
             Id::Settings => Cmd::Settings,
             Id::OpenRepository => Cmd::OpenDialog,
             Id::CloneRepository => Cmd::CloneDialog,
@@ -2292,6 +2293,7 @@ impl eframe::App for App {
         self.keyboard(ctx, &mut cmds);
         self.palette_ui(ctx, &mut cmds);
         self.update_dialog(ctx, &mut cmds);
+        self.about_window(ctx, &mut cmds);
         self.clone_window(ctx, &mut cmds);
         if !self.update.dialog {
             self.whats_new_dialog(ctx, &mut cmds);
