@@ -260,7 +260,9 @@ pub enum Skin {
 }
 
 impl Skin {
-    pub const ALL: [Skin; 6] = [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player];
+    /// The skins the menu offers, in its order. The messy gamer (`Gamer`) left it for the Gamer's
+    /// room (#220); a saved `gamer` opens as `Player`.
+    pub const ALL: [Skin; 5] = [Skin::Normal, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player];
 
     /// Its name in repos.json.
     pub fn key(self) -> &'static str {
@@ -277,11 +279,23 @@ impl Skin {
     pub fn label(self) -> &'static str {
         match self {
             Skin::Normal => "Normal",
-            Skin::Gamer => "Messy gamer",
+            Skin::Gamer => "Gamer",
             Skin::Runner => "Runner",
-            Skin::Trail => "Ultra-trail",
-            Skin::Eater => "Big eater",
+            Skin::Trail => "Trailer",
+            Skin::Eater => "Mangeur",
             Skin::Player => "Gamer",
+        }
+    }
+
+    /// The short line under its name on its tile.
+    pub fn tagline(self) -> &'static str {
+        match self {
+            Skin::Normal => "Plain",
+            Skin::Gamer => "Litter · vacuum",
+            Skin::Runner => "Stadium · 8 km",
+            Skin::Trail => "Mountain · 160 km",
+            Skin::Eater => "Food court · kcal",
+            Skin::Player => "Room · XP",
         }
     }
 
@@ -298,6 +312,9 @@ impl Skin {
     }
 
     pub fn from_key(key: &str) -> Option<Skin> {
+        if key == "gamer" {
+            return Some(Skin::Player);
+        }
         Self::ALL.into_iter().find(|k| k.key() == key)
     }
 
@@ -491,16 +508,22 @@ mod tests {
         }
         assert_eq!(Settings::from_json(&json!({"skin": "runner"})).skin, Skin::Runner);
         assert_eq!(Settings::from_json(&json!({"skin": "eater"})).skin, Skin::Eater);
-        assert_eq!((Skin::Eater.key(), Skin::Eater.label()), ("eater", "Big eater"));
+        assert_eq!((Skin::Eater.key(), Skin::Eater.label()), ("eater", "Mangeur"));
         // The messy gamer stays as it was, the Big eater beside it.
         assert_eq!(Skin::Gamer.about(), "Litter, and a vacuum to clean it");
-        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Gamer, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player]);
-        // The Gamer (#218) after the Big eater, apart from the messy gamer.
+        let (labels, lines): (Vec<_>, Vec<_>) = Skin::ALL.iter().map(|k| (k.label(), k.tagline())).unzip();
+        for set in [&labels, &lines] {
+            assert!(set.iter().all(|t| !t.is_empty()));
+            assert_eq!(set.iter().collect::<std::collections::HashSet<_>>().len(), Skin::ALL.len());
+        }
+        assert_eq!(Skin::ALL, [Skin::Normal, Skin::Runner, Skin::Trail, Skin::Eater, Skin::Player]);
+        // The Gamer (#218), and the messy gamer's saved choice now opening it (#220).
         assert_eq!(Settings::from_json(&json!({"skin": "player"})).skin, Skin::Player);
+        assert_eq!(Settings::from_json(&json!({"skin": "gamer"})).skin, Skin::Player);
         assert_eq!((Skin::Player.key(), Skin::Player.label(), Skin::Player.about()), ("player", "Gamer", "A gaming room and an XP bar"));
         assert_eq!(Skin::Player.race(), None);
         assert_eq!(Settings::from_json(&json!({"skin": "trail"})).skin, Skin::Trail);
-        assert_eq!((Skin::Trail.label(), Skin::Trail.about()), ("Ultra-trail", "A mountain and a 160 km ultra"));
+        assert_eq!((Skin::Trail.label(), Skin::Trail.about()), ("Trailer", "A mountain and a 160 km ultra"));
         assert_eq!(Skin::Trail.race(), Some(crate::course::Race::Ultra));
         assert_eq!(Skin::Runner.race(), Some(crate::course::Race::Track));
         assert_eq!(Skin::Eater.race(), None);

@@ -3,6 +3,7 @@
 //! applies and is saved at once, so there is no OK button; Esc, the close button or a click
 //! outside closes it. A new section is one entry in `SECTIONS` and one function drawing its cards.
 use super::*;
+use super::skin_tiles;
 use super::updater::{now_secs, CheckStatus, UpdateState};
 use crate::settings::{count_label, minutes_label, ClaudeModel, CodeFont, CommitLanguage, Settings, UiFont, UpdateChannel, DIFF_CONTEXTS, FETCH_MINUTES, MAX_COMMITS, SUBJECT_RANGE};
 use crate::icon::IconColour;
@@ -11,7 +12,7 @@ use crate::ui::appearance_icon;
 use egui::{pos2, vec2, Align, Align2, CornerRadius, Key, Layout, Margin, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2};
 
 // Everything sits on an 8-point grid.
-const WIN_W: f32 = 720.0;
+const WIN_W: f32 = 832.0;
 const WIN_H: f32 = 480.0;
 const SIDEBAR_W: f32 = 176.0;
 /// The title row at the top of both panes.
@@ -289,32 +290,70 @@ fn appearance(ui: &mut Ui, pane: &mut Pane<'_>) {
             s.code_font = f;
         }
     });
-    card(ui, |c| {
-        let s = &mut *pane.settings;
-        // Five skins with names of every length (#212, #207): each as wide as its name.
-        let skins = crate::settings::Skin::ALL;
-        let widths: Vec<f32> = skins.iter().map(|k| c.ui.painter().layout_no_wrap(k.label().into(), theme::secondary(), Color32::WHITE).size().x + 18.0).collect();
-        // Five segments leave no room for the help beside them: the picker goes on a line of its own.
-        let r = c.strip(48.0 + SEG_H + 14.0, true);
-        let k = theme::c();
-        let p = c.ui.painter();
-        p.text(pos2(r.left(), r.top() + 17.0), Align2::LEFT_CENTER, "Skin", theme::body(), k.text);
-        p.text(pos2(r.left(), r.top() + 35.0), Align2::LEFT_CENTER, s.skin.about(), theme::secondary(), k.dim);
-        let ctrl = Rect::from_min_size(pos2(r.left(), r.top() + 48.0), vec2(widths.iter().sum::<f32>(), SEG_H));
-        let chosen = skins.iter().position(|k| *k == s.skin).unwrap_or(0);
-        let picked = segmented_by(c.ui, ctrl, &widths, chosen, true, "skin", |p, r, i, fg, _| {
-            p.text(r.center(), Align2::CENTER_CENTER, skins[i].label(), theme::secondary(), fg);
-        });
-        if let Some(i) = picked {
-            s.skin = skins[i];
-        }
-    });
+    card(ui, |c| skin_card(c, &mut pane.settings.skin));
     card(ui, |c| {
         let ctrl = c.row("App icon", "In the Dock and the Finder", vec2(SWATCHES_W, SWATCH + 8.0), true);
         if let Some(colour) = icon_swatches(c.ui, ctrl, pane.icon, pane.cmds) {
             pane.settings.app_icon = colour;
         }
     });
+}
+
+/// The Skin card (#220): the chosen skin's description in full, then one tile per skin across
+/// the card, each with its picture, its name and a short line. A click chooses it.
+fn skin_card(c: &mut Card, skin: &mut crate::settings::Skin) {
+    use crate::settings::Skin;
+    let k = theme::c();
+    let width = c.ui.available_width();
+    let about = c.ui.painter().layout(skin.about().into(), theme::secondary(), k.dim, width);
+    let gap = 8.0;
+    let tile_w = (width - gap * (Skin::ALL.len() - 1) as f32) / Skin::ALL.len() as f32;
+    let preview_h = 74.0;
+    // Each short line may wrap on a narrow tile: the tiles are as tall as the tallest.
+    let lines: Vec<_> = Skin::ALL.iter().map(|s| c.ui.painter().layout(s.tagline().into(), theme::small(), k.dim, tile_w - 8.0)).collect();
+    let text_h = 8.0 + 16.0 + lines.iter().map(|g| g.size().y).fold(0.0, f32::max) + 9.0;
+    let tile_h = preview_h + text_h;
+    let r = c.strip(14.0 + 18.0 + 4.0 + about.size().y + 12.0 + tile_h + 14.0, true);
+    let p = c.ui.painter().clone();
+    p.text(pos2(r.left(), r.top() + 23.0), Align2::LEFT_CENTER, "Skin", theme::body(), k.text);
+    let about_pos = pos2(r.left(), r.top() + 14.0 + 18.0 + 4.0);
+    p.galley(about_pos, about.clone(), k.dim);
+    let top = about_pos.y + about.size().y + 12.0;
+    let well = theme::tint(k.strong, k.bg, if theme::is_light() { 0.06 } else { 0.0 });
+    for (i, s) in Skin::ALL.into_iter().enumerate() {
+        let tile = Rect::from_min_size(pos2(r.left() + i as f32 * (tile_w + gap), top), vec2(tile_w, tile_h));
+        let resp = c.ui.interact(tile, c.ui.scope_id().with(("skin_tile", i)), Sense::click());
+        let on = s == *skin;
+        if resp.hovered() {
+            c.ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        p.rect_filled(tile, CornerRadius::same(8), k.elevated);
+        let top_round = CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 };
+        let pre = Rect::from_min_size(tile.min, vec2(tile_w, preview_h));
+        p.rect_filled(pre, top_round, skin_tiles::backdrop(s).unwrap_or(well));
+        skin_tiles::draw(&p.with_clip_rect(pre), pre.shrink2(vec2(6.0, 5.0)), s);
+        p.hline(tile.x_range(), pre.bottom(), Stroke::new(1.0_f32, k.border));
+        p.text(pos2(tile.left() + 6.0, pre.bottom() + 15.0), Align2::LEFT_CENTER, s.label(), theme::body(), if on { k.strong } else { k.text });
+        p.galley(pos2(tile.left() + 6.0, pre.bottom() + 8.0 + 16.0), lines[i].clone(), k.dim);
+        let (w, col) = if on {
+            (2.0, k.accent)
+        } else if resp.hovered() {
+            (1.0, k.widget_hover_border)
+        } else {
+            (1.0, k.border_strong)
+        };
+        p.rect_stroke(tile, CornerRadius::same(8), Stroke::new(w, col), StrokeKind::Inside);
+        if on {
+            let badge = pos2(tile.right() - 11.0, tile.top() + 11.0);
+            p.circle_filled(badge, 8.0, k.accent);
+            let tick = Stroke::new(1.6_f32, k.on_accent);
+            p.line_segment([badge + vec2(-3.5, 0.5), badge + vec2(-1.0, 3.0)], tick);
+            p.line_segment([badge + vec2(-1.0, 3.0), badge + vec2(3.5, -2.5)], tick);
+        }
+        if resp.clicked() {
+            *skin = s;
+        }
+    }
 }
 
 fn rgb(c: [u8; 3]) -> Color32 {

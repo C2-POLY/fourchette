@@ -20,6 +20,7 @@ mod repos;
 mod resolve;
 mod review;
 mod settings;
+mod skin_tiles;
 mod snapshot;
 mod tab;
 mod tabs;
