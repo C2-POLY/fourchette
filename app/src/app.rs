@@ -1,3 +1,4 @@
+mod about;
 mod app_icon;
 mod art;
 mod assistant;
@@ -251,8 +252,10 @@ pub enum Cmd {
     UpdateDialog(bool),
     /// The update dialog's "Update and Restart".
     InstallUpdate,
-    /// Settings' "Check now": check for an update at once, unless a check is running.
+    /// About's "Check for Updates": check for an update at once, unless a check is running.
     UpdateCheckNow,
+    /// Opens or closes the About window (#228).
+    About(bool),
     /// The "What's new in Fourchette" dialog's OK.
     CloseWhatsNew,
     /// ⇧⌘] / ⌃Tab (next) and ⇧⌘[ / ⌃⇧Tab (previous), going round.
@@ -316,6 +319,8 @@ pub struct App {
     states: crate::repo_state::States,
     /// The Settings window (⌘,) is open.
     settings_open: bool,
+    /// The About window is open.
+    about_open: bool,
     /// The messy gamer skin's litter and vacuum (#202).
     mess: mess::Mess,
     /// The central view of the frame being drawn (between the sidebar and the details), set by each CentralPanel;
@@ -376,6 +381,7 @@ impl App {
             switcher: None,
             states: Default::default(),
             settings_open: false,
+            about_open: false,
             mess: mess::Mess::default(),
             centre: None,
             race: course::CourseState::default(),
@@ -700,6 +706,10 @@ impl App {
         if let (Ok(v), Some(_)) = (std::env::var("FOURCHETTE_CLONE"), &app.screenshot) {
             app.clone_sample(&v);
         }
+        // FOURCHETTE_ABOUT=1 opens the About window (`=checking`, `=uptodate`, `=error` at that status).
+        if std::env::var("FOURCHETTE_ABOUT").is_ok() {
+            app.about_open = true;
+        }
         // FOURCHETTE_SETTINGS=1 opens the Settings window, FOURCHETTE_SETTINGS=<section> at that section.
         if let Ok(v) = std::env::var("FOURCHETTE_SETTINGS") {
             app.settings_open = true;
@@ -721,7 +731,7 @@ impl App {
     fn modal(&self) -> bool {
         let golden = self.meal.golden && self.library.settings.skin == crate::settings::Skin::Eater;
         let gg = self.xp.gg && self.library.settings.skin == crate::settings::Skin::Player;
-        self.tab().dialog.is_some() || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher || golden || gg
+        self.tab().dialog.is_some() || self.about_open || self.update.dialog || self.update.whats_new.is_some() || self.clone.is_some() || self.race.finisher || golden || gg
     }
 
     /// Opens `r` in the active tab, in place of the repository it showed.
@@ -851,7 +861,7 @@ impl App {
                     }
                     // Another channel: check on it at once, so the pill shows what it offers.
                     if s.update_channel != self.library.settings.update_channel {
-                        self.update.check_now(s.update_channel);
+                        self.update.check_now(s.update_channel, false);
                     }
                     if s.app_icon != self.library.settings.app_icon {
                         self.icon_chosen(s.app_icon);
@@ -918,7 +928,8 @@ impl App {
                 }
                 Cmd::UpdateDialog(open) => self.update_dialog_open(open),
                 Cmd::InstallUpdate => self.update_install(ctx),
-                Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel),
+                Cmd::UpdateCheckNow => self.update.check_now(self.library.settings.update_channel, true),
+                Cmd::About(open) => self.about_open(open),
                 Cmd::CloseWhatsNew => self.update.whats_new = None,
                 Cmd::Pull => {
                     let s = self.library.settings;

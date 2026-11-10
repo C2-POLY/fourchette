@@ -367,8 +367,8 @@ pub fn enabled(id: Id, s: &State) -> bool {
     let overlay = free && !s.settings;
     let git = s.repo && !s.busy && free;
     match id {
-        Id::About | Id::Copy | Id::ReleaseNotes | Id::Website | Id::Issues => true,
-        Id::Settings | Id::OpenRepository | Id::ToggleDetails | Id::DetailsRight | Id::DetailsBottom => free,
+        Id::Copy | Id::ReleaseNotes | Id::Website | Id::Issues => true,
+        Id::About | Id::Settings | Id::OpenRepository | Id::ToggleDetails | Id::DetailsRight | Id::DetailsBottom => free,
         Id::Switcher | Id::Palette => overlay,
         Id::NoRecent => false,
         Id::Undo => s.text_focus || (git && s.can_undo),
@@ -439,15 +439,14 @@ pub use other::{install, pasteboard_text, sync, take};
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod mac {
-    use super::{Action, Entry, Id, Pick, Shortcut, State, APP_NAME};
+    use super::{Action, Entry, Id, Pick, Shortcut, State};
     use objc2::rc::Retained;
-    use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, Sel};
+    use objc2::runtime::{NSObject, NSObjectProtocol, Sel};
     use objc2::{define_class, msg_send, sel, MainThreadOnly};
     use objc2_app_kit::{
-        NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionVersion, NSApplication, NSControlStateValueOff, NSControlStateValueOn,
-        NSEventModifierFlags, NSMenu, NSMenuItem, NSMenuItemValidation, NSPasteboard, NSPasteboardTypeString,
+        NSApplication, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSMenu, NSMenuItem, NSMenuItemValidation, NSPasteboard, NSPasteboardTypeString,
     };
-    use objc2_foundation::{ns_string, MainThreadMarker, NSDictionary, NSString};
+    use objc2_foundation::{ns_string, MainThreadMarker, NSString};
     use std::cell::RefCell;
 
     define_class!(
@@ -462,10 +461,6 @@ mod mac {
             #[unsafe(method(menuAction:))]
             fn menu_action(&self, sender: &NSMenuItem) {
                 let Some(pick) = Pick::from_tag(sender.tag()) else { return };
-                if pick == Pick::Item(Id::About) {
-                    about();
-                    return;
-                }
                 UI.with(|u| {
                     let mut u = u.borrow_mut();
                     u.queue.push(pick);
@@ -621,19 +616,6 @@ mod mac {
     pub fn pasteboard_text() -> Option<String> {
         let s = unsafe { NSPasteboard::generalPasteboard().stringForType(NSPasteboardTypeString) }?;
         Some(s.to_string())
-    }
-
-    /// The standard About panel, with the name and version an unbundled binary lacks.
-    fn about() {
-        let Some(mtm) = MainThreadMarker::new() else { return };
-        let version = NSString::from_str(env!("CARGO_PKG_VERSION"));
-        let keys: [&NSString; 3] = unsafe { [NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionVersion] };
-        let values = vec![NSString::from_str(APP_NAME), version, NSString::new()];
-        let dict: Retained<NSDictionary<NSString, NSString>> = NSDictionary::from_retained_objects(&keys, &values);
-        // SAFETY: an NSDictionary of NSString values is an NSDictionary of objects.
-        let dict: Retained<NSDictionary<NSString, AnyObject>> = unsafe { Retained::cast_unchecked(dict) };
-        let app = NSApplication::sharedApplication(mtm);
-        unsafe { app.orderFrontStandardAboutPanelWithOptions(&dict) };
     }
 
     fn item(mtm: MainThreadMarker, title: &str, action: Option<Sel>, key: Option<Shortcut>) -> Retained<NSMenuItem> {
@@ -839,6 +821,15 @@ mod tests {
             assert!(!enabled(id, &s), "{id:?}");
         }
         assert!(enabled(Id::Settings, &s), "⌘, closes it again");
+    }
+
+    #[test]
+    fn about_is_an_ordinary_action_that_waits_for_a_dialog_to_close() {
+        assert!(enabled(Id::About, &open_repo()));
+        assert!(enabled(Id::About, &State::default()), "no repository needed");
+        let d = State { modal: true, ..open_repo() };
+        assert!(!enabled(Id::About, &d), "the About window is itself a dialog");
+        assert!(enabled(Id::About, &State { settings: true, ..open_repo() }), "Settings closes when it opens");
     }
 
     #[test]

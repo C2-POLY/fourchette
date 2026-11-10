@@ -627,7 +627,7 @@ fn button_at(ui: &mut Ui, rect: Rect, id: &str, text: &str, kind: crate::modal::
 }
 
 /// `text` cut to `max` characters, with an ellipsis when it was longer.
-fn ellipsize(text: &str, max: usize) -> String {
+pub(super) fn ellipsize(text: &str, max: usize) -> String {
     let line = text.lines().next().unwrap_or_default().trim();
     if line.chars().count() <= max && !text.trim().contains('\n') {
         return line.to_string();
@@ -636,7 +636,7 @@ fn ellipsize(text: &str, max: usize) -> String {
 }
 
 /// "Checked just now", "Checked 5 min ago", "Checked 2 h ago", from seconds since then.
-fn checked_ago(secs: i64) -> String {
+pub(super) fn checked_ago(secs: i64) -> String {
     match secs.max(0) {
         s if s < 60 => "Checked just now".into(),
         s if s < 3600 => format!("Checked {} min ago", s / 60),
@@ -645,7 +645,8 @@ fn checked_ago(secs: i64) -> String {
     }
 }
 
-/// The update channel, the installed version and the last check, with "Check now".
+/// The update channel, the installed version and the last check. "Check for Updates" is in the
+/// About window (#228).
 fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
     use crate::modal::Kind;
     use crate::update::{commit, Version};
@@ -665,11 +666,7 @@ fn updates(ui: &mut Ui, pane: &mut Pane<'_>) {
     card(ui, |c| {
         let current = Version::current();
         let built = match commit() { Some(c) => format!("Built from {}", short(c)), None => "The version installed".to_string() };
-        let can = u.can_check();
-        let ctrl = c.row(&format!("Fourchette {current}"), &built, vec2(120.0, 30.0), true);
-        if button_at(c.ui, ctrl, "update_check_now", "Check now", Kind::Plain, can && status != CheckStatus::Checking) {
-            pane.cmds.push(Cmd::UpdateCheckNow);
-        }
+        c.row(&format!("Fourchette {current}"), &built, vec2(0.0, 30.0), true);
         let ago = u.checked_at.map(|t| checked_ago(now_secs() - t));
         let (title, help) = match &status {
             CheckStatus::Off => ("Not checked".to_string(), "Checks only run in the installed app".to_string()),
