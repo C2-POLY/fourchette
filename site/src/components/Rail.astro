@@ -1,0 +1,39 @@
+---
+// The graph's lanes down the left of a section, so the page reads as one
+// history: `main` runs through every section, a `branch` section forks onto
+// its own lane and merges back, `start` gathers the lanes into main at the top
+// of the page and `end` stops main at its last commit. Drawn on scroll by
+// scripts/motion.ts; fully drawn without it.
+interface Props {
+  kind: 'start' | 'main' | 'branch' | 'end';
+}
+
+const { kind } = Astro.props;
+---
+
+<div class:list={['rail', `rail-${kind}`]} aria-hidden="true" data-rail>
+  {
+    kind === 'start' && (
+      <svg class="gather" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path class="l1" d="M95 0C95 55 28 45 28 100" pathLength="1" />
+        <path class="l2" d="M67 0C67 60 28 40 28 100" pathLength="1" />
+        <path class="l3" d="M5 0C5 60 28 40 28 100" pathLength="1" />
+      </svg>
+    )
+  }
+  <span class="trunk" data-trunk></span>
+  {
+    kind === 'branch' && (
+      <>
+        <svg class="fork" viewBox="0 0 10 40" preserveAspectRatio="none" data-curve>
+          <path d="M0 0C0 24 10 16 10 40" pathLength="1" />
+        </svg>
+        <span class="branch" data-branch />
+        <svg class="merge" viewBox="0 0 10 40" preserveAspectRatio="none" data-curve>
+          <path d="M10 0C10 24 0 16 0 40" pathLength="1" />
+        </svg>
+      </>
+    )
+  }
+  <span class="node" data-node></span>
+</div>

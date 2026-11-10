@@ -1,7 +1,13 @@
 ---
+// The home page, read as one history: each section is a commit on `main`
+// (Rail.astro draws the lanes), the bigger subjects fork onto their own lane
+// and merge back. The motion is in scripts/motion.ts.
 import Shot from './Shot.astro';
+import Wipe from './Wipe.astro';
 import Phone from './Phone.astro';
-import Icon from './Icon.astro';
+import Rail from './Rail.astro';
+import CommitLine from './CommitLine.astro';
+import UndoDemo from './UndoDemo.astro';
 import { type Lang, t, repo, releases, project } from '../i18n';
 
 interface Props {
@@ -10,122 +16,265 @@ interface Props {
 
 const { lang } = Astro.props;
 const s = t(lang);
+const sc = s.showcase;
 const steps = ['git clone https://github.com/C2-POLY/fourchette.git', 'cd fourchette/app', 'cargo run --release -- ~/path/to/a/repository'];
+const output = ['   Compiling fourchette (app)', '    Finished `release` profile [optimized]', '     Running `target/release/fourchette`'];
+// Each word in its own box, so the title can rise word by word.
+const words = (text: string) => text.split(' ');
+const github = 'M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z';
 ---
 
-<section class="hero">
-  <div class="wrap">
-    <p class="badge">{s.hero.badge}</p>
-    <h1>{s.hero.titleStart} <span class="accent">{s.hero.titleAccent}</span></h1>
-    <p class="lead">{s.hero.lead}</p>
-    <div class="actions">
-      <a class="button primary" href={releases}>{s.hero.primary}</a>
-      <a class="button" href={repo}>
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"></path></svg>
-        {s.hero.secondary}
-      </a>
-    </div>
-    <Shot name="history" alt={s.hero.shotAlt} eager />
-  </div>
-</section>
-
-<section id="features" class="section">
-  <div class="wrap">
-    <h2>{s.features.title}</h2>
-    <ul class="grid">
-      {
-        s.features.items.map((f) => (
-          <li class="card">
-            <Icon name={f.icon} />
-            <h3>{f.title}</h3>
-            <p>{f.text}</p>
-          </li>
-        ))
-      }
-    </ul>
-  </div>
-</section>
-
-{
-  s.showcase.map((sc, i) => (
-    <section class:list={['section', 'showcase', { alt: i % 2 === 1 }]}>
-      <div class="wrap">
-        <div class="showcase-text">
-          <p class="kicker">{sc.kicker}</p>
-          <h2>{sc.title}</h2>
-          <p class="lead">{sc.text}</p>
+<section class="commit hero" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="start" />
+    <div class="body">
+      <CommitLine seed="hero" label="HEAD → main" kind="head" />
+      <h1>
+        <span class="t1">{words(s.hero.titleStart).map((w) => <><span class="w"><span>{w}</span></span>{' '}</>)}</span>
+        <span class="t2">{words(s.hero.titleEnd).map((w) => <><span class="w"><span>{w}</span></span>{' '}</>)}</span>
+      </h1>
+      <div class="hero-row">
+        <p class="lead" data-in>{s.hero.lead}</p>
+        <div class="actions" data-in>
+          <a class="button primary" href={releases}>
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            {s.hero.primary}
+          </a>
+          <a class="button" href={repo}>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d={github}></path></svg>
+            {s.hero.secondary}
+          </a>
         </div>
-        <Shot name={sc.shot} alt={sc.alt} />
       </div>
-    </section>
-  ))
-}
-
-<section class:list={['section', 'showcase', { alt: s.showcase.length % 2 === 1 }]}>
-  <div class="wrap">
-    <div class="showcase-text">
-      <p class="kicker">{s.companion.kicker}</p>
-      <h2>{s.companion.title}</h2>
-      <p class="lead">{s.companion.text}</p>
-      <p class="dim">{s.companion.note}</p>
-    </div>
-    <div class="phones">
-      {s.companion.shots.map((p) => <Phone name={p.name} alt={p.alt} />)}
+      <p class="note" data-in>{s.hero.note}</p>
+      <div class="hero-stage">
+        <div class="hero-shot" data-hero-shot>
+          <Shot name="history" alt={s.hero.shotAlt} eager reveal={false} />
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="teams" class="section">
-  <div class="wrap">
-    <h2>{s.teams.title}</h2>
-    <ul class="grid three">
-      {
-        s.teams.items.map((it) => (
-          <li class="card">
-            <h3>{it.title}</h3>
-            <p>{it.text}</p>
-          </li>
-        ))
-      }
-    </ul>
-  </div>
-</section>
-
-<section id="build" class="section">
-  <div class="wrap build">
-    <div>
-      <h2>{s.build.title}</h2>
-      <p class="lead">{s.build.lead}</p>
-      <p><a class="button primary" href={releases}>{s.build.download}</a></p>
-      <h3>{s.build.installTitle}</h3>
-      <ol class="needs">
-        {s.build.install.map((n) => <li>{n}</li>)}
+<section id="features" class="commit log-section" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="main" />
+    <div class="body split">
+      <header class="sticky-head">
+        <CommitLine seed="features" label={s.features.ref} />
+        <h2 data-in>{s.features.title}</h2>
+        <p class="lead" data-in>{s.features.lead}</p>
+      </header>
+      <ol class="log">
+        {
+          s.features.items.map((f, i) => (
+            <li class="log-row" style={`--lane: var(--lane-${(i % 4) + 1})`} data-log-row>
+              <span class="log-graph" aria-hidden="true">
+                <i />
+              </span>
+              <div>
+                <p class="log-ref">{f.ref}</p>
+                <h3>{f.title}</h3>
+                <p>{f.text}</p>
+              </div>
+            </li>
+          ))
+        }
       </ol>
-      <h3>{s.build.needsTitle}</h3>
-      <ul class="needs">
-        {s.build.needs.map((n) => <li>{n}</li>)}
-      </ul>
-    </div>
-    <div>
-      <h3>{s.build.stepsTitle}</h3>
-      <div class="terminal">
-        <div class="terminal-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-        <pre><code>{steps.map((l) => <span class="line"><span class="prompt" aria-hidden="true">$ </span>{l}</span>)}</code></pre>
-        <button class="copy" type="button" data-copy={steps.join('\n')} data-done={s.build.copied}>{s.build.copy}</button>
-      </div>
-      <p class="dim small-text">{s.build.note}</p>
     </div>
   </div>
 </section>
 
-<section class="section open">
-  <div class="wrap">
-    <h2>{s.open.title}</h2>
-    <p class="lead">{s.open.text}</p>
-    <div class="actions center">
-      <a class="button primary" href={repo}>{s.open.code}</a>
-      <a class="button" href={`${repo}/issues`}>{s.open.issues}</a>
-      <a class="button" href={project}>{s.open.roadmap}</a>
+<section class="commit tint undo-section" style="--lane: var(--lane-4)">
+  <div class="wrap commit-grid">
+    <Rail kind="branch" />
+    <div class="body split wide-right">
+      <div>
+        <CommitLine seed="undo" label={s.undo.ref} />
+        <h2 data-in>{s.undo.title}</h2>
+        <p class="lead" data-in>{s.undo.text}</p>
+        <p class="hint" data-in>{s.undo.try}</p>
+      </div>
+      <div data-in>
+        <UndoDemo lang={lang} />
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="commit stage" style="--lane: var(--lane-2)" data-stage>
+  <div class="wrap commit-grid">
+    <Rail kind="branch" />
+    <div class="body stage-body">
+      <div class="stage-step" data-step>
+        <div class="stage-text">
+          <CommitLine seed="board" label={sc.board.ref} />
+          <h2>{sc.board.title}</h2>
+          <p class="lead">{sc.board.text}</p>
+        </div>
+        <Shot name="board-drag" alt={sc.board.alt} reveal={false} />
+      </div>
+      <div class="stage-step" data-step>
+        <div class="stage-text">
+          <CommitLine seed="city" label={sc.city.ref} />
+          <h2>{sc.city.title}</h2>
+          <p class="lead">{sc.city.text}</p>
+        </div>
+        <Shot name="city" alt={sc.city.alt} reveal={false} />
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="commit" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="main" />
+    <div class="body">
+      <div class="text-row">
+        <div>
+          <CommitLine seed="home" label={sc.home.ref} />
+          <h2 data-in>{sc.home.title}</h2>
+        </div>
+        <p class="lead" data-in>{sc.home.text}</p>
+      </div>
+      <Shot name="home" alt={sc.home.alt} />
+    </div>
+  </div>
+</section>
+
+<section class="commit" style="--lane: var(--lane-3)">
+  <div class="wrap commit-grid">
+    <Rail kind="branch" />
+    <div class="body side side-shot-left">
+      <Shot name="cleanup" alt={sc.cleanup.alt} />
+      <div>
+        <CommitLine seed="cleanup" label={sc.cleanup.ref} />
+        <h2 data-in>{sc.cleanup.title}</h2>
+        <p class="lead" data-in>{sc.cleanup.text}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="commit" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="main" />
+    <div class="body side">
+      <div>
+        <CommitLine seed="palette" label={sc.palette.ref} />
+        <h2 data-in>{sc.palette.title}</h2>
+        <p class="lead" data-in>{sc.palette.text}</p>
+        <p class="keys" data-in aria-hidden="true"><kbd>⌘</kbd><kbd>K</kbd> <span class="typed" data-typed="br">br</span></p>
+      </div>
+      <Shot name="palette" alt={sc.palette.alt} />
+    </div>
+  </div>
+</section>
+
+<section class="commit" style="--lane: var(--lane-1)">
+  <div class="wrap commit-grid">
+    <Rail kind="branch" />
+    <div class="body">
+      <div class="text-row">
+        <div>
+          <CommitLine seed="settings" label={sc.settings.ref} />
+          <h2 data-in>{sc.settings.title}</h2>
+        </div>
+        <p class="lead" data-in>{sc.settings.text}</p>
+      </div>
+      <Wipe name="settings" alt={sc.settings.alt} />
+    </div>
+  </div>
+</section>
+
+<section class="commit tint" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="main" />
+    <div class="body side companion">
+      <div>
+        <CommitLine seed="companion" label={s.companion.ref} />
+        <h2 data-in>{s.companion.title}</h2>
+        <p class="lead" data-in>{s.companion.text}</p>
+        <p class="hint" data-in>{s.companion.note}</p>
+      </div>
+      <div class="phones" data-phones>
+        {s.companion.shots.map((p) => <Phone name={p.name} alt={p.alt} />)}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="teams" class="commit" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="main" />
+    <div class="body split">
+      <header>
+        <CommitLine seed="teams" label={s.teams.ref} />
+        <h2 data-in>{s.teams.title}</h2>
+      </header>
+      <dl class="config" data-in>
+        <p class="config-head" aria-hidden="true">[team]</p>
+        {
+          s.teams.items.map((it) => (
+            <div class="config-row">
+              <dt>
+                <code>{it.key}</code>
+                <span class="eq" aria-hidden="true">=</span>
+              </dt>
+              <dd>
+                <strong>{it.title}.</strong> {it.text}
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section id="build" class="commit tint" style="--lane: var(--lane-3)">
+  <div class="wrap commit-grid">
+    <Rail kind="branch" />
+    <div class="body build">
+      <div>
+        <CommitLine seed="build" label={s.build.ref} kind="tag" />
+        <h2 data-in>{s.build.title}</h2>
+        <p class="lead" data-in>{s.build.lead}</p>
+        <p data-in class="build-cta"><a class="button primary" href={releases}>{s.build.download}</a></p>
+        <h3>{s.build.installTitle}</h3>
+        <ol class="needs">
+          {s.build.install.map((n) => <li>{n}</li>)}
+        </ol>
+        <h3>{s.build.needsTitle}</h3>
+        <ul class="needs">
+          {s.build.needs.map((n) => <li>{n}</li>)}
+        </ul>
+      </div>
+      <div>
+        <h3 class="steps-title">{s.build.stepsTitle}</h3>
+        <div class="terminal" data-terminal>
+          <div class="terminal-bar" aria-hidden="true"><span></span><span></span><span></span><em>zsh</em></div>
+          <pre><code>{steps.map((l) => <span class="line"><span class="prompt" aria-hidden="true">$ </span><span class="cmd" data-cmd>{l}</span></span>)}{output.map((l) => <span class="line out" aria-hidden="true" data-out>{l}</span>)}<span class="line" aria-hidden="true"><span class="prompt">$ </span><span class="caret"></span></span></code></pre>
+          <button class="copy" type="button" data-copy={steps.join('\n')} data-done={s.build.copied}>{s.build.copy}</button>
+        </div>
+        <p class="hint">{s.build.note}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="commit open" style="--lane: var(--accent)">
+  <div class="wrap commit-grid">
+    <Rail kind="end" />
+    <div class="body">
+      <CommitLine seed="open" label={s.open.ref} kind="head" />
+      <h2 class="big" data-in>{s.open.title}</h2>
+      <p class="lead" data-in>{s.open.text}</p>
+      <div class="actions" data-in>
+        <a class="button primary" href={repo}>{s.open.code}</a>
+        <a class="button" href={`${repo}/issues`}>{s.open.issues}</a>
+        <a class="button" href={project}>{s.open.roadmap}</a>
+      </div>
     </div>
   </div>
 </section>
