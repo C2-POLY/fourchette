@@ -76,18 +76,16 @@ pub fn layout(commits: &[Commit]) -> (Vec<Row>, usize) {
             }
             let existing = lanes.iter().position(|l| l.as_ref().map(|(h, _)| h == p).unwrap_or(false));
             match existing {
-                Some(j) if pi == 0 && node < j => {
-                    // The leftmost lane keeps the shared parent; the other one merges into it.
-                    let col = lanes[j].as_ref().unwrap().1;
-                    lanes[j] = None;
+                Some(_) if pi == 0 => {
+                    // Another lane awaits the same parent: keep our own line down to
+                    // its row, where all of them end on its dot.
                     lanes[node] = Some((p.clone(), color));
                     fresh.push(node);
                     edges.push(Edge { from: node, to: node, color });
-                    edges.push(Edge { from: j, to: node, color: col });
                 }
                 Some(j) => {
                     let col = lanes[j].as_ref().unwrap().1;
-                    edges.push(Edge { from: node, to: j, color: if pi == 0 { color } else { col } });
+                    edges.push(Edge { from: node, to: j, color: col });
                 }
                 None => {
                     let (slot, col) = if pi == 0 && lanes[node].is_none() {
@@ -163,11 +161,10 @@ mod tests {
 
     #[test]
     fn freed_lane_is_compacted() {
-        // m merges x (lane 1) and y (lane 2); x's branch then ends on a shared base.
-        let commits = vec![c("m", &["b", "x", "y"]), c("x", &["b"]), c("y", &["b"]), c("b", &[])];
+        // m merges x (lane 1) and y (lane 2); x's branch ends, so y slides from lane 2 to 1.
+        let commits = vec![c("m", &["b", "x", "y"]), c("x", &[]), c("y", &["b"]), c("b", &[])];
         let (rows, _) = layout(&commits);
         assert_eq!(rows[1].lane, 1);
-        // x's line merges into b (lane 0); y slides from lane 2 to lane 1 in x's bottom edges.
         assert!(rows[1].bottom.iter().any(|e| e.from == 2 && e.to == 1));
         assert_eq!(rows[2].lane, 1);
         assert_eq!(rows[3].lane, 0);
@@ -207,6 +204,31 @@ mod tests {
             if main_hashes.contains(&cm.hash) {
                 assert_eq!(r.lane, 0, "{} left lane 0", cm.hash);
             }
+        }
+    }
+
+    #[test]
+    fn branches_reach_their_shared_parent_without_looping() {
+        // Two branches forked from the same main commit `b`, merged one after the other.
+        let commits = vec![c("m2", &["m1", "y"]), c("y", &["b"]), c("m1", &["b", "x"]), c("x", &["b"]), c("b", &[])];
+        let (rows, _) = layout(&commits);
+        for (i, r) in rows.iter().enumerate() {
+            // No column is both entered from another column and left toward another one.
+            for e1 in r.bottom.iter().filter(|e| e.from != e.to) {
+                assert!(
+                    !r.bottom.iter().any(|e2| e2.from == e1.to && e2.to != e2.from),
+                    "row {i}: a line enters column {} while another leaves it",
+                    e1.to
+                );
+            }
+        }
+        // In b's row every lane converges on its dot through `top` edges.
+        let b = &rows[4];
+        assert_eq!(b.lane, 0);
+        assert!(b.top.len() >= 2 && b.top.iter().all(|e| e.to == b.lane));
+        // Branch lines stay straight in their own column until b's row.
+        for r in &rows[1..4] {
+            assert!(r.bottom.iter().filter(|e| e.to != 0).all(|e| e.from == e.to || r.lane == e.from));
         }
     }
 
