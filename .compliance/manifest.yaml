@@ -1,0 +1,164 @@
+# Compliance manifest, v0: written by hand, before any schema exists.
+# Purpose: try the format on a real repo (C2-POLY/fourchette#238, C2-POLY/compliance-spec#3).
+# Every item says where it comes from: code (a path), spec (an issue) or declared (a person).
+# What did not fit is in FINDINGS.md next to this file.
+
+spec_version: "0-draft"
+
+service:
+  name: Fourchette
+  repo: C2-POLY/fourchette
+  kind: desktop-app            # also: ios-app (ios/), website (site/)
+  description: A Git client for macOS; an iOS companion reads GitHub; a static website.
+  # Who decides why and how data is processed. For a local app, the person using it
+  # processes the data on their own machine; C2-POLY only receives what the app sends it.
+  controller: user-of-the-app
+  source: {kind: declared, ref: "CLAUDE.md#stack"}
+
+personal_data:
+  - id: git-authorship
+    subjects: [commit authors of the opened repositories]
+    fields:
+      - {name: author name, category: identity}
+      - {name: author email, category: contact}
+      - {name: committer name and email, category: identity}
+    purpose: show history, branches and commits
+    legal_basis: not-applicable (local processing by the user of the app)
+    source: {kind: code, ref: "app/src/git.rs"}
+    linked_files: ["app/src/git.rs"]
+
+  - id: repo-content
+    subjects: [anyone whose data is in the opened repositories]
+    fields:
+      - {name: diffs, file contents, commit subjects, category: unknown (whatever the repository holds)}
+    purpose: show diffs; feed the AI features on request
+    legal_basis: not-applicable (local processing by the user of the app)
+    source: {kind: code, ref: "app/src/git.rs"}
+    linked_files: ["app/src/git.rs", "app/src/ai.rs", "app/src/review.rs", "app/src/resolve.rs", "app/src/pr_draft.rs", "app/src/changelog.rs"]
+
+  - id: github-identity
+    subjects: [the user, members and assignees of their GitHub projects]
+    fields:
+      - {name: GitHub login, category: identity}
+      - {name: repositories and organisations of the user, category: professional}
+      - {name: project items, assignees, labels, category: professional}
+      - {name: pull requests, checks and logs, category: professional}
+      - {name: avatar URL (iOS, decoded, not shown), category: identity}
+    purpose: clone list, project board, pull requests, review requests
+    legal_basis: not-applicable (local processing by the user of the app)
+    source: {kind: code, ref: "app/src/clone.rs, app/src/github.rs, app/src/pulls.rs, ios/Companion/GitHub/GitHubClient.swift"}
+    linked_files: ["app/src/clone.rs", "app/src/github.rs", "app/src/pulls.rs", "app/src/repo_state.rs", "app/src/cockpit.rs", "ios/Companion/GitHub/**"]
+
+  - id: local-paths
+    subjects: [the user]
+    fields:
+      - {name: repository paths (often contain the macOS account name), category: identity}
+      - {name: last opened time per repository, category: usage}
+    purpose: the repository switcher
+    legal_basis: not-applicable (local processing by the user of the app)
+    source: {kind: code, ref: "app/src/library.rs"}
+    linked_files: ["app/src/library.rs", "app/src/settings.rs"]
+
+  - id: github-token-ios
+    subjects: [the user]
+    fields:
+      - {name: GitHub OAuth token (scopes repo, read:org, project), category: credential}
+    purpose: let the iOS companion read GitHub and move a card
+    legal_basis: not-applicable (local processing by the user of the app)
+    source: {kind: code, ref: "ios/Companion/GitHub/DeviceFlow.swift, ios/Companion/GitHub/Keychain.swift"}
+    linked_files: ["ios/Companion/GitHub/DeviceFlow.swift", "ios/Companion/GitHub/Keychain.swift", "ios/Companion/Session.swift"]
+
+storage:
+  - id: library-file
+    kind: file
+    location: "~/Library/Application Support/Fourchette/repos.json (user's Mac)"
+    data: [local-paths]
+    retention: {duration: none, trigger: "until the user removes the repository from the switcher"}
+    source: {kind: code, ref: "app/src/library.rs"}
+
+  - id: memory
+    kind: memory
+    location: process memory (user's Mac)
+    data: [git-authorship, repo-content, github-identity]
+    retention: {duration: session, trigger: "app quit"}
+    source: {kind: code, ref: "app/src/undo.rs, app/src/git.rs"}
+
+  - id: temp-files
+    kind: file
+    location: "$TMPDIR (user's Mac): snapshot PNGs, update download, scratch files"
+    data: [repo-content]
+    retention: {duration: unknown, trigger: "scratch files removed after use; snapshot PNGs left to the OS"}
+    source: {kind: code, ref: "app/src/app/snapshot.rs, app/src/update.rs, app/src/pr_draft.rs"}
+
+  - id: ios-keychain
+    kind: keychain
+    location: "iOS keychain, service com.c2poly.fourchette.companion, this device only"
+    data: [github-token-ios]
+    retention: {duration: none, trigger: "removed on sign-out"}
+    source: {kind: code, ref: "ios/Companion/GitHub/Keychain.swift"}
+
+processors: []
+# No processor contracted by C2-POLY: the app holds no account and sends nothing to a server of ours.
+# The services below are reached with the user's own accounts and tools: they are recipients
+# chosen by the user, not processors of C2-POLY. See FINDINGS.md, point 2.
+
+outbound_flows:
+  - id: update-check
+    to: {name: GitHub (releases API, api.github.com), country: US}
+    data: [IP address, User-Agent "Fourchette/<version>"]
+    frequency: at launch, then every hour
+    account: none
+    source: {kind: code, ref: "app/src/update.rs"}
+
+  - id: github-cli
+    to: {name: GitHub through the gh command line, country: US}
+    data: [github-identity, project status and position writes, PR title and body on click]
+    account: the user's own gh sign-in
+    source: {kind: code, ref: "app/src/github.rs, app/src/pulls.rs, app/src/pr_draft.rs, app/src/changelog.rs"}
+
+  - id: git-remotes
+    to: {name: any Git remote the user configured}
+    data: [repo-content, git-authorship]
+    account: the user's own Git credentials
+    source: {kind: code, ref: "app/src/repo_state.rs"}
+
+  - id: claude-code
+    to: {name: Anthropic, through Claude Code (claude -p), country: US}
+    data: [repo-content (diffs up to 60,000 characters, commit subjects, issue title and body), git-authorship (branch author names in the clean-up prompt)]
+    account: the user's own Claude subscription; API keys removed from the environment
+    trigger: a click on an AI feature, never in the background
+    source: {kind: code, ref: "app/src/ai.rs"}
+
+  - id: ios-github-api
+    to: {name: GitHub (api.github.com, github.com device flow), country: US}
+    data: [github-identity, github-token-ios]
+    account: the user's own GitHub account
+    source: {kind: code, ref: "ios/Companion/GitHub/**"}
+
+automated_decisions:
+  - id: branch-clean-up
+    description: Claude suggests which local branches to delete; the app pre-ticks them; the person confirms.
+    uses_ai: true
+    affects_persons: false
+    human_review: true
+    transparency_notice: the dialog says the suggestion comes from Claude (to check)
+    source: {kind: code, ref: "app/src/ai.rs"}
+
+  - id: generated-text
+    description: commit messages, review, PR draft, conflict resolution, changelog are drafted by Claude and edited or confirmed by the person.
+    uses_ai: true
+    affects_persons: false
+    human_review: true
+    transparency_notice: AI Act Art. 50 — to check whether generated text pushed to GitHub needs marking
+    source: {kind: code, ref: "app/src/ai.rs, app/src/review.rs, app/src/resolve.rs, app/src/pr_draft.rs, app/src/changelog.rs"}
+
+linked_files:
+  - "app/src/ai.rs"
+  - "app/src/update.rs"
+  - "app/src/library.rs"
+  - "app/src/settings.rs"
+  - "app/src/clone.rs"
+  - "app/src/github.rs"
+  - "app/src/pulls.rs"
+  - "ios/Companion/GitHub/**"
+  - "app/Cargo.toml"
