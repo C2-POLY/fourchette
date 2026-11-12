@@ -296,6 +296,20 @@ impl Repo {
         run_in(&self.root, args)
     }
 
+    /// The reflogs of the local and remote branches, read only. Empty when Git fails.
+    pub fn reflogs(&self) -> crate::outside::Reflogs {
+        let out = self.git(&["reflog", "show", "--all", "--format=%gD%x09%H%x09%gs"]).unwrap_or_default();
+        crate::outside::Reflogs::parse(&out)
+    }
+
+    /// The Git folder shared by the worktrees of this repository.
+    pub fn common_dir(&self) -> Option<PathBuf> {
+        let out = self.git(&["rev-parse", "--git-common-dir"]).ok()?;
+        let p = PathBuf::from(out.trim());
+        let p = if p.is_absolute() { p } else { self.root.join(p) };
+        Some(p.canonicalize().unwrap_or(p))
+    }
+
     pub fn commits(&self, limit: usize) -> Vec<Commit> {
         let fmt = format!("--pretty=format:%H{SEP}%P{SEP}%aN{SEP}%aE{SEP}%at{SEP}%s");
         let n = format!("-n{limit}");

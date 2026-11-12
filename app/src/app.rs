@@ -314,6 +314,8 @@ pub struct App {
     /// The open repositories. There is always at least one; the views show `tabs[active]`.
     tabs: Vec<Tab>,
     active: usize,
+    /// What each repository's reflogs showed last, by common Git folder (#241).
+    outside: HashMap<PathBuf, crate::outside::Ledger>,
     toast: Option<tab::Notice>,
     library: crate::library::Library,
     switcher: Option<repos::Switcher>,
@@ -378,6 +380,7 @@ impl App {
         App {
             tabs: vec![Tab::new()],
             active: 0,
+            outside: HashMap::new(),
             toast: None,
             library,
             switcher: None,
@@ -777,7 +780,16 @@ impl App {
     /// the Gamer's session (#218).
     /// Other skins drop it.
     fn take_strides(&mut self) {
-        let strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
+        let mut strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
+        // What was done outside the app (#241): the ledger advances under every skin, so a skin
+        // chosen later does not replay old entries.
+        for t in &mut self.tabs {
+            let own = std::mem::take(&mut t.own);
+            if let Some((dir, read)) = t.reflogs.take() {
+                let mut own = own;
+                strides.extend(self.outside.entry(dir).or_default().advance(&read, &mut own));
+            }
+        }
         if strides.is_empty() {
             return;
         }

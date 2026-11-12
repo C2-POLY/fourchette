@@ -91,6 +91,11 @@ pub struct Tab {
     /// What moved the Runner skin's runner, or fed the Big eater, since the app last looked,
     /// with the toast's message (`App::take_strides` takes them).
     pub(super) strides: Vec<(crate::course::Stride, String)>,
+    /// The last reflogs read with the repository's common Git folder, for `App::take_strides`
+    /// to count what was done outside the app (#241).
+    pub(super) reflogs: Option<(PathBuf, crate::outside::Reflogs)>,
+    /// What the app's own actions are about to leave in the reflogs, so they are not counted twice.
+    pub(super) own: Vec<crate::course::Stride>,
     /// The Ultra-trail's km, copied here each frame for the Mountain view's "You" (#207).
     pub(super) trail_km: f32,
     /// The screen x of the Mountain view's km 0 and km 160 this frame, if it is drawn: the
@@ -218,6 +223,8 @@ impl Tab {
             snap: Default::default(),
             room_look: super::room::Look::default(),
             strides: Vec::new(),
+            reflogs: None,
+            own: Vec::new(),
         }
     }
 
@@ -344,6 +351,15 @@ impl Tab {
             self.sel = if self.commits.is_empty() { Sel::None } else { Sel::Commit(0) };
         }
         self.details_for.clear();
+        self.read_reflogs();
+    }
+
+    fn read_reflogs(&mut self) {
+        if let Some(r) = &self.repo {
+            if let Some(dir) = r.common_dir() {
+                self.reflogs = Some((dir, r.reflogs()));
+            }
+        }
     }
 
     pub(super) fn refresh_status(&mut self) {
@@ -354,6 +370,7 @@ impl Tab {
             self.status = r.status();
         }
         self.read_operation();
+        self.read_reflogs();
         self.last_status = Instant::now();
     }
 
@@ -900,6 +917,10 @@ impl Tab {
         let res = crate::merge::run(r, merge, way);
         let squash_stopped = way == crate::merge::Way::Squash && r.operation().is_none() && !r.conflicted_files().is_empty();
         let steps = self.undo.len();
+        // A squash leaves a commit in the reflog, the others a merge.
+        if res.is_ok() && !squash_stopped {
+            self.own.push(if way == crate::merge::Way::Squash { crate::course::Stride::Commit } else { crate::course::Stride::Merge });
+        }
         if squash_stopped {
             let mut snap = snap;
             r.after(&mut snap);
@@ -979,6 +1000,7 @@ impl Tab {
             // A push that sent something moves the Runner skin's runner on.
             if let (true, Ok(msg)) = (pushed, &res) {
                 if !msg.contains("up-to-date") {
+                    self.own.push(crate::course::Stride::Push);
                     self.strides.push((crate::course::Stride::Push, msg.clone()));
                 }
             }
@@ -1020,6 +1042,7 @@ impl Tab {
                 self.summary.clear();
                 self.description.clear();
                 self.amend = false;
+                self.own.push(crate::course::Stride::Commit);
                 self.reload();
                 self.sel = if self.status.is_empty() { Sel::Commit(0) } else { Sel::Wip };
                 self.strides.push((crate::course::Stride::Commit, done.clone()));
