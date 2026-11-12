@@ -19,6 +19,7 @@ mod menu;
 mod merge;
 mod modal;
 mod operation;
+mod outside;
 mod pr_draft;
 mod preview;
 mod push;
