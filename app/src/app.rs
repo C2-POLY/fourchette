@@ -782,12 +782,23 @@ impl App {
     fn take_strides(&mut self) {
         let mut strides: Vec<(crate::course::Stride, String)> = self.tabs.iter_mut().flat_map(|t| std::mem::take(&mut t.strides)).collect();
         // What was done outside the app (#241): the ledger advances under every skin, so a skin
-        // chosen later does not replay old entries.
+        // chosen later does not replay old entries. The reflogs are read again within 2 s of a
+        // change, and pull requests merged on GitHub (#243) count as merges.
         for t in &mut self.tabs {
             let own = std::mem::take(&mut t.own);
             if let Some((dir, read)) = t.reflogs.take() {
                 let mut own = own;
-                strides.extend(self.outside.entry(dir).or_default().advance(&read, &mut own));
+                let ledger = self.outside.entry(dir).or_default();
+                let found = ledger.advance(&read, &mut own);
+                strides.extend(found.strides);
+                // A pull request merged on GitHub only arrives as a fetch of a remote branch:
+                // each counts as one merge, anyone's.
+                if let Some(repo) = &t.repo {
+                    for (_, old, new) in &found.ranges {
+                        let prs = crate::outside::merged_prs(&repo.first_parent_log(old, new));
+                        strides.extend(ledger.take_prs(prs));
+                    }
+                }
             }
         }
         if strides.is_empty() {

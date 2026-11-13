@@ -94,6 +94,12 @@ pub struct Tab {
     /// The last reflogs read with the repository's common Git folder, for `App::take_strides`
     /// to count what was done outside the app (#241).
     pub(super) reflogs: Option<(PathBuf, crate::outside::Reflogs)>,
+    /// The fingerprint of the reflog files at the last read, and when it was last compared
+    /// (every `REFLOG_WATCH_SECS`), so a branch deleted seconds after its commits is still seen.
+    pub(super) reflog_sig: u64,
+    pub(super) last_reflog_watch: Instant,
+    /// The repository's common Git folder, read once for the watch.
+    common_dir: Option<PathBuf>,
     /// What the app's own actions are about to leave in the reflogs, so they are not counted twice.
     pub(super) own: Vec<crate::course::Stride>,
     /// The Ultra-trail's km, copied here each frame for the Mountain view's "You" (#207).
@@ -152,6 +158,9 @@ pub(super) fn poll_tabs(tabs: &mut [Tab], ctx: &egui::Context, settings: crate::
         }
     }
 }
+
+/// How often the reflog files' fingerprint is compared (#243).
+const REFLOG_WATCH_SECS: f32 = 2.0;
 
 impl Tab {
     pub(super) fn new() -> Tab {
@@ -224,6 +233,9 @@ impl Tab {
             room_look: super::room::Look::default(),
             strides: Vec::new(),
             reflogs: None,
+            reflog_sig: 0,
+            last_reflog_watch: Instant::now(),
+            common_dir: None,
             own: Vec::new(),
         }
     }
@@ -357,6 +369,8 @@ impl Tab {
     fn read_reflogs(&mut self) {
         if let Some(r) = &self.repo {
             if let Some(dir) = r.common_dir() {
+                self.reflog_sig = crate::outside::signature(&dir);
+                self.common_dir = Some(dir.clone());
                 self.reflogs = Some((dir, r.reflogs()));
             }
         }
@@ -385,11 +399,19 @@ impl Tab {
         if self.last_status.elapsed().as_secs_f32() > STATUS_UPDATE_SECS && self.busy.is_none() {
             self.refresh_status();
         }
+        if self.last_reflog_watch.elapsed().as_secs_f32() > REFLOG_WATCH_SECS {
+            self.last_reflog_watch = Instant::now();
+            if let Some(dir) = &self.common_dir {
+                if crate::outside::signature(dir) != self.reflog_sig {
+                    self.read_reflogs();
+                }
+            }
+        }
         if s.auto_fetch && self.last_fetch.elapsed().as_secs_f32() > s.fetch_secs() && self.busy.is_none() {
             self.last_fetch = Instant::now();
             self.fetch(false, true, ctx);
         }
-        ctx.request_repaint_after(std::time::Duration::from_secs(5));
+        ctx.request_repaint_after(std::time::Duration::from_secs(2));
     }
 
     /// Runs `job` in the background in this repository; `poll_busy` picks up its result.
