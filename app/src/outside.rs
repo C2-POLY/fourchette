@@ -34,7 +34,8 @@ pub fn signature(common_dir: &Path) -> u64 {
 
 /// The pull requests merged on GitHub among `hash\tcommitter_email\tsubject` lines (from
 /// `Repo::first_parent_log`): the commits GitHub itself made (committer `noreply@github.com`)
-/// whose subject ends with `(#n)` (squash, rebase) or starts with `Merge pull request #n`.
+/// whose subject ends with `(#n)` (a squash) or starts with `Merge pull request #n`. A rebase
+/// merge keeps its commits' own subjects, so it only counts when they carry `(#n)`.
 /// Each number once, with its title.
 pub fn merged_prs(log: &str) -> Vec<(u32, String)> {
     let mut out: Vec<(u32, String)> = Vec::new();
