@@ -396,7 +396,35 @@ pub fn fonts_for(ui: UiFont, code: CodeFont, previews: bool, read: &dyn Fn(&str)
             f.families.insert(preview_family(name), names);
         }
     }
+    add_fallbacks(&mut f, read);
     f
+}
+
+/// The fonts behind every family, last, for the symbols, emoji and scripts the others lack in
+/// commit subjects and pull request titles (#247): Noto Emoji, built in (monochrome, licence
+/// beside it), then the Mac's Apple Symbols (`✕` and other dingbats) and Arial Unicode (Chinese,
+/// Japanese, Korean), each left out when it is missing or not a font.
+pub const FALLBACKS: [(&str, &str); 2] = [
+    ("Apple Symbols", "/System/Library/Fonts/Apple Symbols.ttf"),
+    ("Arial Unicode", "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+];
+
+fn add_fallbacks(f: &mut egui::FontDefinitions, read: &dyn Fn(&str) -> Option<Vec<u8>>) {
+    use egui::FontData;
+    use std::sync::Arc;
+    f.font_data.insert("Noto Emoji".into(), Arc::new(FontData::from_static(include_bytes!("../assets/fonts/NotoEmoji.ttf"))));
+    let mut names = vec!["Noto Emoji".to_string()];
+    for (name, path) in FALLBACKS {
+        if let Some(bytes) = read(path).filter(|b| looks_like_a_font(b)) {
+            let index = regular_face(&bytes);
+            f.font_data.insert(name.into(), Arc::new(FontData { index, ..FontData::from_owned(bytes) }));
+            names.push(name.to_string());
+        }
+    }
+    // Behind egui's own fonts, so the glyphs the app writes itself (`✔`, `★`, `☁`…) keep their look.
+    for family in f.families.values_mut() {
+        family.extend(names.iter().filter(|n| !family.contains(n)).cloned().collect::<Vec<_>>());
+    }
 }
 
 /// The family that writes `label`, a font of the Settings menus, in its own font. It only
@@ -629,6 +657,17 @@ mod tests {
         }
     }
 
+    /// egui's fonts of `family` as `fonts_for` leaves them behind ours, then Noto Emoji and,
+    /// when they were read, the Mac's fallbacks.
+    fn egui_behind(family: &egui::FontFamily, read_ok: bool) -> Vec<String> {
+        let mut names = egui::FontDefinitions::default().families[family].clone();
+        names.push("Noto Emoji".into());
+        if read_ok {
+            names.extend(FALLBACKS.map(|(n, _)| n.to_string()));
+        }
+        names
+    }
+
     fn no_files(_: &str) -> Option<Vec<u8>> {
         None
     }
@@ -642,11 +681,10 @@ mod tests {
     fn built_in_fonts_come_first_by_default_with_egui_behind() {
         use egui::FontFamily;
         let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, &no_files);
-        let default = egui::FontDefinitions::default();
         for (family, ours) in [(FontFamily::Proportional, "Inter"), (FontFamily::Monospace, "JetBrains Mono")] {
             let names = &f.families[&family];
             assert_eq!(names[0], ours);
-            assert_eq!(&names[1..], &default.families[&family][..]);
+            assert_eq!(names[1..], egui_behind(&family, false));
             assert!(f.font_data.contains_key(ours));
         }
     }
@@ -654,14 +692,13 @@ mod tests {
     #[test]
     fn a_chosen_system_font_goes_first_with_the_built_in_and_egui_behind() {
         use egui::FontFamily;
-        let default = egui::FontDefinitions::default();
         for (u, c) in UiFont::ALL[1..].iter().zip(&CodeFont::ALL[1..]) {
             let f = fonts_for(*u, *c, false, &fake_file);
             for (family, chosen, built_in) in [(FontFamily::Proportional, u.label(), "Inter"), (FontFamily::Monospace, c.label(), "JetBrains Mono")] {
                 let names = &f.families[&family];
                 assert_eq!(names[0], chosen);
                 assert_eq!(names[1], built_in);
-                assert_eq!(&names[2..], &default.families[&family][..]);
+                assert_eq!(names[2..], egui_behind(&family, true));
                 assert!(f.font_data.contains_key(chosen) && f.font_data.contains_key(built_in));
                 assert_eq!(f.font_data[chosen].index, 0, "face 0 of a collection");
             }
@@ -672,7 +709,9 @@ mod tests {
             asked.borrow_mut().push(p.to_string());
             None
         });
-        assert_eq!(*asked.borrow(), ["/System/Library/Fonts/Menlo.ttc"]);
+        let mut want = vec!["/System/Library/Fonts/Menlo.ttc"];
+        want.extend(FALLBACKS.map(|(_, p)| p));
+        assert_eq!(*asked.borrow(), want);
     }
 
     #[test]
@@ -702,7 +741,6 @@ mod tests {
             read.borrow_mut().push(p.to_string());
             fake_file(p)
         });
-        let default = egui::FontDefinitions::default();
         let ui_fonts = UiFont::ALL.map(|u| (u.label(), FontFamily::Proportional, "Inter"));
         let code_fonts = CodeFont::ALL.map(|c| (c.label(), FontFamily::Monospace, "JetBrains Mono"));
         for (label, base, built_in) in ui_fonts.into_iter().chain(code_fonts) {
@@ -714,10 +752,10 @@ mod tests {
                 assert_eq!(names[1], built_in);
                 &names[2..]
             };
-            assert_eq!(rest, &default.families[&base][..]);
+            assert_eq!(rest, &egui_behind(&base, true)[..]);
         }
-        // Each system font is read once, the chosen one included.
-        assert_eq!(read.borrow().len(), 6);
+        // Each system font is read once, the chosen one included, then the fallbacks.
+        assert_eq!(read.borrow().len(), 6 + FALLBACKS.len());
         // A missing system font shows in the built-in one.
         let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, true, &no_files);
         assert_eq!(f.families[&preview_family("Avenir Next")][0], "Inter");
@@ -725,9 +763,41 @@ mod tests {
     }
 
     #[test]
+    fn the_fallbacks_go_behind_every_family_and_only_when_read() {
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, true, &fake_file);
+        for names in f.families.values() {
+            assert_eq!(names[names.len() - 3..], ["Noto Emoji", "Apple Symbols", "Arial Unicode"]);
+        }
+        // Without the Mac's files, only the built-in Noto Emoji stays.
+        let f = fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, &no_files);
+        assert!(f.font_data.contains_key("Noto Emoji"));
+        for (name, _) in FALLBACKS {
+            assert!(!f.font_data.contains_key(name) && f.families.values().all(|v| !v.iter().any(|n| n == name)));
+        }
+    }
+
+    #[test]
+    fn the_fallbacks_draw_the_symbols_of_commit_subjects() {
+        // On this Mac: `✕`, a smiley and Chinese now have a font, so no box.
+        let has = |read: &dyn Fn(&str) -> Option<Vec<u8>>, c: char| {
+            let ctx = egui::Context::default();
+            ctx.set_fonts(fonts_for(UiFont::Inter, CodeFont::JetBrainsMono, false, read));
+            ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
+            ctx.fonts_mut(|fonts| fonts.has_glyphs(&egui::FontId::proportional(13.0), &c.to_string()))
+        };
+        assert!(has(&no_files, '🙂'), "Noto Emoji is built in");
+        assert!(!has(&no_files, '✕'), "without the Mac's fonts");
+        if FALLBACKS.iter().all(|(_, p)| std::path::Path::new(p).exists()) {
+            for c in ['✕', '中', '한'] {
+                assert!(has(&read_system_font, c), "{c}");
+            }
+        }
+    }
+
+    #[test]
     fn the_system_fonts_of_this_mac_are_real_fonts() {
         // Skipped off macOS; on a Mac a font that is there must pass the check, or the choice would never show.
-        for p in UiFont::ALL.iter().filter_map(|f| f.path()).chain(CodeFont::ALL.iter().filter_map(|f| f.path())) {
+        for p in UiFont::ALL.iter().filter_map(|f| f.path()).chain(CodeFont::ALL.iter().filter_map(|f| f.path())).chain(FALLBACKS.map(|(_, p)| p)) {
             if let Some(b) = read_system_font(p) {
                 assert!(looks_like_a_font(&b), "{p}");
             }
