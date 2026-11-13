@@ -302,6 +302,13 @@ impl Repo {
         crate::outside::Reflogs::parse(&out)
     }
 
+    /// `hash`, committer email and subject (tab-separated) of the first-parent commits in
+    /// `old..new`, for the pull requests GitHub merged. Empty on error.
+    pub fn first_parent_log(&self, old: &str, new: &str) -> String {
+        let range = format!("{old}..{new}");
+        self.git(&["log", "--first-parent", "--format=%H%x09%cE%x09%s", &range]).unwrap_or_default()
+    }
+
     /// The Git folder shared by the worktrees of this repository.
     pub fn common_dir(&self) -> Option<PathBuf> {
         let out = self.git(&["rev-parse", "--git-common-dir"]).ok()?;
