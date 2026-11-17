@@ -23,6 +23,7 @@ mod review;
 mod settings;
 mod skin_tiles;
 mod snapshot;
+mod testing;
 mod tab;
 mod tabs;
 mod track;

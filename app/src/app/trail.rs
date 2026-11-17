@@ -185,6 +185,42 @@ fn aid_station(p: &Painter, v: &View, o: (f32, f32)) {
     block(p, v, o, s, (9.0, -16.0, 5.0, 6.0), rgb(0x3b82c4));
 }
 
+/// The ridge's checkpoint beside a runner To test (#249): a marshal in an orange vest scanning
+/// its bib, the scanner's red line flickering, and the post's lamp blinking amber. `f` points per
+/// unit, as the runners.
+fn checkpoint(p: &Painter, foot: Pos2, f: f32, seed: u32, time: f32) {
+    let k = f / 1.5;
+    // The lamp on its post, behind.
+    let post = foot + vec2(20.0, -2.0) * k;
+    p.line_segment([post, post - vec2(0.0, 34.0 * k)], Stroke::new((1.6 * k).max(1.0), paint::INK));
+    let lamp = post - vec2(0.0, 36.0 * k);
+    let on = super::testing::blink(time, 0.9, (seed % 97) as f32 / 97.0);
+    p.circle_filled(lamp, 3.0 * k, if on { super::testing::AMBER } else { Color32::from_rgb(0x5a, 0x45, 0x1e) });
+    if on {
+        p.circle_filled(lamp, 8.0 * k, super::testing::AMBER.gamma_multiply(0.3));
+    }
+    // The marshal: dark trousers, the orange vest with its bands, a cap.
+    let m = foot + vec2(12.0, 0.0) * k;
+    let legs = Stroke::new((2.2 * k).max(1.0), Color32::from_rgb(0x2c, 0x33, 0x44));
+    p.line_segment([m - vec2(0.0, 12.0 * k), m + vec2(-2.0 * k, 0.0)], legs);
+    p.line_segment([m - vec2(0.0, 12.0 * k), m + vec2(2.0 * k, 0.0)], legs);
+    let vest = Rect::from_min_max(m + vec2(-4.5, -26.0) * k, m + vec2(4.5, -11.0) * k);
+    p.rect_filled(vest, CornerRadius::same((2.0 * k) as u8), Color32::from_rgb(0xff, 0x7a, 0x1a));
+    for y in [-21.0, -16.0] {
+        p.hline(vest.x_range(), m.y + y * k, Stroke::new((1.2 * k).max(0.8), Color32::from_rgb(0xe8, 0xee, 0xf2)));
+    }
+    let head = m - vec2(0.0, 30.0 * k);
+    p.circle_filled(head, 3.6 * k, Color32::from_rgb(0xe0, 0xac, 0x84));
+    p.rect_filled(Rect::from_min_max(head + vec2(-4.0, -4.6) * k, head + vec2(4.0, -1.6) * k), CornerRadius::same((1.5 * k) as u8), Color32::from_rgb(0x1f, 0x3a, 0x5f));
+    // The scanner held out toward the bib, its beam flickering.
+    let hand = m + vec2(-6.5, -20.0) * k;
+    p.line_segment([m + vec2(-3.0, -22.0) * k, hand], Stroke::new((1.8 * k).max(1.0), Color32::from_rgb(0xff, 0x7a, 0x1a)));
+    p.rect_filled(Rect::from_center_size(hand, vec2(4.0, 3.0) * k), CornerRadius::same(1), paint::INK);
+    if super::testing::pulse(time * 2.0, seed as f32) > 0.35 {
+        p.line_segment([hand - vec2(2.0 * k, 0.0), foot - vec2(1.0, 20.0) * k], Stroke::new((1.0 * k).max(0.7), Color32::from_rgb(0xff, 0x30, 0x30).gamma_multiply(0.8)));
+    }
+}
+
 /// A rock on the trail at `at` (world): what a bug stumbles on.
 fn rock(p: &Painter, v: &View, at: Pos2) {
     let f = v.fig();
@@ -389,6 +425,7 @@ impl Tab {
             let (x, y) = trail::ground(r.km + 3.2);
             rock(&p, &v, at((x, y + 2.0)));
         }
+        let mut loupes: Vec<(Pos2, u32)> = Vec::new();
         for r in &m.runners {
             let Some(it) = by_id.get(r.id.as_str()) else { continue };
             let foot = at(r.pos);
@@ -399,7 +436,14 @@ impl Tab {
             }
             p.add(Shape::ellipse_filled(foot, vec2(9.0, 2.5) * f / 1.5, Color32::from_black_alpha(76)));
             let swing = if r.spot.running() { (time * 7.0 + (r.seed % 628) as f32 / 100.0).sin() } else { 0.0 };
+            let testing = r.spot == Spot::Ridge;
+            if testing {
+                checkpoint(&p, foot, f, r.seed, time);
+            }
             figure(&p, foot, f, 1.0, r.seed, zone_colour(r.zone), bib(it, pulls), swing);
+            if testing {
+                loupes.push((foot + vec2(-24.0, -44.0) * f / 1.5, r.seed));
+            }
         }
         // Each runner on the trail has its label on a stem, two heights apart from its neighbour.
         for r in m.runners.iter().filter(|r| r.spot.running()) {
@@ -411,6 +455,11 @@ impl Tab {
         for more in m.more.iter().filter(|x| x.spot.running()) {
             let foot = at(more.pos);
             pill(&p, &v, foot - vec2(0.0, 44.0 * v.fig()), &format!("+{}", more.more), false);
+        }
+        // The loupes of the runners To test, over their labels (#249).
+        let size = (22.0 * v.fig()).clamp(16.0, 32.0);
+        for (at, seed) in &loupes {
+            super::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
         }
 
         // The groups at the tent, the start and the summit; the places' signs.
@@ -462,10 +511,10 @@ impl Tab {
         self.mountain_x = Some((at((0.0, 0.0)).x, at((trail::LENGTH_KM * KM, 0.0)).x));
 
         // The tally, the hints and the legend above.
-        let on_trail = m.count(Spot::Climb) + m.count(Spot::Aid) + m.count(Spot::Ridge);
+        let on_trail = m.count(Spot::Climb) + m.count(Spot::Aid);
         let bg = Rect::from_min_size(area.min, vec2(area.width(), 56.0));
         p.rect_filled(bg, 0.0, k.bg);
-        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} of {} at the summit · {on_trail} on the trail · {} at the start · {} registered", m.count(Spot::Summit), m.total(), m.count(Spot::Start), m.count(Spot::Tent)), theme::secondary(), k.dim);
+        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} of {} at the summit · {} in test · {on_trail} on the trail · {} at the start · {} registered", m.count(Spot::Summit), m.total(), m.count(Spot::Ridge), m.count(Spot::Start), m.count(Spot::Tent)), theme::secondary(), k.dim);
         // Not in a photo (#232).
         if !self.board.shooting {
             p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);
