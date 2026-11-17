@@ -758,7 +758,8 @@ impl Tab {
         ui.label(RichText::new(&d.subject).size(theme::FS_TITLE).color(theme::c().strong));
         if !d.body.is_empty() {
             ui.add_space(4.0);
-            ui.label(RichText::new(&d.body).color(theme::c().dim));
+            // Its paragraphs joined back, so it wraps to the panel's width (#187).
+            ui.label(RichText::new(crate::git::reflow(&d.body)).color(theme::c().dim));
         }
         ui.add_space(8.0);
         // Plain-words explanation by Claude.

@@ -129,7 +129,8 @@ pub fn details(c: &Commit) -> CommitDetails {
         committer_time: c.time,
         parents: c.parents.clone(),
         subject: c.subject.clone(),
-        body: "This is a sample history so you can look around.\nOpen one of your own projects to see its real history.".into(),
+        // Wrapped at 72 columns like a real message, with a list and a trailer (#187).
+        body: "This is a sample history so you can look around: open one of your own\nprojects to see its real history, with the message each commit was\nwritten with.\n\n- the graph shows every branch in its own colour\n- a click on a commit shows what it changed,\n  file by file\n\nRefs: #51".into(),
         files: vec![
             FileChange { path: "src/graph.rs".into(), code: 'M' },
             FileChange { path: "src/theme.rs".into(), code: 'M' },

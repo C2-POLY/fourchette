@@ -71,6 +71,81 @@ pub struct CommitDetails {
     pub files: Vec<FileChange>,
 }
 
+/// A commit's body as the details panel shows it (#187): the lines Git wrapped at 72 columns
+/// joined back into their paragraph, so the text wraps to the panel's width instead of falling
+/// in a ragged edge. Blank lines between paragraphs stay; a list item (`- `, `* `, `+ `, `1. `)
+/// starts its own line and takes in its indented continuation; code (fenced with ``` or
+/// indented by four spaces or a tab) and trailers (`Refs: #12`, `Co-authored-by: …`) keep
+/// their lines as they are.
+pub fn reflow(body: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    // What the last line is, so the next one knows whether it joins it.
+    #[derive(PartialEq)]
+    enum Last {
+        Break,
+        Text,
+        Item,
+        Kept,
+    }
+    let mut last = Last::Break;
+    let mut fenced = false;
+    for raw in body.trim_matches('\n').lines() {
+        let line = raw.trim_end();
+        let text = line.trim_start();
+        let indented = line.len() > text.len();
+        if text.starts_with("```") {
+            fenced = !fenced;
+            out.push(line.to_string());
+            last = Last::Kept;
+        } else if fenced {
+            out.push(line.to_string());
+            last = Last::Kept;
+        } else if text.is_empty() {
+            out.push(String::new());
+            last = Last::Break;
+        } else if indented && last == Last::Item {
+            push_onto(&mut out, text);
+        } else if line.starts_with("    ") || line.starts_with('\t') {
+            out.push(line.to_string());
+            last = Last::Kept;
+        } else if list_item(text) {
+            out.push(line.to_string());
+            last = Last::Item;
+        } else if trailer(text) {
+            out.push(text.to_string());
+            last = Last::Kept;
+        } else if last == Last::Text {
+            push_onto(&mut out, text);
+        } else {
+            out.push(text.to_string());
+            last = Last::Text;
+        }
+    }
+    out.join("\n")
+}
+
+/// Adds `text` at the end of the last line, a space between.
+fn push_onto(out: &mut [String], text: &str) {
+    if let Some(l) = out.last_mut() {
+        l.push(' ');
+        l.push_str(text);
+    }
+}
+
+/// `- a`, `* a`, `+ a`, `1. a` or `1) a`.
+fn list_item(text: &str) -> bool {
+    if ["- ", "* ", "+ "].iter().any(|b| text.starts_with(b)) {
+        return true;
+    }
+    let digits = text.chars().take_while(char::is_ascii_digit).count();
+    digits > 0 && (text[digits..].starts_with(". ") || text[digits..].starts_with(") "))
+}
+
+/// A Git trailer: `Token: value`, the token one word of letters and dashes.
+fn trailer(text: &str) -> bool {
+    text.split_once(": ").is_some_and(|(key, value)| !value.is_empty() && !key.is_empty() && key.chars().all(|c| c.is_ascii_alphabetic() || c == '-') && key.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+}
+
 #[derive(Clone, Debug)]
 pub struct Stash {
     pub name: String,
@@ -647,6 +722,34 @@ pub fn refs_by_target(refs: &[GitRef]) -> HashMap<String, Vec<GitRef>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reflow_keeps_lists_code_and_trailers() {
+        let body = "Why:\n\n- the first item goes on\n  over two lines\n- the second\n1. one\n2) two\n\n```\nfn main() {\n    run();\n}\n```\n\n    indented code\n    stays\n\nRefs: #12\nCo-authored-by: Sam <sam@example.com>";
+        assert_eq!(
+            reflow(body),
+            "Why:\n\n- the first item goes on over two lines\n- the second\n1. one\n2) two\n\n```\nfn main() {\n    run();\n}\n```\n\n    indented code\n    stays\n\nRefs: #12\nCo-authored-by: Sam <sam@example.com>"
+        );
+    }
+
+    #[test]
+    fn reflow_leaves_a_short_body_and_trims_its_edges() {
+        assert_eq!(reflow("One line."), "One line.");
+        assert_eq!(reflow("\nTrailing spaces   \nare dropped\n\n"), "Trailing spaces are dropped");
+        assert_eq!(reflow("Windows\r\nline ends"), "Windows line ends");
+        assert_eq!(reflow(""), "");
+        // A sentence with a colon is not a trailer.
+        assert_eq!(reflow("Fix the bug: it crashed\nwhen empty."), "Fix the bug: it crashed when empty.");
+    }
+
+    #[test]
+    fn reflow_joins_the_lines_git_wrapped_at_72_columns() {
+        let body = "Homebrew's rust is too old for the release. That version\nneeds Rust 1.95, now the rust-version of the crate, so\nthe build fails.\n\nThe second paragraph stays\napart from the first.";
+        assert_eq!(
+            reflow(body),
+            "Homebrew's rust is too old for the release. That version needs Rust 1.95, now the rust-version of the crate, so the build fails.\n\nThe second paragraph stays apart from the first."
+        );
+    }
+
     use super::*;
 
     #[test]
