@@ -24,6 +24,9 @@ pub struct ProjectState {
 /// in, offline) keeps what was there and says nothing: the badges are a bonus.
 #[derive(Default)]
 pub struct PullsState {
+    /// "owner/name" of the repository on GitHub, read with the pull requests; None outside
+    /// GitHub. The details panel links a commit's `#n` with it (#188).
+    pub slug: Option<String>,
     pub pulls: Option<Arc<crate::pulls::Pulls>>,
     pub loading: Option<Receiver<Result<crate::pulls::Pulls, String>>>,
 }
@@ -116,6 +119,7 @@ impl Tab {
             self.pulls = PullsState::default();
             return;
         };
+        self.pulls.slug = Some(slug.clone());
         let (tx, rx) = channel();
         std::thread::spawn(move || {
             let _ = tx.send(crate::pulls::load(&slug, &remote));

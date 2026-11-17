@@ -290,7 +290,7 @@ impl Tab {
         };
         self.worktrees = vec![wt("graph-colours", Some("feature/graph-colours"), false), wt("search-fix", Some("feature/search"), false), wt("old-try", None, true)];
         self.project = project::ProjectState { board: Some(std::sync::Arc::new(crate::github::sample())), ..Default::default() };
-        self.pulls = project::PullsState { pulls: Some(std::sync::Arc::new(crate::pulls::sample())), loading: None };
+        self.pulls = project::PullsState { slug: Some("example/sample-project".into()), pulls: Some(std::sync::Arc::new(crate::pulls::sample())), loading: None };
         self.after_load();
         self.sel = Sel::Commit(0);
         self.details_layout = DetailsLayout::default();

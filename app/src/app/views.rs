@@ -755,11 +755,18 @@ impl Tab {
 
     /// Subject, message, Claude's explanation, people and SHA, parents and refs.
     fn commit_info(&self, ui: &mut Ui, d: &CommitDetails, cmds: &mut Vec<Cmd>) {
-        ui.label(RichText::new(&d.subject).size(theme::FS_TITLE).color(theme::c().strong));
+        // Its `#n` link to GitHub (#188).
+        let slug = self.pulls.slug.as_deref();
+        if let Some(url) = crate::ui::linked_text(ui, &d.subject, FontId::proportional(theme::FS_TITLE), theme::c().strong, slug) {
+            cmds.push(Cmd::OpenUrl(url));
+        }
         if !d.body.is_empty() {
             ui.add_space(4.0);
             // Its paragraphs joined back, so it wraps to the panel's width (#187).
-            ui.label(RichText::new(crate::git::reflow(&d.body)).color(theme::c().dim));
+            let body = crate::git::reflow(&d.body);
+            if let Some(url) = crate::ui::linked_text(ui, &body, FontId::proportional(theme::FS_BODY), theme::c().dim, slug) {
+                cmds.push(Cmd::OpenUrl(url));
+            }
         }
         ui.add_space(8.0);
         // Plain-words explanation by Claude.

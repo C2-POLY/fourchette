@@ -875,6 +875,37 @@ pub fn glyph(p: &egui::Painter, c: Pos2, icon: &str, size: f32, width: f32, col:
     }
 }
 
+/// Text wrapped to the width, each `#n` in it a link to that issue or pull request on GitHub
+/// when the repository is there (`slug`, #188): in the accent colour and underlined, the hand
+/// and the address on hover. Returns the address clicked.
+pub fn linked_text(ui: &mut Ui, text: &str, font: FontId, color: Color32, slug: Option<&str>) -> Option<String> {
+    use egui::text::{LayoutJob, TextFormat, TextWrapping};
+    let refs = crate::github::issue_links(text, slug);
+    let link = theme::c().accent_text;
+    let plain = TextFormat { font_id: font.clone(), color, ..Default::default() };
+    let linked = TextFormat { font_id: font, color: link, underline: Stroke::new(1.0, link), ..Default::default() };
+    let mut job = LayoutJob::default();
+    let mut at = 0;
+    for (r, _) in &refs {
+        job.append(&text[at..r.start], 0.0, plain.clone());
+        job.append(&text[r.clone()], 0.0, linked.clone());
+        at = r.end;
+    }
+    job.append(&text[at..], 0.0, plain);
+    job.wrap = TextWrapping { max_width: ui.available_width(), ..Default::default() };
+    let galley = ui.painter().layout_job(job);
+    let (rect, resp) = ui.allocate_exact_size(galley.size(), if refs.is_empty() { Sense::hover() } else { Sense::click() });
+    ui.painter().galley(rect.min, galley.clone(), color);
+    // The `#n` under the pointer: the character on either side of the nearest cursor place.
+    let pos = resp.hover_pos().filter(|p| rect.contains(*p))?;
+    let index = galley.cursor_from_pos(pos - rect.min).index.0;
+    let byte = |i: usize| text.char_indices().nth(i).map_or(text.len(), |(b, _)| b);
+    let (here, before) = (byte(index), index.checked_sub(1).map(byte));
+    let (_, url) = refs.iter().find(|(r, _)| r.contains(&here) || before.is_some_and(|b| r.contains(&b)))?;
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(url);
+    resp.clicked().then(|| url.clone())
+}
+
 pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i64) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(34.0, 34.0), Sense::hover());

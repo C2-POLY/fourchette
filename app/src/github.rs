@@ -220,6 +220,49 @@ pub fn drop_after(column: &[&str], dragged: &str, slot: usize) -> Option<String>
     slot.checked_sub(1).and_then(|i| others.get(i.min(others.len().saturating_sub(1)))).map(|s| s.to_string())
 }
 
+/// The `#n` of a commit's title or body (#188), each with its byte range and number: a `#`
+/// and digits, at the start or after a space or a punctuation mark, and not followed by a
+/// letter or a digit. `Closes #12`, `(#12)` and `#12.` count; `#fff`, `a#1`, `owner/repo#1`
+/// and `#12a` don't.
+pub fn issue_refs(text: &str) -> Vec<(std::ops::Range<usize>, u64)> {
+    let b = text.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'#' {
+            let before_ok = i == 0 || {
+                let c = text[..i].chars().next_back().unwrap_or(' ');
+                !(c.is_alphanumeric() || c == '/' || c == '_' || c == '&' || c == '#')
+            };
+            let digits = b[i + 1..].iter().take_while(|c| c.is_ascii_digit()).count();
+            let end = i + 1 + digits;
+            let after_ok = text[end..].chars().next().is_none_or(|c| !(c.is_alphanumeric() || c == '_'));
+            if before_ok && digits > 0 && after_ok {
+                if let Ok(n) = text[i + 1..end].parse::<u64>() {
+                    out.push((i..end, n));
+                }
+            }
+            i = end.max(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// The links of a commit's text: each `#n` with its issue's address, only when the repository
+/// is on GitHub (`slug`); none otherwise, and the text stays plain.
+pub fn issue_links(text: &str, slug: Option<&str>) -> Vec<(std::ops::Range<usize>, String)> {
+    let Some(slug) = slug else { return Vec::new() };
+    issue_refs(text).into_iter().map(|(r, n)| (r, issue_url(slug, n))).collect()
+}
+
+/// Where issue or pull request `n` of `slug` is on GitHub: its issue address, which GitHub
+/// sends on to the pull request when it is one.
+pub fn issue_url(slug: &str, n: u64) -> String {
+    format!("https://github.com/{slug}/issues/{n}")
+}
+
 /// "owner/name" from a GitHub remote address (SSH or HTTPS).
 pub fn slug(remote_url: &str) -> Option<String> {
     let u = remote_url.trim();
@@ -680,6 +723,28 @@ pub fn sample() -> Board {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn issue_refs_finds_the_numbers_of_a_commit_message() {
+        let found = |t: &str| issue_refs(t).into_iter().map(|(r, n)| (t[r].to_string(), n)).collect::<Vec<_>>();
+        assert_eq!(found("Closes #12"), [("#12".to_string(), 12)]);
+        assert_eq!(found("feat: add it (#250)"), [("#250".to_string(), 250)]);
+        assert_eq!(found("#7 first, then #8."), [("#7".to_string(), 7), ("#8".to_string(), 8)]);
+        assert_eq!(found("Refs: #187, #188"), [("#187".to_string(), 187), ("#188".to_string(), 188)]);
+        assert_eq!(found("[#3] and é #4"), [("#3".to_string(), 3), ("#4".to_string(), 4)]);
+        // Not an issue: a colour, inside a word, another repository's, followed by letters.
+        assert!(found("color #fff and #12a, a#1, owner/repo#1, ##5, &#38;").is_empty());
+        assert!(found("no number here: #").is_empty());
+        assert_eq!(issue_url("C2-POLY/fourchette", 188), "https://github.com/C2-POLY/fourchette/issues/188");
+    }
+
+    #[test]
+    fn issue_links_only_on_github() {
+        let text = "Fix the crash (#46)";
+        assert_eq!(issue_links(text, Some("acme/app")), [(15..18, "https://github.com/acme/app/issues/46".to_string())]);
+        // Outside GitHub the text stays plain.
+        assert!(issue_links(text, None).is_empty());
+    }
+
     use super::*;
     use serde_json::json;
 
