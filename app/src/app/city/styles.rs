@@ -134,10 +134,24 @@ fn hip(p: &Painter, iso: &Iso, (x0, y0, x1, y1): (f32, f32, f32, f32), z: f32, r
     poly(p, vec![iso.at(x0, y1, z), top, iso.at(x1, y1, z)], roof);
 }
 
+thread_local! {
+    /// The building drawn now is To test: built, but nobody has moved in, its windows dark (#249).
+    static UNLIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Draws the next buildings with their windows dark (`true`) or as usual.
+pub(super) fn set_unlit(on: bool) {
+    UNLIT.with(|u| u.set(on));
+}
+
+/// A dark window of a building nobody has moved into yet.
+const UNLIT_PANE: Color32 = Color32::from_rgb(0x3a, 0x40, 0x4c);
+
 /// Rows of windows on a face, one row per floor from `from` to `to`, `cols` of them spread
 /// from a0 to a1, each from `lo` to `hi` within its floor.
 #[allow(clippy::too_many_arguments)]
 fn windows(p: &Painter, iso: &Iso, south: bool, face: f32, (a0, a1): (f32, f32), (from, to): (u32, u32), cols: u32, (lo, hi): (f32, f32), fill: Color32, frame: Color32) {
+    let fill = if UNLIT.with(|u| u.get()) { UNLIT_PANE } else { fill };
     let step = (a1 - a0) / cols as f32;
     for f in from..to {
         let z = KERB + f as f32;

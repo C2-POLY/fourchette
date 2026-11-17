@@ -112,6 +112,26 @@ fn athlete(p: &Painter, v: &View, a: &Athlete, zone: Color32, bib: Color32, swin
     figure(p, v.at(a.pos), v.fig(), a.facing, a.seed, zone, bib, swing);
 }
 
+/// The photo-finish camera beside an athlete To test (#249): a black camera on its pole aimed
+/// at it, flashing now and then. Returns whether it flashes now.
+fn photo_finish(p: &Painter, v: &View, foot: Pos2, seed: u32, time: f32) -> bool {
+    let f = v.fig();
+    let base = foot + vec2(-15.0, 2.0) * f;
+    let top = base - vec2(0.0, 40.0 * f);
+    p.line_segment([base, top], Stroke::new((1.6 * f).max(1.0), paint::DIM));
+    let body = Rect::from_center_size(top + vec2(2.0, -2.0) * f, vec2(10.0, 7.0) * f);
+    p.rect_filled(body, CornerRadius::same((1.5 * f) as u8), Color32::from_rgb(0x1d, 0x1f, 0x24));
+    let lens = body.right_center() + vec2(1.4 * f, 0.0);
+    let flash = super::testing::blink(time, 1.3, (seed % 97) as f32 / 97.0);
+    p.circle_filled(lens, 2.6 * f, if flash { Color32::WHITE } else { Color32::from_rgb(0x3b, 0x6e, 0xa8) });
+    if flash {
+        p.circle_filled(lens, 9.0 * f, Color32::from_white_alpha(90));
+    }
+    // The red light that says it records.
+    p.circle_filled(body.left_top() + vec2(2.0, 2.0) * f, 1.1 * f, if super::testing::blink(time, 0.6, 0.2) { Color32::from_rgb(0xff, 0x3b, 0x30) } else { Color32::from_rgb(0x55, 0x1a, 0x18) });
+    flash
+}
+
 /// The runner's figure, its feet at `foot`, `f` points per unit: also the Ultra-trail's (#207).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn figure(p: &Painter, foot: Pos2, f: f32, facing: f32, seed: u32, zone: Color32, bib: Color32, swing: f32) {
@@ -405,6 +425,7 @@ impl Tab {
             things.push((m.pos.1, Thing::More(m)));
         }
         things.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut loupes: Vec<(Pos2, u32)> = Vec::new();
         for (_, thing) in &things {
             match thing {
                 Thing::Hurdle(at) => hurdle(&p, &v, v.at(*at)),
@@ -419,18 +440,32 @@ impl Tab {
                         p.add(Shape::ellipse_stroke(v.at(a.pos), vec2(11.0, 4.0) * v.fig(), Stroke::new(2.0, col)));
                     }
                     let swing = if a.spot.running() { (time * 9.0 + (a.seed % 628) as f32 / 100.0).sin() } else { 0.0 };
+                    let testing = a.spot == Spot::LastBend;
+                    let flash = testing && photo_finish(&p, &v, v.at(a.pos), a.seed, time);
                     athlete(&p, &v, a, zone_colour(a.lane), bib(it, pulls), swing);
+                    if flash {
+                        // The flash washes over the athlete for an instant.
+                        p.add(Shape::ellipse_filled(v.at(a.pos) - vec2(0.0, 20.0) * v.fig(), vec2(16.0, 26.0) * v.fig(), Color32::from_white_alpha(120)));
+                    }
                     tag(&p, &v, v.at(a.pos), 28.0, &a.label);
+                    if testing {
+                        loupes.push((v.at(a.pos) - vec2(0.0, 52.0 * v.fig()), a.seed));
+                    }
                 }
             }
+        }
+
+        let size = (22.0 * v.fig()).clamp(16.0, 32.0);
+        for (at, seed) in &loupes {
+            super::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
         }
 
         // The legend's card on the right (the strip is drawn already); the tally and the hints above.
         if card {
             legend_card(&p, area, &st);
         }
-        let running = st.count(Spot::Bend) + st.count(Spot::Back) + st.count(Spot::LastBend);
-        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{done} finished · {running} on the track · {} in the blocks · {} warming up", st.count(Spot::Blocks), st.count(Spot::Warmup)), theme::secondary(), k.dim);
+        let running = st.count(Spot::Bend) + st.count(Spot::Back);
+        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{done} finished · {} in test · {running} on the track · {} in the blocks · {} warming up", st.count(Spot::LastBend), st.count(Spot::Blocks), st.count(Spot::Warmup)), theme::secondary(), k.dim);
         // Not in a photo (#232).
         if !self.board.shooting {
             p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);

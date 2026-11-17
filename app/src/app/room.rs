@@ -273,7 +273,9 @@ fn box_hit(r: &Rm, shelf: &Shelf, b: &GameBox) -> Rect {
 }
 
 /// A shelf: its neon sign, its three boards and its boxes, and the `+k` of the rest.
-fn shelf(r: &Rm, i: usize, s: &Shelf, wood: Faces, time: f32) {
+/// Draws a shelf and its boxes; returns where the loupes of its boxes To test go.
+fn shelf(r: &Rm, i: usize, s: &Shelf, wood: Faces, time: f32) -> Vec<(Pos2, u32)> {
+    let mut loupes = Vec::new();
     let (neon, dark_ink) = NEON[i % NEON.len()];
     let (a0, a1) = s.along;
     let mid = (a0 + a1) / 2.0;
@@ -300,7 +302,9 @@ fn shelf(r: &Rm, i: usize, s: &Shelf, wood: Faces, time: f32) {
         // Back to front: along the right wall by x, along the left one by y.
         on.sort_by(|a, b| box_place(s, a).0 .0.total_cmp(&box_place(s, b).0 .0).then(box_place(s, a).0 .1.total_cmp(&box_place(s, b).0 .1)));
         for b in on {
-            game_box(r, s, b, neon, dark_ink, time);
+            if let Some(at) = game_box(r, s, b, neon, dark_ink, time) {
+                loupes.push((at, b.slot as u32 * 37 + i as u32));
+            }
         }
     }
     if s.more > 0 {
@@ -319,13 +323,32 @@ fn shelf(r: &Rm, i: usize, s: &Shelf, wood: Faces, time: f32) {
         r.p.rect_filled(pill, CornerRadius::same(8), neon);
         r.p.galley(pill.center() - gal.size() / 2.0, gal, rgb(0x1b1c20));
     }
+    loupes
 }
 
-/// One ticket's game box on its board.
-fn game_box(r: &Rm, s: &Shelf, b: &GameBox, cover: Color32, dark_ink: bool, time: f32) {
+/// One ticket's game box on its board; returns where its loupe goes when it is To test.
+fn game_box(r: &Rm, s: &Shelf, b: &GameBox, cover: Color32, dark_ink: bool, time: f32) -> Option<Pos2> {
     let ((x0, y0, x1, y1), bz, w, h) = box_place(s, b);
     let u = r.step(s.wall);
     let ghost = b.stage == Stage::Lot;
+    let testing = b.stage == Stage::Testing;
+    let phase = b.slot as f32 * 0.9;
+    if testing {
+        // The test bench under it: a steel tray a little wider than the box, its status light
+        // blinking amber (#249).
+        let m = 0.07;
+        r.cuboid((x0 - m, y0 - m, x1 + m, y1 + m), bz, bz + 0.09, Faces { left: rgb(0x8e96a3), right: rgb(0x6f7684), top: rgb(0xb7bec9) });
+        let led = match s.wall {
+            Wall::Right => r.at(x1 + m * 0.4, y1 + m, bz + 0.045),
+            Wall::Left => r.at(x1 + m, y1 + m * 0.4, bz + 0.045),
+        };
+        let on = super::testing::blink(time, 0.8, phase);
+        r.p.circle_filled(led, (2.2 * r.s()).max(1.2), if on { super::testing::AMBER } else { rgb(0x3a3f48) });
+        if on {
+            r.p.circle_filled(led, (5.0 * r.s()).max(2.0), super::testing::AMBER.gamma_multiply(0.3));
+        }
+    }
+    let bz = if testing { bz + 0.09 } else { bz };
     let faces = if ghost {
         let c = if theme::is_light() { Color32::from_black_alpha(18) } else { Color32::from_white_alpha(18) };
         Faces { left: c, right: c, top: c }
@@ -384,8 +407,21 @@ fn game_box(r: &Rm, s: &Shelf, b: &GameBox, cover: Color32, dark_ink: bool, time
                 art::draw_mapped(r.p, &[Part(g::PAUSE_D, Some(rgb(0xffc93c)), Some(super::mess::INK), 1.0), Part(g::PAUSE_BARS_D, None, Some(super::mess::INK), 4.0)], &f, k);
             }
             Stage::Testing => {
-                art::draw_mapped(r.p, &[Part(g::BETA_D, Some(LIME), None, 0.0)], &f, k);
-                r.text(f(vec2(50.0, 79.0)), "BETA", 7.0, rgb(0x1b1c20), u, Some(w * u.length() * 0.9));
+                // The screen glitches: bright bands jump across the front, a few times a second.
+                let slot = (time * 7.0 + phase).floor() as i64;
+                for band in 0..3 {
+                    let h0 = ((slot * 31 + band * 17) % 97) as f32 / 97.0;
+                    if ((slot * 13 + band * 7) % 5) < 2 {
+                        let (ya, yb) = (8.0 + h0 * 70.0, 8.0 + h0 * 70.0 + 4.0 + (band as f32) * 2.0);
+                        let col = [rgb(0x00e5ff), rgb(0xff3df2), LIME][band as usize].gamma_multiply(0.7);
+                        r.p.add(Shape::convex_polygon(vec![f(vec2(4.0, ya)), f(vec2(96.0, ya)), f(vec2(96.0, yb)), f(vec2(4.0, yb))], col, Stroke::NONE));
+                    }
+                }
+                // The BETA sticker blinks.
+                if super::testing::blink(time, 1.1, phase) || super::testing::pulse(time, phase) > 0.5 {
+                    art::draw_mapped(r.p, &[Part(g::BETA_D, Some(LIME), None, 0.0)], &f, k);
+                    r.text(f(vec2(50.0, 79.0)), "BETA", 7.0, rgb(0x1b1c20), u, Some(w * u.length() * 0.9));
+                }
             }
             _ => {}
         }
@@ -400,6 +436,7 @@ fn game_box(r: &Rm, s: &Shelf, b: &GameBox, cover: Color32, dark_ink: bool, time
         let at = f(vec2(along, 0.0));
         r.art(g::BUG, at - vec2(15.0, 22.0) * 0.55 * r.s(), 0.55);
     }
+    testing.then(|| top - vec2(0.0, 4.0 * r.s()))
 }
 
 /// The desk: its legs and top with the lit strip, the two screens, the keyboard and the mouse,
@@ -683,8 +720,9 @@ impl Tab {
             }
         }
         // The shelves along the walls.
+        let mut loupes = Vec::new();
         for (i, sh) in layout.shelves.iter().enumerate() {
-            shelf(&r, i, sh, w.wood, time);
+            loupes.extend(shelf(&r, i, sh, w.wood, time));
         }
 
         // What stands in the room, back to front.
@@ -828,11 +866,15 @@ impl Tab {
             p.rect_stroke(box_hit(&r, sh, b).expand(2.0), CornerRadius::same(4), Stroke::new(2.0, k.accent_text), StrokeKind::Outside);
         }
 
+        // The loupes of the boxes To test, over everything else (#249).
+        let size = (24.0 * r.s()).clamp(16.0, 34.0);
+        for (at, seed) in &loupes {
+            super::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
+        }
+
         // The tally and the hints, top left (the boss pill sits above the XP bar).
-        let count = |f: fn(Stage) -> bool| items.iter().filter(|it| f(Stage::of(&it.status))).count();
-        let done = count(|s| s.built());
-        let playing = count(|s| s.crane());
-        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{done} finished · {playing} playing · {} on the wishlist", items.len() - done - playing), theme::secondary(), k.dim);
+        let n = crate::city::Tally::of(items.iter().map(|it| Stage::of(&it.status)));
+        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} finished · {} in test · {} playing · {} on the wishlist", n.done, n.testing, n.busy, n.todo), theme::secondary(), k.dim);
         // Not in a photo (#232).
         if !self.board.shooting {
             p.text(area.left_top() + vec2(4.0, 20.0), Align2::LEFT_TOP, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);

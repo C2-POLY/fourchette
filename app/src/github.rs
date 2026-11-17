@@ -617,7 +617,7 @@ pub fn sample() -> Board {
     s53.labels = vec![label("zone:sélecteur", "1cadf8")];
     items.push(s53);
     // The rest of #51's sub-issues, spread over the columns.
-    for (n, title, status, days) in [(54, "Drag a repository into a group", "Done", 4), (55, "Rename a group", "Ready", 2), (56, "Collapse a group in the list", "Backlog", 2)] {
+    for (n, title, status, days) in [(54, "Drag a repository into a group", "To test", 4), (55, "Rename a group", "Ready", 2), (56, "Collapse a group in the list", "Backlog", 2)] {
         let mut s = it(n, title, status, "Task", &["me"], days);
         s.parent = Some(Linked { number: 51, title: "Group repositories in the switcher".into(), state: "OPEN".into(), url: format!("https://github.com/{slug}/issues/51") });
         s.labels = vec![label("zone:sélecteur", "1cadf8")];
@@ -672,7 +672,7 @@ pub fn sample() -> Board {
         projects: vec![ProjectRef { owner: "example".into(), number: 1, title: "Fourchette roadmap".into(), url: "https://github.com/orgs/example/projects/1".into() }],
         chosen: 0,
         slug: slug.into(),
-        statuses: [("Backlog", "GRAY"), ("Ready", "YELLOW"), ("In progress", "BLUE"), ("In review", "PURPLE"), ("Done", "GREEN")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
+        statuses: [("Backlog", "GRAY"), ("Ready", "YELLOW"), ("In progress", "BLUE"), ("In review", "PURPLE"), ("To test", "ORANGE"), ("Done", "GREEN")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
         items,
         me: "me".into(),
     }

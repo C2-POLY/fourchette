@@ -123,8 +123,9 @@ fn table_shadow(p: &Painter, iso: &Iso, (cx, cy): (f32, f32), w: f32, reach: f32
     poly(p, iso.quad(cx - w, cy - w + 0.05, end, cy + w, KERB).to_vec(), Color32::from_rgba_unmultiplied(30, 32, 40, 60));
 }
 
-/// A plot: what its ticket's status puts on it, its cook and its flies.
-fn plot(p: &Painter, iso: &Iso, pl: &Plot, it: &Item, col: Color32, time: f32) {
+/// A plot: what its ticket's status puts on it, its cook and its flies. Returns where the
+/// To test loupe goes, for a ticket To test.
+fn plot(p: &Painter, iso: &Iso, pl: &Plot, it: &Item, col: Color32, time: f32) -> Option<Pos2> {
     let (x, y) = (pl.x as f32, pl.y as f32);
     let (cx, cy) = (x + 0.5, y + 0.45);
     let s = iso.zoom;
@@ -136,6 +137,7 @@ fn plot(p: &Painter, iso: &Iso, pl: &Plot, it: &Item, col: Color32, time: f32) {
     let cook_at = iso.at(x + 0.86, y + 0.95, KERB);
     let top = iso.at(cx, cy, KERB + TABLE);
     let mut flies_at = None;
+    let mut loupe = None;
     match pl.stage {
         Stage::Lot => {
             // The order slip on the floor, its lines and its tab in the restaurant's colour.
@@ -203,9 +205,14 @@ fn plot(p: &Painter, iso: &Iso, pl: &Plot, it: &Item, col: Color32, time: f32) {
                 other => other,
             };
             dishes::dish(p, top, s * 0.85, small, t, false);
-            dishes::fork_in(p, top - vec2(0.0, small.height() * s * 0.85), s);
+            // The taster pricks the dish again and again, its steam rising (#249).
+            let dish_top = top - vec2(0.0, small.height() * s * 0.85);
+            dishes::steam(p, dish_top, s, t);
+            dishes::fork_in(p, dish_top, s, 3.0 * (t * 2.6).sin().max(0.0));
             dishes::cook(p, cook_at, s, tone, Pose::Taste, t);
+            dishes::tasting_bubble(p, cook_at - vec2(4.0 * s, 52.0 * s), s, crate::app::testing::pulse(time, phase));
             flies_at = Some(top - vec2(0.0, (small.height() + 12.0) * s));
+            loupe = Some(dish_top - vec2(0.0, 26.0 * s));
         }
         Stage::Built => {
             table(p, iso, (cx, cy), 0.3);
@@ -217,6 +224,7 @@ fn plot(p: &Painter, iso: &Iso, pl: &Plot, it: &Item, col: Color32, time: f32) {
     if let (Dish::Chili(_), Some(at)) = (d, flies_at) {
         dishes::flies(p, at, s, time, 3, phase);
     }
+    loupe
 }
 
 /// The restaurant's sign over the back of its stand: two poles, a striped awning sloping over
@@ -531,6 +539,8 @@ impl Tab {
         let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered() && !self.board.shooting);
         let hovered: Option<&Plot> = city.plots.iter().rev().find(|pl| hover.is_some_and(|h| plot_hit(&iso, pl).contains(h)));
 
+        // Where the loupes of the dishes To test go, drawn over everything once the court is.
+        let mut loupes: Vec<(Pos2, u32)> = Vec::new();
         for (_, thing) in &things {
             match thing {
                 Thing::Sign(d) => sign(&p, &iso, d),
@@ -550,9 +560,15 @@ impl Tab {
                         let c = if selected { k.accent } else { k.accent_text };
                         p.add(Shape::convex_polygon(iso.quad(x + 0.03, y + 0.03, x + 0.97, y + 0.97, KERB).to_vec(), c.gamma_multiply(0.35), Stroke::new(2.0, c)));
                     }
-                    plot(&p, &iso, pl, it, restaurant(city.districts[pl.district].style).0, time);
+                    if let Some(at) = plot(&p, &iso, pl, it, restaurant(city.districts[pl.district].style).0, time) {
+                        loupes.push((at, pl.seed));
+                    }
                 }
             }
+        }
+        let size = (24.0 * iso.zoom).clamp(16.0, 34.0);
+        for (at, seed) in &loupes {
+            crate::app::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
         }
 
         // Each stand's name on a tag by its south-west edge, over the traffic, for when the sign
@@ -568,8 +584,8 @@ impl Tab {
         }
 
         // The tally, top left; the hints just above the menu bar.
-        let (served, cooking, todo) = crate::city::counts(&city);
-        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{served} served · {cooking} cooking · {todo} on order"), theme::secondary(), k.dim);
+        let n = crate::city::counts(&city);
+        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} served · {} in test · {} cooking · {} on order", n.done, n.testing, n.busy, n.todo), theme::secondary(), k.dim);
         // Not in a photo (#232).
         if !self.board.shooting {
             p.text(pos2(area.left() + 4.0, room.bottom() - 2.0), Align2::LEFT_BOTTOM, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);

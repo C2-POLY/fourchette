@@ -283,7 +283,7 @@ fn burger(p: &Painter, c: Pos2, s: f32, n: u32, served: bool) {
 }
 
 /// Steam rising over a hot dish, three wisps that fade as they go up.
-fn steam(p: &Painter, top: Pos2, s: f32, time: f32) {
+pub(super) fn steam(p: &Painter, top: Pos2, s: f32, time: f32) {
     for k in 0..3 {
         let phase = (time * 0.45 + k as f32 / 3.0).fract();
         let x = (k as f32 - 1.0) * 6.0 * s;
@@ -330,11 +330,23 @@ pub(super) fn cloche(p: &Painter, c: Pos2, s: f32) {
     oval(p, c - vec2(0.0, 16.6 * s), 1.6 * s, 0.9 * s, rgb(0xd6d8de));
 }
 
-/// To test: a fork stuck in the dish, its handle up.
-pub(super) fn fork_in(p: &Painter, top: Pos2, s: f32) {
+/// To test: a fork stuck in the dish, its handle up, `dip` points further in as it pricks.
+pub(super) fn fork_in(p: &Painter, top: Pos2, s: f32, dip: f32) {
     let st = Stroke::new(1.6 * s, rgb(0xd6d8de));
-    p.line_segment([top + vec2(2.0 * s, -s), top + vec2(8.0 * s, -20.0 * s)], st);
-    p.circle_filled(top + vec2(8.0 * s, -20.0 * s), 1.3 * s, rgb(0xd6d8de));
+    let d = vec2(-0.3, 1.0) * dip * s;
+    p.line_segment([top + vec2(2.0 * s, -s) + d, top + vec2(8.0 * s, -20.0 * s) + d], st);
+    p.circle_filled(top + vec2(8.0 * s, -20.0 * s) + d, 1.3 * s, rgb(0xd6d8de));
+}
+
+/// The taster's "Mmm… ?" in a speech bubble over `at`, swelling and shrinking with `k` (0 to 1).
+pub(super) fn tasting_bubble(p: &Painter, at: Pos2, s: f32, k: f32) {
+    let size = (8.5 * s * (1.0 + 0.1 * k)).max(7.0);
+    let g = p.layout_no_wrap("Mmm… ?".into(), egui::FontId::proportional(size), INK);
+    let r = egui::Rect::from_center_size(at, g.size() + vec2(8.0 * s.max(0.8), 4.0 * s.max(0.8)));
+    let tail = r.center_bottom();
+    fill(p, vec![tail + vec2(-3.0 * s, -0.5), tail + vec2(3.0 * s, -0.5), tail + vec2(-4.0 * s, 5.0 * s)], Color32::WHITE);
+    p.rect(r, egui::CornerRadius::same((r.height() / 2.0) as u8), Color32::WHITE, Stroke::new(1.0, crate::app::testing::AMBER), egui::StrokeKind::Inside);
+    p.galley(r.center() - g.size() / 2.0, g, INK);
 }
 
 /// What a cook is doing.

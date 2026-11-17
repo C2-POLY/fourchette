@@ -117,6 +117,10 @@ pub(super) mod paint {
     pub const STRIPE: Color32 = rgb(0x9b8fd6);
     pub const CARS: [Color32; 7] = [rgb(0xf2c230), rgb(0x5b6fd6), rgb(0x6b4a32), rgb(0xd9412f), rgb(0x6a5acd), rgb(0x3fa7a0), rgb(0xf4f4f4)];
     pub const TROUSERS: Color32 = rgb(0x3c4660);
+    // A To test building's ribbon, its inspector's shirt and clipboard (#249).
+    pub const RIBBON: Color32 = rgb(0xd8263a);
+    pub const SHIRT: Color32 = rgb(0xf4f6f8);
+    pub const CLIPBOARD: Color32 = rgb(0x8a5a32);
 }
 
 #[derive(Clone, Copy)]
@@ -443,6 +447,78 @@ fn worker(p: &Painter, iso: &Iso, (x, y): (f32, f32), who: &str, t: f32) {
         head + vec2(iso.px(2.9) * a.cos(), -iso.px(2.9) * a.sin() - iso.px(0.5))
     });
     poly(p, dome.collect(), paint::YELLOW);
+}
+
+/// A building To test (#249): a red ribbon not yet cut across its front, an orange beacon
+/// turning on its roof, and the inspector pacing before it with a clipboard. Returns where the
+/// loupe goes, over the beacon.
+fn inspection(p: &Painter, iso: &Iso, (x, y): (f32, f32), roof: Pos2, seed: u32, time: f32) -> Pos2 {
+    // The ribbon on two posts along the plot's south edge, a bow in the middle.
+    let (ry, rz) = (y + 0.93, KERB + 0.22);
+    let post = Stroke::new(iso.px(1.2), paint::WIRE);
+    let (a, b) = (iso.at(x + 0.1, ry, rz), iso.at(x + 0.9, ry, rz));
+    p.line_segment([iso.at(x + 0.1, ry, KERB), a], post);
+    p.line_segment([iso.at(x + 0.9, ry, KERB), b], post);
+    p.line_segment([a, b], Stroke::new(iso.px(2.0), paint::RIBBON));
+    let bow = a.lerp(b, 0.5);
+    let w = iso.px(4.0);
+    poly(p, vec![bow, bow + vec2(-w, -w * 0.7), bow + vec2(-w, w * 0.7)], paint::RIBBON);
+    poly(p, vec![bow, bow + vec2(w, -w * 0.7), bow + vec2(w, w * 0.7)], paint::RIBBON);
+    p.circle_filled(bow, iso.px(1.4), theme::shade(paint::RIBBON, 0.3));
+
+    // The beacon: an orange dome whose light turns, bright when it faces us.
+    let turn = time * 3.2 + (seed % 628) as f32 / 100.0;
+    let base = roof - vec2(0.0, iso.px(1.0));
+    let r = iso.px(3.2);
+    p.rect_filled(Rect::from_min_max(base + vec2(-r, -iso.px(1.5)), base + vec2(r, 0.0)), 0.0, paint::WIRE);
+    let dome = base - vec2(0.0, iso.px(1.5));
+    let facing = turn.cos();
+    for side in [1.0_f32, -1.0] {
+        let dir = vec2((turn.sin() * side) * 1.0, 0.0);
+        let len = iso.px(22.0);
+        let glow = (0.5 + 0.5 * facing * side).clamp(0.0, 1.0);
+        let tip = dome + dir * len - vec2(0.0, iso.px(2.0));
+        let spread = vec2(0.0, iso.px(5.0));
+        p.add(Shape::convex_polygon(vec![dome - vec2(0.0, r * 0.6), tip - spread, tip + spread], super::testing::AMBER.gamma_multiply(0.18 + 0.3 * glow), Stroke::NONE));
+    }
+    let lit = (0.6 + 0.4 * facing.abs()).clamp(0.0, 1.0);
+    p.circle_filled(dome - vec2(0.0, r * 0.4), r * (1.6 + facing.abs()), super::testing::AMBER.gamma_multiply(0.25 * lit));
+    let half: Vec<Pos2> = (0..=8).map(|k| {
+        let a = std::f32::consts::PI * k as f32 / 8.0;
+        dome + vec2(r * a.cos(), -r * 1.1 * a.sin())
+    }).collect();
+    poly(p, half, theme::lighten(paint::TAPE, 0.25 * lit));
+
+    // The inspector, back and forth along the ribbon, turning at each end.
+    let lap = (time * 0.22 + (seed % 97) as f32 / 97.0).fract();
+    let along = if lap < 0.5 { lap * 2.0 } else { 2.0 - lap * 2.0 };
+    inspector(p, iso, (x + 0.22 + 0.56 * along, y + 0.99), if lap < 0.5 { 1.0 } else { -1.0 }, time);
+    dome - vec2(0.0, r * 1.4)
+}
+
+/// The inspector: white shirt, dark trousers, a white hard hat, a clipboard held out on the side
+/// they walk to, stepping as they go.
+fn inspector(p: &Painter, iso: &Iso, (x, y): (f32, f32), dir: f32, t: f32) {
+    let step = (t * 7.0).sin();
+    let feet = iso.at(x, y, KERB) - vec2(0.0, iso.px(step.abs() * 0.8));
+    let (w, h) = (iso.px(3.0), iso.px(7.6));
+    let legs = Stroke::new(iso.px(1.5), paint::TROUSERS);
+    p.line_segment([feet - vec2(0.0, h * 0.45), feet + vec2(iso.px(1.4) * step, 0.0)], legs);
+    p.line_segment([feet - vec2(0.0, h * 0.45), feet - vec2(iso.px(1.4) * step, 0.0)], legs);
+    p.rect_filled(Rect::from_min_max(feet - vec2(w, h), feet - vec2(-w, h * 0.42)), iso.px(1.5), paint::SHIRT);
+    let head = feet - vec2(0.0, h + iso.px(2.2));
+    p.circle_filled(head, iso.px(2.3), SKIN[1]);
+    let dome = (0..=8).map(|k| {
+        let a = std::f32::consts::PI * k as f32 / 8.0;
+        head + vec2(iso.px(2.9) * a.cos(), -iso.px(2.9) * a.sin() - iso.px(0.5))
+    });
+    poly(p, dome.collect(), Color32::WHITE);
+    // The clipboard, held out in front.
+    let board = Rect::from_center_size(feet - vec2(-dir * iso.px(4.6), h * 0.7), vec2(iso.px(3.6), iso.px(4.6)));
+    p.rect_filled(board, iso.px(0.6), paint::CLIPBOARD);
+    p.rect_filled(board.shrink(iso.px(0.8)), 0.0, Color32::WHITE);
+    p.hline(board.shrink(iso.px(1.2)).x_range(), board.center().y - iso.px(0.6), Stroke::new(iso.px(0.5), paint::WIRE));
+    p.hline(board.shrink(iso.px(1.2)).x_range(), board.center().y + iso.px(0.6), Stroke::new(iso.px(0.5), paint::WIRE));
 }
 
 /// Where a vehicle is: on the road at (x, y), heading along x or y, forward (+1) or back (-1).
@@ -825,6 +901,8 @@ impl Tab {
         let hover = ui.input(|i| i.pointer.hover_pos()).filter(|h| area.contains(*h) && resp.hovered() && !self.board.shooting);
         let hovered: Option<&Plot> = city.plots.iter().rev().find(|pl| hover.is_some_and(|h| plot_hit(&iso, pl).contains(h)));
 
+        // Where the loupes of the To test buildings go, drawn over everything once the city is.
+        let mut loupes: Vec<(Pos2, u32)> = Vec::new();
         for (_, thing) in &things {
             match thing {
                 Thing::Garden(x, y, style) => styles::yard(&p, &iso, (*x, *y), *style),
@@ -843,18 +921,23 @@ impl Tab {
                         Stage::Lot | Stage::Staked => lot(&p, &iso, pl),
                         Stage::Foundations | Stage::Frame => site(&p, &iso, pl, it, time),
                         Stage::Testing | Stage::Built => {
+                            let testing = pl.stage == Stage::Testing;
+                            styles::set_unlit(testing);
                             let roof = styles::building(&p, &iso, (x, y), city.districts[pl.district].style, pl.building, pl.floors, pl.seed);
-                            if pl.stage == Stage::Testing {
-                                // To test: a flag on the roof.
-                                let base = roof;
-                                let tip = base - vec2(0.0, iso.px(16.0));
-                                p.line_segment([base, tip], Stroke::new(iso.px(1.0), paint::WIRE));
-                                poly(&p, vec![tip, tip + vec2(iso.px(10.0), iso.px(3.0)), tip + vec2(0.0, iso.px(6.5))], paint::TAPE);
+                            styles::set_unlit(false);
+                            if testing {
+                                let top = inspection(&p, &iso, (x, y), roof, pl.seed, time);
+                                loupes.push((top, pl.seed));
                             }
                         }
                     }
                 }
             }
+        }
+
+        let size = iso.px(24.0).clamp(16.0, 34.0);
+        for (at, seed) in &loupes {
+            super::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
         }
 
         // Each block's name on a tag by its south-west edge, over the traffic.
@@ -867,8 +950,8 @@ impl Tab {
         }
 
         // The tally, top left; the hints, bottom left.
-        let (built, site, todo) = crate::city::counts(&city);
-        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{built} built · {site} under construction · {todo} to build"), theme::secondary(), k.dim);
+        let n = crate::city::counts(&city);
+        p.text(area.left_top() + vec2(4.0, 2.0), Align2::LEFT_TOP, format!("{} built · {} in test · {} under construction · {} to build", n.done, n.testing, n.busy, n.todo), theme::secondary(), k.dim);
         // Not in a photo (#232).
         if !self.board.shooting {
             p.text(area.left_bottom() + vec2(4.0, -2.0), Align2::LEFT_BOTTOM, "Drag to move · pinch or ⌘ scroll to zoom · double-click to fit", theme::small(), k.faint);

@@ -16,7 +16,7 @@ pub enum Stage {
     Foundations,
     /// In review: the building half up, still under its crane.
     Frame,
-    /// To test: built, with a flag on the roof.
+    /// To test: built but not handed over, under inspection (#249).
     Testing,
     /// Done: built.
     Built,
@@ -45,9 +45,6 @@ impl Stage {
         matches!(self, Stage::Foundations | Stage::Frame)
     }
 
-    pub fn built(self) -> bool {
-        matches!(self, Stage::Testing | Stage::Built)
-    }
 }
 
 /// What a finished ticket becomes.
@@ -292,11 +289,34 @@ fn next_to(d: &District, x: i32, y: i32, w: i32, above: Option<i32>) -> bool {
     left || over
 }
 
-/// How many tickets are built, under construction and still to do.
-pub fn counts(city: &City) -> (usize, usize, usize) {
-    let built = city.plots.iter().filter(|p| p.stage.built()).count();
-    let site = city.plots.iter().filter(|p| p.stage.crane()).count();
-    (built, site, city.plots.len() - built - site)
+/// How many tickets are in each part of a view's tally: done, to test, being worked on, still
+/// to do (#249: To test is counted apart, never with what is done).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Tally {
+    pub done: usize,
+    pub testing: usize,
+    pub busy: usize,
+    pub todo: usize,
+}
+
+impl Tally {
+    pub fn of(stages: impl IntoIterator<Item = Stage>) -> Tally {
+        let mut t = Tally::default();
+        for s in stages {
+            match s {
+                Stage::Built => t.done += 1,
+                Stage::Testing => t.testing += 1,
+                s if s.crane() => t.busy += 1,
+                _ => t.todo += 1,
+            }
+        }
+        t
+    }
+}
+
+/// The city's tally: built, in test, under construction, still to build.
+pub fn counts(city: &City) -> Tally {
+    Tally::of(city.plots.iter().map(|p| p.stage))
 }
 
 #[cfg(test)]
@@ -337,6 +357,14 @@ mod tests {
     }
 
     #[test]
+    fn to_test_is_counted_apart_from_what_is_done() {
+        let stages = ["Done", "To test", "To test", "In review", "In progress", "Ready", "Backlog"].map(Stage::of);
+        assert_eq!(Tally::of(stages), Tally { done: 1, testing: 2, busy: 2, todo: 2 });
+        // Standing in the city, but not built for the tally.
+        assert_eq!(Tally::of([Stage::Testing]).done, 0);
+    }
+
+    #[test]
     fn districts_hold_their_zone_without_overlap() {
         let items: Vec<Item> = vec![
             item(1, "Done", Some("graphe"), Some("Feature"), 0),
@@ -361,7 +389,7 @@ mod tests {
         // Built first within a district: the Done ticket gets the block's first tile.
         let done = city.plots.iter().find(|p| p.id == "I1").unwrap();
         assert_eq!((done.x, done.y), (city.districts[0].x, city.districts[0].y));
-        assert_eq!(counts(&city), (2, 1, 2));
+        assert_eq!(counts(&city), Tally { done: 2, testing: 0, busy: 1, todo: 2 });
         // The block of three keeps its fourth tile for a tree.
         let d = &city.districts[0];
         let in_block: Vec<_> = city.trees.iter().filter(|(x, y)| *x >= d.x && *x < d.x + d.w && *y >= d.y && *y < d.y + d.h).collect();
