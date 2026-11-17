@@ -885,7 +885,19 @@ pub fn person_card(ui: &mut Ui, caption: &str, name: &str, email: &str, time: i6
                 ui.label(RichText::new(name).color(theme::c().strong));
                 ui.label(RichText::new(caption).size(theme::FS_SMALL).color(theme::c().faint));
             });
-            ui.label(RichText::new(format!("{email} · {}", git::relative_time(time))).size(theme::FS_SECONDARY).color(theme::c().dim));
+            // The time stays whole; a long email is cut with "…", whole on hover (#187).
+            let when = format!(" · {}", git::relative_time(time));
+            let font = egui::FontId::proportional(theme::FS_SECONDARY);
+            let when_w = ui.painter().layout_no_wrap(when.clone(), font.clone(), theme::c().dim).size().x;
+            let email_w = ui.painter().layout_no_wrap(email.to_string(), font, theme::c().dim).size().x;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let room = email_w.min(ui.available_width() - when_w - 2.0).max(40.0);
+                ui.allocate_ui_with_layout(vec2(room, ui.spacing().interact_size.y), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(egui::Label::new(RichText::new(email).size(theme::FS_SECONDARY).color(theme::c().dim)).truncate()).on_hover_text(email);
+                });
+                ui.label(RichText::new(when).size(theme::FS_SECONDARY).color(theme::c().dim));
+            });
         });
     });
 }
