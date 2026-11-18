@@ -135,6 +135,14 @@ impl Iso {
         self.origin + vec2((x - y) * TILE_W / 2.0, (x + y) * TILE_H / 2.0 - z * FLOOR) * self.zoom
     }
 
+    /// The point of the ground at height z under a screen point, in tiles: the inverse of `at`
+    /// (x − y and x + y come straight from the screen, then x and y from their sum and difference).
+    pub(super) fn tile_at(&self, s: Pos2, z: f32) -> (f32, f32) {
+        let a = (s.x - self.origin.x) / self.zoom / (TILE_W / 2.0);
+        let b = ((s.y - self.origin.y) / self.zoom + z * FLOOR) / (TILE_H / 2.0);
+        ((a + b) / 2.0, (b - a) / 2.0)
+    }
+
     /// A rectangle of ground from (x0, y0) to (x1, y1) at height z: north, east, south, west.
     pub(super) fn quad(&self, x0: f32, y0: f32, x1: f32, y1: f32, z: f32) -> [Pos2; 4] {
         [self.at(x0, y0, z), self.at(x1, y0, z), self.at(x1, y1, z), self.at(x0, y1, z)]
@@ -940,8 +948,21 @@ impl Tab {
             super::testing::loupe(&p, *at, size, time, (*seed % 628) as f32 / 100.0);
         }
 
-        // Each block's name on a tag by its south-west edge, over the traffic.
-        for d in &city.districts {
+        // Only the hovered block's name, on a tag by its south-west edge, over the traffic (#253):
+        // the district of the hovered building, else the one under the pointer's ground tile.
+        // Never in a photo.
+        let tag = if self.board.shooting {
+            None
+        } else if let Some(pl) = hovered {
+            Some(pl.district)
+        } else {
+            hover.and_then(|h| {
+                let (x, y) = iso.tile_at(h, KERB);
+                let (x, y) = (x.floor() as i32, y.floor() as i32);
+                city.districts.iter().position(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h)
+            })
+        };
+        if let Some(d) = tag.map(|i| &city.districts[i]) {
             let at = iso.at(d.x as f32 - 0.07, (d.y + d.h) as f32 + 0.54, 0.0);
             let font = FontId::proportional((theme::FS_SMALL * iso.zoom.sqrt()).max(9.0));
             let g = p.layout_no_wrap(d.name.clone(), font, paint::WIRE);
@@ -988,6 +1009,16 @@ mod tests {
         assert_eq!(iso.at(1.0, 0.0, 0.0), pos2(TILE_W / 2.0, TILE_H / 2.0));
         assert_eq!(iso.at(0.0, 1.0, 0.0), pos2(-TILE_W / 2.0, TILE_H / 2.0));
         assert_eq!(iso.at(0.0, 0.0, 1.0), pos2(0.0, -FLOOR));
+    }
+
+    #[test]
+    fn the_ground_under_a_screen_point_is_the_inverse_of_the_projection() {
+        let iso = Iso { origin: pos2(310.0, -42.0), zoom: 1.7 };
+        for (x, y) in [(0.0, 0.0), (3.5, 1.25), (12.0, 7.75), (-2.0, 4.5)] {
+            let s = iso.at(x, y, KERB);
+            let (gx, gy) = iso.tile_at(s, KERB);
+            assert!((gx - x).abs() < 1e-3 && (gy - y).abs() < 1e-3, "({x}, {y}) -> ({gx}, {gy})");
+        }
     }
 
     #[test]
