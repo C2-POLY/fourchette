@@ -14,6 +14,13 @@ const root = document.documentElement;
 const MOTION = '(prefers-reduced-motion: no-preference)';
 const $ = <T extends Element = HTMLElement>(sel: string, scope: ParentNode = document) => Array.from(scope.querySelectorAll<T>(sel));
 
+// A curve of the rails is drawn by uncovering it from the top. Not with
+// stroke-dasharray: with pathLength and a non-scaling stroke, Safari measures
+// the dashes in screen pixels and leaves the line short of its commit's dot.
+// The sides reach past the box so the stroke at its edges is not cut.
+const HIDDEN = 'inset(0% -4px 100% -4px)';
+const SHOWN = 'inset(0% -4px 0% -4px)';
+
 root.classList.add('motion-ready');
 
 if (matchMedia(MOTION).matches) {
@@ -47,11 +54,11 @@ window.addEventListener('load', () => ScrollTrigger.refresh());
 
 function hero() {
   const words = $('.hero h1 .w > span');
-  const gather = $('.hero .gather path');
   const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
   tl.set('.hero .gather', { opacity: 1 })
-    .fromTo(gather, { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 1.1, stagger: 0.12, ease: 'power2.inOut' }, 0)
+    .fromTo('.hero .gather', { clipPath: HIDDEN }, { clipPath: SHOWN, duration: 1.3, ease: 'power2.inOut' }, 0)
     .fromTo('.hero .rail [data-node]', { scale: 0 }, { scale: 1, duration: 0.6, ease: 'back.out(3)' }, 0.75)
+    .fromTo('.hero .rail [data-trunk]', { scaleY: 0 }, { scaleY: 1, duration: 1.2, ease: 'power2.inOut' }, 0.9)
     .fromTo(words, { y: 0, yPercent: 108 }, { y: 0, yPercent: 0, duration: 1.1, stagger: 0.055 }, 0.15)
     .fromTo('.hero [data-in]', { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.9, stagger: 0.08 }, 0.55)
     .fromTo('[data-hero-shot]', { autoAlpha: 0, y: 60 }, { autoAlpha: 1, y: 0, duration: 1.4 }, 0.7);
@@ -71,30 +78,24 @@ function hero() {
 
 /* ------------------------------------------------------------ the history's lanes */
 
+// The main lane is always drawn whole, so the page never shows a line
+// stopping in mid-air. A section's branch (fork, lane, merge) and its dot are
+// drawn once, when the section comes in. The hero's are in hero().
 function rails() {
   for (const rail of $('[data-rail]')) {
     const section = rail.closest('section')!;
-    if (section.matches('[data-stage].pinned')) continue; // drawn by its own timeline
-    const trunk = rail.querySelector('[data-trunk]');
+    if (section.classList.contains('hero')) continue;
     const branch = rail.querySelector('[data-branch]');
-    const curves = $<SVGPathElement>('[data-curve] path', rail);
+    const curves = $<SVGElement>('[data-curve]', rail);
     const node = rail.querySelector('[data-node]');
-    const isHero = section.classList.contains('hero');
-
-    gsap.set(trunk, { opacity: 1 });
-    const tl = gsap.timeline({
-      defaults: { ease: 'none' },
-      scrollTrigger: { trigger: section, start: 'top 70%', end: 'bottom 70%', scrub: 0.6 },
-    });
-    tl.fromTo(trunk, { scaleY: 0 }, { scaleY: 1, duration: 1 }, 0);
-    if (curves.length === 2) {
-      tl.fromTo(curves[0], { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.08 }, 0)
-        .fromTo(branch, { scaleY: 0 }, { scaleY: 1, duration: 0.84 }, 0.08)
-        .fromTo(curves[1], { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.08 }, 0.92);
+    const tl = gsap.timeline({ paused: true, defaults: { ease: 'power1.inOut' } });
+    if (curves.length === 2 && branch) {
+      tl.fromTo(curves[0], { clipPath: HIDDEN }, { clipPath: SHOWN, duration: 0.3 }, 0)
+        .fromTo(branch, { scaleY: 0 }, { scaleY: 1, duration: 0.9 }, 0.3)
+        .fromTo(curves[1], { clipPath: HIDDEN }, { clipPath: SHOWN, duration: 0.3 }, 1.2);
     }
-    if (node && !isHero) {
-      gsap.fromTo(node, { scale: 0 }, { scale: 1, duration: 0.5, ease: 'back.out(3)', scrollTrigger: { trigger: section, start: 'top 72%', toggleActions: 'play none none reverse' } });
-    }
+    if (node) tl.fromTo(node, { scale: 0 }, { scale: 1, duration: 0.5, ease: 'back.out(3)' }, curves.length ? 0.25 : 0);
+    ScrollTrigger.create({ trigger: section, start: 'top 75%', once: true, onEnter: () => tl.play() });
   }
 }
 
@@ -202,20 +203,12 @@ function stage() {
   const [first, second] = $('[data-step]', section);
   const [t1, t2] = [first, second].map((s) => s.querySelector('.stage-text')!);
   const [s1, s2] = [first, second].map((s) => s.querySelector('.shot')!);
-  const rail = section.querySelector('[data-rail]')!;
-  const curves = $<SVGPathElement>('[data-curve] path', rail);
-
-  gsap.set(rail.querySelector('[data-trunk]'), { opacity: 1 });
   const tl = gsap.timeline({
     defaults: { ease: 'none' },
     scrollTrigger: { trigger: section, start: 'top top', end: '+=140%', pin: true, scrub: 0.6, anticipatePin: 1 },
   });
-  tl.fromTo(rail.querySelector('[data-trunk]'), { scaleY: 0 }, { scaleY: 1, duration: 1 }, 0)
-    .fromTo(curves[0], { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.1 }, 0)
-    .fromTo(rail.querySelector('[data-branch]'), { scaleY: 0 }, { scaleY: 1, duration: 0.8 }, 0.1)
-    .fromTo(curves[1], { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.1 }, 0.9)
-    // The board, then the city rising over it from below.
-    .fromTo(s2, { clipPath: 'inset(100% 0% 0% 0% round 14px)' }, { clipPath: 'inset(0% 0% 0% 0% round 14px)', duration: 0.45, ease: 'power2.inOut' }, 0.35)
+  // The board, then the city rising over it from below.
+  tl.fromTo(s2, { clipPath: 'inset(100% 0% 0% 0% round 14px)' }, { clipPath: 'inset(0% 0% 0% 0% round 14px)', duration: 0.45, ease: 'power2.inOut' }, 0.35)
     .fromTo(s1, { scale: 1 }, { scale: 0.94, autoAlpha: 0.4, duration: 0.45 }, 0.35)
     .fromTo(t1, { autoAlpha: 1, y: 0 }, { autoAlpha: 0, y: -30, duration: 0.2 }, 0.35)
     .fromTo(t2, { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: 0.25 }, 0.55);

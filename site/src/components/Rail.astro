@@ -37,3 +37,36 @@ const { kind } = Astro.props;
   }
   <span class="node" data-node></span>
 </div>
+
+<script>
+  // Puts each rail's commit dot level with its section's commit line. The
+  // stylesheet's --node-y only guesses it from the padding, which is wrong
+  // where the text is centred beside a picture; this measures it instead, at
+  // every size and with or without the motion. A sticky header is left to
+  // the stylesheet: once stuck its line has moved and the dot should not follow.
+  const offset = (el: HTMLElement, to: HTMLElement) => {
+    let y = 0;
+    for (let e: HTMLElement | null = el; e && e !== to; e = e.offsetParent as HTMLElement | null) y += e.offsetTop;
+    return y;
+  };
+
+  const align = () => {
+    for (const rail of document.querySelectorAll<HTMLElement>('[data-rail]')) {
+      const section = rail.closest('section');
+      const line = section?.querySelector<HTMLElement>('.commit-line');
+      if (!section || !line || line.closest('.sticky-head')) continue;
+      const y = offset(line, section) + line.offsetHeight / 2 - offset(rail, section);
+      rail.style.setProperty('--node-y', `${Math.round(y)}px`);
+    }
+  };
+
+  align();
+  const sizes = new ResizeObserver(align);
+  // The section, its body and the block holding the line: pinning the stage
+  // (scripts/motion.ts) moves its line without changing the section's size.
+  document.querySelectorAll('section.commit').forEach((s) => {
+    sizes.observe(s);
+    s.querySelectorAll('.body, .commit-line').forEach((e) => sizes.observe(e.parentElement ?? e));
+  });
+  document.fonts?.ready.then(align);
+</script>
